@@ -16,21 +16,26 @@
  * ====================================================================
  */
 
-package org.dasein.cloud.cloudstack;
+package org.dasein.cloud.cloudstack.identity;
 
-import org.dasein.cloud.CloudErrorType;
-import org.dasein.cloud.CloudException;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.identity.AbstractIdentityServices;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
-public class CloudstackException extends CloudException {
-    private static final long serialVersionUID = -4873119673296587092L;
+/**
+ * Implements the identity services for CSCloud.
+ * @author George Reese (george.reese@imaginary.com)
+ * @since 2012.02
+ * @version 2012.02
+ */
+public class CSIdentityServices extends AbstractIdentityServices {
+    private CSCloud provider;
     
-    public CloudstackException(@Nonnull CloudstackMethod.ParsedError e) {
-        super(CloudErrorType.GENERAL, e.code, String.valueOf(e.code), e.message);
-    }
+    public CSIdentityServices(@Nonnull CSCloud provider) { this.provider = provider; }
     
-    public CloudstackException(@Nonnull CloudErrorType type, @Nonnull CloudstackMethod.ParsedError e) {
-        super(type, e.code, String.valueOf(e.code), e.message);        
+    public @Nullable Keypair getShellKeySupport() {
+        return new Keypair(provider);
     }
 }

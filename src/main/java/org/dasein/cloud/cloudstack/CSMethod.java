@@ -24,31 +24,42 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.security.SignatureException;
 import java.util.Date;
+import java.util.Properties;
 import java.util.TreeSet;
 
 import javax.annotation.Nonnull;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import javax.servlet.http.HttpServletResponse;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.commons.codec.binary.Base64;
-import org.apache.commons.httpclient.Header;
-import org.apache.commons.httpclient.HttpClient;
-import org.apache.commons.httpclient.HttpException;
-import org.apache.commons.httpclient.HttpStatus;
-import org.apache.commons.httpclient.cookie.CookiePolicy;
-import org.apache.commons.httpclient.methods.GetMethod;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpVersion;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.conn.params.ConnRoutePNames;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.params.BasicHttpParams;
+import org.apache.http.params.HttpParams;
+import org.apache.http.params.HttpProtocolParams;
+import org.apache.http.protocol.HTTP;
+import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudErrorType;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.ProviderContext;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
 
-public class CloudstackMethod { 
+public class CSMethod {
     static public class ParsedError {
         public int code;
         public String message;
@@ -58,15 +69,20 @@ public class CloudstackMethod {
     static public final String DELETE_KEYPAIR = "deleteSSHKeyPair";
     static public final String LIST_KEYPAIRS  = "listSSHKeyPairs";
 
-    private CloudstackProvider provider;
+    private CSCloud provider;
     
-    public CloudstackMethod(@Nonnull CloudstackProvider provider) { this.provider = provider; }
+    public CSMethod(@Nonnull CSCloud provider) { this.provider = provider; }
     
-    public String buildUrl(String command, Param ... params) throws InternalException {
+    public String buildUrl(String command, Param ... params) throws CloudException, InternalException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
         try {
             StringBuilder str = new StringBuilder();
-            String apiKey = new String(provider.getContext().getAccessPublic(), "utf-8");
-            String accessKey = new String(provider.getContext().getAccessPrivate(), "utf-8");
+            String apiKey = new String(ctx.getAccessPublic(), "utf-8");
+            String accessKey = new String(ctx.getAccessPrivate(), "utf-8");
 
             StringBuilder newKey = new StringBuilder();
             for( int i =0; i<apiKey.length(); i++ ) {
@@ -86,7 +102,7 @@ public class CloudstackMethod {
                 }
             }
             accessKey = newKey.toString();
-            str.append(provider.getContext().getEndpoint());
+            str.append(ctx.getEndpoint());
             str.append("/api?command=");
             str.append(command);
             for( Param param : params ) {
@@ -124,48 +140,82 @@ public class CloudstackMethod {
             throw new SignatureException("Failed to generate HMAC : " + e.getMessage());
         }
     }
-    
+
+    protected @Nonnull HttpClient getClient(String url) throws InternalException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new InternalException("No context was specified for this request");
+        }
+        boolean ssl = url.startsWith("https");
+        HttpParams params = new BasicHttpParams();
+
+        HttpProtocolParams.setVersion(params, HttpVersion.HTTP_1_1);
+        HttpProtocolParams.setContentCharset(params, HTTP.UTF_8);
+        HttpProtocolParams.setUserAgent(params, "Dasein Cloud");
+
+        Properties p = ctx.getCustomProperties();
+
+        if( p != null ) {
+            String proxyHost = p.getProperty("proxyHost");
+            String proxyPort = p.getProperty("proxyPort");
+
+            if( proxyHost != null ) {
+                int port = 0;
+
+                if( proxyPort != null && proxyPort.length() > 0 ) {
+                    port = Integer.parseInt(proxyPort);
+                }
+                params.setParameter(ConnRoutePNames.DEFAULT_PROXY, new HttpHost(proxyHost, port, ssl ? "https" : "http"));
+            }
+        }
+        return new DefaultHttpClient(params);
+    }
+
     public Document get(String url) throws CloudException, InternalException {
-        Logger wire = CloudstackProvider.getLogger(CloudstackMethod.class, "wire");
-        Logger logger = CloudstackProvider.getLogger(CloudstackMethod.class, "std");
+        Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
+        Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
         if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CloudstackMethod.class.getName() + ".get(" + url + ")");
+            logger.trace("enter - " + CSMethod.class.getName() + ".get(" + url + ")");
         }
         if( wire.isDebugEnabled() ) {
             wire.debug("[" + (new Date()) + "] -------------------------------------------------------------------");
             wire.debug("");
         }
         try {
-            HttpClient client = getClient();
-            GetMethod get = new GetMethod(url);
-            int code;
-            
-            get.addRequestHeader("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
-            get.getParams().setCookiePolicy(CookiePolicy.IGNORE_COOKIES);
+            HttpGet get = new HttpGet(url);
+            HttpClient client = getClient(url);
+            HttpResponse response;
+
+            get.addHeader("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+            //get.getParams().setCookiePolicy(CookiePolicy.IGNORE_COOKIES);
             if( wire.isDebugEnabled() ) {
-                wire.debug("GET " + get.getPath() + "?" + get.getQueryString());
-                for( Header header : get.getRequestHeaders() ) {
+                wire.debug(get.getRequestLine().toString());
+                for( Header header : get.getAllHeaders() ) {
                     wire.debug(header.getName() + ": " + header.getValue());
                 }
                 wire.debug("");
             }
             try {
-                code = client.executeMethod(get);
-            }
-            catch( HttpException e ) {
-                throw new InternalException("HttpException during GET: " + e.getMessage());
+                response = client.execute(get);
+                if( wire.isDebugEnabled() ) {
+                    wire.debug(response.getStatusLine().toString());
+                }
             }
             catch( IOException e ) {
-                throw new CloudException("IOException during GET: " + e.getMessage());
+                logger.error("I/O error from server communications: " + e.getMessage());
+                e.printStackTrace();
+                throw new InternalException(e);
             }
+            int status = response.getStatusLine().getStatusCode();
             if( logger.isDebugEnabled() ) {
-                logger.debug("get(): HTTP Status " + code);
+                logger.debug("get(): HTTP Status " + status);
             }
             if( wire.isDebugEnabled() ) {
-                Header[] headers = get.getResponseHeaders();
+                Header[] headers = response.getAllHeaders();
                 
-                wire.debug(get.getStatusLine().toString());
+                wire.debug(response.getStatusLine().toString());
                 for( Header h : headers ) {
                     if( h.getValue() != null ) {
                         wire.debug(h.getName() + ": " + h.getValue().trim());
@@ -177,29 +227,39 @@ public class CloudstackMethod {
                 wire.debug("");                                
             }
             try {
-                if( code != HttpStatus.SC_OK ) {
-                    String body = get.getResponseBodyAsString();
-                    
+                if( status != HttpServletResponse.SC_OK ) {
+                    HttpEntity entity = response.getEntity();
+                    String body = (entity == null ? null : EntityUtils.toString(entity));
+
+                    if( body == null ) {
+                        CSMethod.ParsedError p = new CSMethod.ParsedError();
+
+                        p.code = status;
+                        p.message = "No error information was provided";
+                        throw new CSException(CloudErrorType.GENERAL, p);
+                    }
                     if( body.contains("<html>") ) {
-                        if( code == HttpStatus.SC_FORBIDDEN || code == HttpStatus.SC_UNAUTHORIZED ) {
-                            CloudstackMethod.ParsedError p = new CloudstackMethod.ParsedError();
+                        if( status == HttpServletResponse.SC_FORBIDDEN || status == HttpServletResponse.SC_UNAUTHORIZED ) {
+                            CSMethod.ParsedError p = new CSMethod.ParsedError();
                             
-                            p.code = code;
+                            p.code = status;
                             p.message = body;
-                            throw new CloudstackException(CloudErrorType.AUTHENTICATION, p);
+                            throw new CSException(CloudErrorType.AUTHENTICATION, p);
                         }
-                        else if( code == 430 || code == 431 || code == 432 || code == 436 ) {
+                        else if( status == 430 || status == 431 || status == 432 || status == 436 ) {
                             return null;
                         }
-                        CloudstackMethod.ParsedError p = new CloudstackMethod.ParsedError();
+                        CSMethod.ParsedError p = new CSMethod.ParsedError();
                         
-                        p.code = code;
+                        p.code = status;
                         p.message = body;
-                        throw new CloudstackException(p);
+                        throw new CSException(p);
                     }
-                    throw new CloudstackException(parseError(code, body));
+                    throw new CSException(parseError(status, body));
                 }
-                return parseResponse(code, get.getResponseBodyAsString());
+                HttpEntity entity = response.getEntity();
+
+                return parseResponse(status, EntityUtils.toString(entity));
             }
             catch( IOException e ) {
                 throw new CloudException("IOException getting stream: " + e.getMessage());
@@ -211,32 +271,16 @@ public class CloudstackMethod {
                 wire.debug("[" + (new Date()) + "] -------------------------------------------------------------------");
             }
             if( logger.isTraceEnabled() ) {
-                logger.trace("exit - " + CloudstackMethod.class.getName() + ".get()");
+                logger.trace("exit - " + CSMethod.class.getName() + ".get()");
             }            
         }
     }
     
-    protected HttpClient getClient() {
-        String proxyHost = provider.getContext().getCustomProperties().getProperty("proxyHost");
-        String proxyPort = provider.getContext().getCustomProperties().getProperty("proxyPort");
-        HttpClient client = new HttpClient();
-        
-        if( proxyHost != null ) {
-            int port = 0;
-            
-            if( proxyPort != null && proxyPort.length() > 0 ) {
-                port = Integer.parseInt(proxyPort);
-            }
-            client.getHostConfiguration().setProxy(proxyHost, port);
-        }
-        return client;
-    }
-    
     private String getSignature(String command, String apiKey, String accessKey, Param ... params) throws UnsupportedEncodingException, SignatureException {
-        Logger logger = CloudstackProvider.getLogger(CloudstackMethod.class, "std");
+        Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
         if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CloudstackMethod.class.getName() + ".getSignature(" + command + "," + apiKey + "," + accessKey + "," + params + ")");
+            logger.trace("enter - " + CSMethod.class.getName() + ".getSignature(" + command + "," + apiKey + "," + accessKey + ",[params])");
         }
         try {
             TreeSet<Param> sorted = new TreeSet<Param>();
@@ -264,16 +308,16 @@ public class CloudstackMethod {
         }
         finally {
             if( logger.isTraceEnabled() ) {
-                logger.trace("exit - " + CloudstackMethod.class.getName() + ".getSignature()");
+                logger.trace("exit - " + CSMethod.class.getName() + ".getSignature()");
             }
         }
     }
     
     private ParsedError parseError(int httpStatus, String assumedXml) throws InternalException {
-        Logger logger = CloudstackProvider.getLogger(CloudstackMethod.class, "std");
+        Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
         if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CloudstackMethod.class.getName() + ".parseError(" + httpStatus + "," + assumedXml + ")");
+            logger.trace("enter - " + CSMethod.class.getName() + ".parseError(" + httpStatus + "," + assumedXml + ")");
         }
         try {
             ParsedError error = new ParsedError();
@@ -327,17 +371,17 @@ public class CloudstackMethod {
         }
         finally {
             if( logger.isTraceEnabled() ) {
-                logger.trace("exit - " + CloudstackMethod.class.getName() + ".parseError()");
+                logger.trace("exit - " + CSMethod.class.getName() + ".parseError()");
             }
         }
     }
     
     private Document parseResponse(int code, String xml) throws CloudException, InternalException {
-        Logger wire = CloudstackProvider.getLogger(CloudstackMethod.class, "wire");
-        Logger logger = CloudstackProvider.getLogger(CloudstackMethod.class, "std");
+        Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
+        Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
         if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CloudstackMethod.class.getName() + ".parseResponse(" + xml + ")");
+            logger.trace("enter - " + CSMethod.class.getName() + ".parseResponse(" + xml + ")");
         }
         try {
             try {
@@ -360,7 +404,7 @@ public class CloudstackMethod {
         }
         finally {
             if( logger.isTraceEnabled() ) {
-                logger.trace("exit - " + CloudstackMethod.class.getName() + ".parseResponse()");
+                logger.trace("exit - " + CSMethod.class.getName() + ".parseResponse()");
             }
         }
     }

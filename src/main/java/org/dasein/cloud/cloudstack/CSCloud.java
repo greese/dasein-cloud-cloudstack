@@ -21,14 +21,17 @@ package org.dasein.cloud.cloudstack;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Properties;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.cloudstack.compute.CloudstackComputeServices;
-import org.dasein.cloud.cloudstack.network.CloudstackNetworkServices;
+import org.dasein.cloud.cloudstack.compute.CSComputeServices;
+import org.dasein.cloud.cloudstack.identity.CSIdentityServices;
+import org.dasein.cloud.cloudstack.network.CSNetworkServices;
+import org.dasein.cloud.storage.BlobStoreSupport;
 import org.dasein.cloud.storage.StorageServices;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -38,7 +41,7 @@ import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class CloudstackProvider extends AbstractCloud {
+public class CSCloud extends AbstractCloud {
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
         
@@ -63,7 +66,7 @@ public class CloudstackProvider extends AbstractCloud {
         return Logger.getLogger("dasein.cloud.cloudstack." + type + "." + pkg + getLastItem(cls.getName()));
     }
     
-    public CloudstackProvider() { }
+    public CSCloud() { }
     
     @Override
     public @Nonnull String getCloudName() {
@@ -81,19 +84,30 @@ public class CloudstackProvider extends AbstractCloud {
     }
     
     @Override
-    public @Nonnull CloudstackComputeServices getComputeServices() {
-        return new CloudstackComputeServices(this);
+    public @Nonnull
+    CSComputeServices getComputeServices() {
+        return new CSComputeServices(this);
     }
     
     @Override
-    public @Nonnull Zones getDataCenterServices() {
-        return new Zones(this);
+    public @Nonnull
+    CSTopology getDataCenterServices() {
+        return new CSTopology(this);
     }
     
-    
     @Override
-    public @Nonnull CloudstackNetworkServices getNetworkServices() {
-        return new CloudstackNetworkServices(this);
+    public @Nullable
+    CSIdentityServices getIdentityServices() {
+        if( getVersion().greaterThan(CSVersion.CS21) ) {
+            return new CSIdentityServices(this);
+        }
+        return null;
+    }
+
+    @Override
+    public @Nonnull
+    CSNetworkServices getNetworkServices() {
+        return new CSNetworkServices(this);
     }
     
     @Override
@@ -111,30 +125,46 @@ public class CloudstackProvider extends AbstractCloud {
         return name;
     }
 
-    private transient ServiceProvider serviceProvider;
+    private transient CSServiceProvider serviceProvider;
 
-    public ServiceProvider getServiceProvider() {
+    public CSServiceProvider getServiceProvider() {
         if( serviceProvider == null ) {
             String pn = getProviderName();
 
             if( "kt".equalsIgnoreCase(pn) ) {
-                serviceProvider = ServiceProvider.KT;
+                serviceProvider = CSServiceProvider.KT;
             }
             else if( "datapipe".equalsIgnoreCase(pn) ) {
-                serviceProvider = ServiceProvider.DATAPIPE;
+                serviceProvider = CSServiceProvider.DATAPIPE;
             }
             else if( "tata".equalsIgnoreCase(pn) ) {
-                serviceProvider = ServiceProvider.TATA;
+                serviceProvider = CSServiceProvider.TATA;
             }
             else {
-                serviceProvider = ServiceProvider.INTERNAL;
+                serviceProvider = CSServiceProvider.INTERNAL;
             }
         }
         return serviceProvider;
     }
 
-    public @Nonnull CloudstackVersion getVersion() {
-        return CloudstackVersion.CS21;
+    private transient CSVersion version;
+
+    public @Nonnull
+    CSVersion getVersion() {
+        if( version == null ) {
+            ProviderContext ctx = getContext();
+            Properties properties = (ctx == null ? null : ctx.getCustomProperties());
+            String versionString;
+
+            versionString = (properties == null ? "CS3" : properties.getProperty("csVersion", "CS3"));
+            try {
+                version = CSVersion.valueOf(versionString);
+            }
+            catch( Throwable t ) {
+                version = CSVersion.CS3;
+            }
+        }
+        return version;
     }
     
     public @Nonnegative long parseTime(@Nonnull String timestamp) {
@@ -157,55 +187,60 @@ public class CloudstackProvider extends AbstractCloud {
     
     @Override
     public @Nullable String testContext() {
-        Logger logger = getLogger(CloudstackProvider.class, "std");
+        Logger logger = getLogger(CSCloud.class, "std");
         
         if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CloudstackProvider.class.getName() + ".testContext()");
+            logger.trace("enter - " + CSCloud.class.getName() + ".testContext()");
         }
         try {
             try {
+                ProviderContext ctx = getContext();
+
+                if( ctx == null ) {
+                    return null;
+                }
                 if( logger.isDebugEnabled() ) {
-                    logger.debug("testContext(): Checking Cloudstack compute credentials");
+                    logger.debug("testContext(): Checking CSCloud compute credentials");
                 }
                 if( !getComputeServices().getVirtualMachineSupport().isSubscribed() ) {
-                    logger.warn("testContext(): Cloudstack compute credentials are not subscribed for VM services");
+                    logger.warn("testContext(): CSCloud compute credentials are not subscribed for VM services");
                     return null;
                 }
                 if( hasStorageServices() ) {
                     if( logger.isDebugEnabled() ) {
-                        logger.debug("testContext(): Checking " + getContext().getStorage() + " storage credentials");
+                        logger.debug("testContext(): Checking " + ctx.getStorage() + " storage credentials");
                     }
                     StorageServices services = getStorageServices();
-                    
-                    if( services.hasBlobStoreSupport() ) {
-                        try {
-                            services.getBlobStoreSupport().listFiles(null).iterator().hasNext();
-                        }
-                        catch( Throwable t ) {
-                            logger.warn("testContext(): Storage credentials failed: " + t.getMessage());
-                            if( logger.isTraceEnabled() ) {
-                                t.printStackTrace();
+
+                    if( services != null && services.hasBlobStoreSupport() ) {
+                        BlobStoreSupport support = services.getBlobStoreSupport();
+
+                        if( support != null ) {
+                            try {
+                                support.list(null).iterator().hasNext();
                             }
-                            return null;
+                            catch( Throwable t ) {
+                                logger.warn("testContext(): Storage credentials failed: " + t.getMessage());
+                                t.printStackTrace();
+                                return null;
+                            }
                         }
                     }
                 }
                 if( logger.isInfoEnabled() ) {
                     logger.info("testContext(): Credentials validated");
                 }
-                return getContext().getAccountNumber();
+                return ctx.getAccountNumber();
             }
             catch( Throwable t ) {
                 logger.warn("testContext(): Failed to test cloudstack context: " + t.getMessage());
-                if( logger.isTraceEnabled() ) {
-                    t.printStackTrace();
-                }
+                t.printStackTrace();
                 return null;
             }
         }
         finally {
             if( logger.isDebugEnabled() ) {
-                logger.debug("exit - " + CloudstackProvider.class.getName() + ".testContext()");
+                logger.debug("exit - " + CSCloud.class.getName() + ".testContext()");
             }
         }
     }
@@ -219,7 +254,7 @@ public class CloudstackProvider extends AbstractCloud {
     }
     
     public Document waitForJob(String jobId, String jobName) throws CloudException, InternalException { 
-        CloudstackMethod method = new CloudstackMethod(this);
+        CSMethod method = new CSMethod(this);
         String url = method.buildUrl("queryAsyncJobResult", new Param("jobId", jobId));
 
         while( true ) {
@@ -263,11 +298,11 @@ public class CloudstackProvider extends AbstractCloud {
                                     message = n.getFirstChild().getNodeValue().trim();
                                 }
                             }
-                            CloudstackMethod.ParsedError error = new CloudstackMethod.ParsedError();
+                            CSMethod.ParsedError error = new CSMethod.ParsedError();
                             
                             error.code = code;
                             error.message = message;
-                            throw new CloudstackException(error);
+                            throw new CSException(error);
                         }
                         else {
                             throw new CloudException(str);

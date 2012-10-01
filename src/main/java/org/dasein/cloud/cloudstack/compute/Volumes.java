@@ -27,25 +27,29 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
+import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
-import javax.servlet.http.HttpServletResponse;
+import javax.annotation.Nullable;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.cloudstack.CloudstackException;
-import org.dasein.cloud.cloudstack.CloudstackMethod;
-import org.dasein.cloud.cloudstack.CloudstackProvider;
+import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSException;
+import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
-import org.dasein.cloud.cloudstack.Zones;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.compute.VolumeCreateOptions;
+import org.dasein.cloud.compute.VolumeProduct;
 import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.compute.VolumeSupport;
+import org.dasein.cloud.compute.VolumeType;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.util.Jiterator;
-import org.dasein.util.JiteratorPopulator;
-import org.dasein.util.PopulatorThread;
+import org.dasein.util.uom.storage.Gigabyte;
+import org.dasein.util.uom.storage.Storage;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -69,14 +73,14 @@ public class Volumes implements VolumeSupport {
         
     }
     
-    private CloudstackProvider provider;
+    private CSCloud provider;
     
-    Volumes(CloudstackProvider provider) {
+    Volumes(CSCloud provider) {
         this.provider = provider;
     }
     
     @Override
-    public void attach(String volumeId, String serverId, String deviceId) throws InternalException, CloudException {
+    public void attach(@Nonnull String volumeId, @Nonnull String serverId, @Nullable String deviceId) throws InternalException, CloudException {
         Param[] params;
         
         if( logger.isInfoEnabled() ) {
@@ -92,7 +96,7 @@ public class Volumes implements VolumeSupport {
             }
             params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId), new Param("deviceId", deviceId) };
         }
-        CloudstackMethod method = new CloudstackMethod(provider);
+        CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params));
 
         if( doc == null ) {
@@ -102,55 +106,114 @@ public class Volumes implements VolumeSupport {
     }
 
     @Override
-    public String create(String snapshotId, int size, String zoneId) throws InternalException, CloudException {
+    @Deprecated
+    public @Nonnull String create(@Nullable String snapshotId, @Nonnegative int size, @Nullable String zoneId) throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was provided for this request");
+        }
         String name = "vol_" + System.currentTimeMillis();
-        DiskOffering bestOffering = null;
-        
-        long requestedSize = 0;
-        
+        VolumeCreateOptions options;
+
+        if( size < 0 ) {
+            size = 0;
+        }
         if( snapshotId == null ) {
-            for( DiskOffering offering : getDiskOfferings() ) {
-            	if (offering.diskSize > 100000) {  // This cloud isn't returning sizes in GB... must be Bytes.
-            		requestedSize = size * 1024 * 1024 * 1024;	
-            	} else {
-            		requestedSize = size;
-            	}
-                if( offering.diskSize == requestedSize ) {
-                    bestOffering = offering;
+            options = VolumeCreateOptions.getInstance(new Storage<Gigabyte>(size, Storage.GIGABYTE), name, name);
+        }
+        else {
+            options = VolumeCreateOptions.getInstanceForSnapshot(snapshotId, new Storage<Gigabyte>(size, Storage.GIGABYTE), name, name);
+        }
+        if( zoneId != null ) {
+            options = options.inDataCenter(zoneId);
+        }
+        return createVolume(options);
+    }
+
+    @Override
+    public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was provided for this request");
+        }
+        String snapshotId = options.getSnapshotId();
+        String productId = options.getVolumeProductId();
+        VolumeProduct product = null;
+
+        if( productId != null ) {
+            for( VolumeProduct prd : listVolumeProducts() ) {
+                if( productId.equals(prd.getProviderProductId()) ) {
+                    product = prd;
                     break;
                 }
-                else if( bestOffering == null ) {
-                    bestOffering = offering;
-                }
-                else if( bestOffering.diskSize < requestedSize ) {
-                    if( offering.diskSize > requestedSize || offering.diskSize > bestOffering.diskSize ) {
-                        bestOffering = offering;
+            }
+        }
+        Storage<Gigabyte> size = options.getVolumeSize();
+
+        if( snapshotId == null ) {
+            if( product == null ) {
+                Iterable<VolumeProduct> products = listVolumeProducts();
+                VolumeProduct best = null;
+
+                for( VolumeProduct p : products ) {
+                    Storage<Gigabyte> s = p.getVolumeSize();
+
+                    long currentSize = (s == null ? 0L : s.getQuantity().longValue());
+
+                    s = (best == null ? null : best.getVolumeSize());
+
+                    long bestSize = (s == null ? 0L : s.getQuantity().longValue());
+
+                    if( size.longValue() > 0L && size.longValue() == currentSize ) {
+                        product = p;
+                        break;
+                    }
+                    if( best == null ) {
+                        best = p;
+                    }
+                    else if( bestSize > 0L || currentSize > 0L ) {
+                        if( size.longValue() > 0L ) {
+                            if( bestSize < size.longValue() && bestSize >0L && currentSize > size.longValue() ) {
+                                best = p;
+                            }
+                            else if( bestSize > size.longValue() && currentSize > size.longValue() && currentSize < bestSize ) {
+                                best = p;
+                            }
+                        }
+                        else if( currentSize > 0L && currentSize < bestSize ) {
+                            best = p;
+                        }
                     }
                 }
-                else if( offering.diskSize > requestedSize && offering.diskSize < bestOffering.diskSize ) {
-                    bestOffering = offering;
+                if( product == null ) {
+                    product = best;
                 }
             }
-            if( bestOffering == null ) {
-                throw new CloudException("No matching volume size offering for " + requestedSize);
+            if( product == null && size.longValue() < 1L ) {
+                throw new CloudException("No offering matching " + options.getVolumeProductId());
             }
         }
         Param[] params = new Param[3];
 
-        params[0] = new Param("name", name);
-        params[1] = new Param("zoneId", provider.getContext().getRegionId());
+        params[0] = new Param("name", options.getName());
+        params[1] = new Param("zoneId", ctx.getRegionId());
         if( snapshotId != null ) {
             params[2] = new Param("snapshotId", snapshotId);
         }
-        else {
-            params[2] = new Param("diskOfferingId", bestOffering.id);
+        else if( product != null ) {
+            params[2] = new Param("diskOfferingId", product.getProviderProductId());
         }
-        
-        CloudstackMethod method = new CloudstackMethod(provider);
+        else {
+            params[2] = new Param("size", String.valueOf(size.longValue()));
+        }
+
+        CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(CREATE_VOLUME, params));
         NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
         String volumeId = null;
-        
+
         if( matches.getLength() > 0 ) {
             volumeId = matches.item(0).getFirstChild().getNodeValue();
         }
@@ -158,7 +221,7 @@ public class Volumes implements VolumeSupport {
             matches = doc.getElementsByTagName("id"); // v2.2
             if( matches.getLength() > 0 ) {
                 volumeId = matches.item(0).getFirstChild().getNodeValue();
-            }            
+            }
         }
         if( volumeId == null ) {
             throw new CloudException("Failed to create volume");
@@ -168,14 +231,30 @@ public class Volumes implements VolumeSupport {
     }
 
     @Override
-    public void detach(String volumeId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param[] { new Param("id", volumeId) }));
+    public void detach(@Nonnull String volumeId) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)));
 
         provider.waitForJob(doc, "Detach Volume");
     }
-    
-    String getDiskOfferingId(String forServerId) throws InternalException, CloudException {
+
+    @Override
+    public int getMaximumVolumeCount() throws InternalException, CloudException {
+        return -2;
+    }
+
+    @Override
+    public @Nonnull Storage<Gigabyte> getMaximumVolumeSize() throws InternalException, CloudException {
+        return new Storage<Gigabyte>(5000, Storage.GIGABYTE);
+    }
+
+    @Override
+    public @Nonnull Storage<Gigabyte> getMinimumVolumeSize() throws InternalException, CloudException {
+        return new Storage<Gigabyte>(1, Storage.GIGABYTE);
+    }
+
+    /*
+    @Nullable String getDiskOfferingId(@Nonnull String forServerId) throws InternalException, CloudException {
         VolumeConfig it = null;
 
         for( VolumeConfig cfg : listVolumeConfigs(forServerId) ) {
@@ -186,10 +265,11 @@ public class Volumes implements VolumeSupport {
         }
         return (it == null ? null : it.offeringId);
     }
-    
-    Collection<DiskOffering> getDiskOfferings() throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_DISK_OFFERINGS, new Param[0]));
+    */
+
+    @Nonnull Collection<DiskOffering> getDiskOfferings() throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_DISK_OFFERINGS));
         ArrayList<DiskOffering> offerings = new ArrayList<DiskOffering>();
         NodeList matches = doc.getElementsByTagName("diskoffering");
         
@@ -227,33 +307,35 @@ public class Volumes implements VolumeSupport {
     }
     
     @Override
-    public String getProviderTermForVolume(Locale locale) {
+    public @Nonnull String getProviderTermForVolume(@Nonnull Locale locale) {
         return "volume";
     }
 
-    String getRootVolumeId(String serverId) throws InternalException, CloudException {
-        VolumeConfig cfg = getRootVolume(serverId);
+    @Nullable String getRootVolumeId(@Nonnull String serverId) throws InternalException, CloudException {
+        Volume volume = getRootVolume(serverId);
         
-        return ((cfg == null || cfg.volume == null) ? null : cfg.volume.getProviderVolumeId());
+        return (volume == null ? null : volume.getProviderVolumeId());
     }
-    
-    String getRootVolumeOffering(String serverId) throws InternalException, CloudException {
+
+    /*
+    @Nonnull String getRootVolumeOffering(@Nonnull String serverId) throws InternalException, CloudException {
         return getRootVolume(serverId).offeringId;
     }
-    
-    private VolumeConfig getRootVolume(String serverId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param[] { new Param("virtualMachineId", serverId) }));        
+    */
+
+    private @Nullable Volume getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("virtualMachineId", serverId)));
         NodeList matches = doc.getElementsByTagName("volume");
         
         for( int i=0; i<matches.getLength(); i++ ) {
             Node v = matches.item(i);
 
             if( v != null ) {
-                VolumeConfig cfg = toVolume(v, true);
+                Volume volume = toVolume(v, true);
                 
-                if( cfg != null ) {
-                    return cfg;
+                if( volume != null ) {
+                    return volume;
                 }
             }
         }
@@ -261,16 +343,15 @@ public class Volumes implements VolumeSupport {
     }
     
     @Override
-    public Volume getVolume(String volumeId) throws InternalException, CloudException {
-        VolumeConfig cfg = getVolumeConfig(volumeId);
-        
-        return (cfg == null ? null : cfg.volume);
-    }
+    public @Nullable Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
 
-    private VolumeConfig getVolumeConfig(String volumeId) throws InternalException, CloudException {
+        if( ctx == null ) {
+            throw new CloudException("No context was configured for this request");
+        }
         try {
-            CloudstackMethod method = new CloudstackMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param[] { new Param("id", volumeId), new Param("zoneId", provider.getContext().getRegionId()) }));
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", ctx.getRegionId())));
             NodeList matches = doc.getElementsByTagName("volume");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -282,14 +363,24 @@ public class Volumes implements VolumeSupport {
             }
             return null;
         }
-        catch( CloudstackException e ) {
+        catch( CSException e ) {
             if( e.getHttpCode() == 431 ) {
                 return null;
             }
             throw e;
         }
     }
-    
+
+    @Override
+    public @Nonnull Requirement getVolumeProductRequirement() throws InternalException, CloudException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
+    public boolean isVolumeSizeDeterminedByProduct() throws InternalException, CloudException {
+        return false;
+    }
+
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return provider.getComputeServices().getVirtualMachineSupport().isSubscribed();
@@ -299,7 +390,7 @@ public class Volumes implements VolumeSupport {
     private List<String> windowsDeviceIdList = null;
     
     @Override
-    public Iterable<String> listPossibleDeviceIds(Platform platform) throws InternalException, CloudException {
+    public @Nonnull Iterable<String> listPossibleDeviceIds(@Nonnull Platform platform) throws InternalException, CloudException {
         if( platform.isWindows() ) {
             if( windowsDeviceIdList == null ) {
                 ArrayList<String> list = new ArrayList<String>();
@@ -330,15 +421,39 @@ public class Volumes implements VolumeSupport {
             return unixDeviceIdList;
         }
     }
-    
+
+    private transient Collection<VolumeProduct> products;
+
     @Override
-    public Iterable<Volume> listVolumes() throws InternalException, CloudException {
+    public @Nonnull Iterable<VolumeProduct> listVolumeProducts() throws InternalException, CloudException {
+        if( products == null ) {
+            ArrayList<VolumeProduct> list = new ArrayList<VolumeProduct>();
+
+            for( DiskOffering offering : getDiskOfferings() ) {
+                VolumeProduct p = toProduct(offering);
+
+                if( p != null ) {
+                    list.add(p);
+                }
+            }
+            products = Collections.unmodifiableList(list);
+        }
+        return products;
+    }
+
+    @Override
+    public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
         return listVolumes(false);
     }
      
-    private Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param[] { new Param("zoneId", provider.getContext().getRegionId()) }));
+    private @Nonnull Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was specified for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())));
         ArrayList<Volume> volumes = new ArrayList<Volume>();
         NodeList matches = doc.getElementsByTagName("volume");
         
@@ -346,17 +461,18 @@ public class Volumes implements VolumeSupport {
             Node v = matches.item(i);
 
             if( v != null ) {
-                VolumeConfig volume = toVolume(v, rootOnly);
+                Volume volume = toVolume(v, rootOnly);
                 
-                if( volume != null && volume.volume != null ) {
-                    volumes.add(volume.volume);
+                if( volume != null ) {
+                    volumes.add(volume);
                 }
             }
         }
         return volumes;
     }
-    
-    public Iterable<Volume> listVolumesAttachedTo(final String serverId) throws InternalException, CloudException {
+
+    /*
+    public @Nonnull Iterable<Volume> listVolumesAttachedTo(@Nonnull final String serverId) throws InternalException, CloudException {
         provider.hold();
         
         PopulatorThread<Volume> populator = new PopulatorThread<Volume>(new JiteratorPopulator<Volume>() {
@@ -376,9 +492,9 @@ public class Volumes implements VolumeSupport {
         populator.populate();
         return populator.getResult();
     }
-    
-    private Collection<VolumeConfig> listVolumeConfigs(String serverId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
+
+    private @Nonnull Collection<VolumeConfig> listVolumeConfigs(@Nonnull String serverId) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param[] { new Param("virtualMachineId", serverId), new Param("zoneId", provider.getContext().getRegionId()) }));
         ArrayList<VolumeConfig> volumes = new ArrayList<VolumeConfig>();
         NodeList matches = doc.getElementsByTagName("volume");
@@ -396,6 +512,7 @@ public class Volumes implements VolumeSupport {
         }
         return volumes;
     }
+    */
 
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
@@ -403,14 +520,14 @@ public class Volumes implements VolumeSupport {
     }
 
     @Override
-    public void remove(String volumeId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param[] { new Param("id", volumeId) }));
+    public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)));
 
         provider.waitForJob(doc, "Delete Volume");
     }
     
-    private String toDeviceNumber(String deviceId) {
+    private @Nonnull String toDeviceNumber(@Nonnull String deviceId) {
         if( !deviceId.startsWith("/dev/") && !deviceId.startsWith("hd") ) {
             deviceId = "/dev/" + deviceId;
         }
@@ -435,16 +552,15 @@ public class Volumes implements VolumeSupport {
         else if( deviceId.equals("hdj") ) { return "9"; }
         else { return "9"; }
     }
-    
-    static private class VolumeConfig {
-        public VolumeConfig() { }
-        
-        public Volume volume;
-        public String offeringId;
-        public boolean root;
+
+    private @Nullable VolumeProduct toProduct(@Nullable DiskOffering offering) throws InternalException, CloudException {
+        if( offering == null ) {
+            return null;
+        }
+        return VolumeProduct.getInstance(offering.id, offering.diskSize + " GB", offering.diskSize + " GB", VolumeType.HDD);
     }
-    
-    private VolumeConfig toVolume(Node node, boolean rootOnly) throws InternalException, CloudException {
+
+    private @Nullable Volume toVolume(@Nullable Node node, boolean rootOnly) throws InternalException, CloudException {
         if( node == null ) {
             return null;
         }
@@ -452,6 +568,7 @@ public class Volumes implements VolumeSupport {
         Volume volume = new Volume();
         String offeringId = null;
         NodeList attributes = node.getChildNodes();
+        String volumeName = null, description = null;
         boolean root = false;
         
         for( int i=0; i<attributes.getLength(); i++ ) {
@@ -480,18 +597,18 @@ public class Volumes implements VolumeSupport {
                     offeringId = attribute.getFirstChild().getNodeValue().trim();
                 }
                 else if( name.equals("name") && attribute.hasChildNodes() ) {
-                    if( volume.getName() == null ) {
-                        volume.setName(attribute.getFirstChild().getNodeValue());
-                    }
+                    volumeName = attribute.getFirstChild().getNodeValue().trim();
                 }
                 else if( name.equalsIgnoreCase("virtualmachineid") && attribute.hasChildNodes() ) {
                     volume.setProviderVirtualMachineId(attribute.getFirstChild().getNodeValue());
                 }
                 else if( name.equals("displayname") && attribute.hasChildNodes() ) {
-                    volume.setName(attribute.getFirstChild().getNodeValue());
+                    description = attribute.getFirstChild().getNodeValue().trim();
                 }
                 else if( name.equals("size") && attribute.hasChildNodes() ) {
-                    volume.setSizeInGigabytes((int)(Long.parseLong(attribute.getFirstChild().getNodeValue())/1024000000L));
+                    long size = (Long.parseLong(attribute.getFirstChild().getNodeValue())/1024000000L);
+
+                    volume.setSize(new Storage<Gigabyte>(size, Storage.GIGABYTE));
                 }
                 else if( name.equals("state") && attribute.hasChildNodes() ) {
                     String state = attribute.getFirstChild().getNodeValue();
@@ -503,7 +620,7 @@ public class Volumes implements VolumeSupport {
                         volume.setCurrentState(VolumeState.AVAILABLE);
                     }
                     else {
-                        logger.warn("Unknown state for CloudStack volume: " + state);
+                        logger.warn("DEBUG: Unknown state for CloudStack volume: " + state);
                         volume.setCurrentState(VolumeState.PENDING);
                     }
                 }
@@ -523,11 +640,23 @@ public class Volumes implements VolumeSupport {
         if( !root && rootOnly ) {
             return null;
         }
-        String name = volume.getName();
-        
-        if( name == null ) {
-            name = volume.getProviderVolumeId();
-            volume.setName(name);
+        if( volume.getProviderVolumeId() == null ) {
+            return null;
+        }
+        if( volumeName == null ) {
+            volume.setName(volume.getProviderVolumeId());
+        }
+        else {
+            volume.setName(volumeName);
+        }
+        if( description == null ) {
+            volume.setDescription(volume.getName());
+        }
+        else {
+            volume.setDescription(description);
+        }
+        if( offeringId != null ) {
+            volume.setProviderProductId(offeringId);
         }
         volume.setProviderRegionId(provider.getContext().getRegionId());
         volume.setProviderDataCenterId(provider.getContext().getRegionId());
@@ -536,11 +665,8 @@ public class Volumes implements VolumeSupport {
                 volume.setDeviceId("/dev/xvda2");
             }
         }
-        VolumeConfig v = new VolumeConfig();
-        
-        v.volume = volume;
-        v.offeringId = offeringId;
-        v.root = root;
-        return v;
+        volume.setRootVolume(root);
+        volume.setType(VolumeType.HDD);
+        return volume;
     }
 }

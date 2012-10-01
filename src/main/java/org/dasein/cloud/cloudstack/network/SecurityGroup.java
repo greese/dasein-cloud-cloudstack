@@ -25,9 +25,11 @@ import java.util.Locale;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.cloudstack.CloudstackException; 
-import org.dasein.cloud.cloudstack.CloudstackMethod;
-import org.dasein.cloud.cloudstack.CloudstackProvider;
+import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSException;
+import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.Direction;
@@ -41,6 +43,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 public class SecurityGroup implements FirewallSupport {
     static private final Logger logger = Logger.getLogger(SecurityGroup.class);
@@ -51,34 +54,43 @@ public class SecurityGroup implements FirewallSupport {
     static public final String LIST_SECURITY_GROUPS             = "listSecurityGroups";
     static public final String REVOKE_SECURITY_GROUP_INGRESS    = "revokeSecurityGroupIngress";
     
-    private CloudstackProvider cloudstack;
+    private CSCloud cloudstack;
     
-    SecurityGroup(CloudstackProvider cloudstack) { this.cloudstack = cloudstack; }
+    SecurityGroup(CSCloud cloudstack) { this.cloudstack = cloudstack; }
     
     @Override
-    public String authorize(String firewallId, String cidr, Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        Param[] params = new Param[] { new Param("securitygroupid", firewallId), new Param("cidrlist", cidr), new Param("startport", String.valueOf(beginPort)), new Param("endport", String.valueOf(endPort)), new Param("protocol", protocol.name()) };
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
-        
-        method.get(method.buildUrl(AUTHORIZE_SECURITY_GROUP_INGRESS, params));
-        for( FirewallRule rule : getRules(firewallId) ) {
-            if( rule.getCidr().equals(cidr) ) {
-                if( rule.getProtocol().equals(protocol) ) {
-                    if( rule.getStartPort() == beginPort ) {
-                        if( rule.getEndPort() == endPort ) {
-                            return rule.getProviderRuleId();
+    @Deprecated
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        return authorize(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
+    }
+
+    @Override
+    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        if( direction.equals(Direction.INGRESS) ) {
+            Param[] params = new Param[] { new Param("securitygroupid", firewallId), new Param("cidrlist", cidr), new Param("startport", String.valueOf(beginPort)), new Param("endport", String.valueOf(endPort)), new Param("protocol", protocol.name()) };
+            CSMethod method = new CSMethod(cloudstack);
+
+            method.get(method.buildUrl(AUTHORIZE_SECURITY_GROUP_INGRESS, params));
+            for( FirewallRule rule : getRules(firewallId) ) {
+                if( cidr.equals(rule.getCidr()) ) {
+                    if( protocol.equals(rule.getProtocol()) ) {
+                        if( rule.getStartPort() == beginPort ) {
+                            if( rule.getEndPort() == endPort ) {
+                                return rule.getProviderRuleId();
+                            }
                         }
                     }
                 }
             }
+            throw new CloudException("Unable to identify newly created firewall rule ID");
         }
-        return null;
+        throw new OperationNotSupportedException("No egress rules are supported");
     }
 
     @Override
-    public String create(String name, String description) throws InternalException, CloudException {
+    public @Nonnull String create(@Nonnull String name, @Nonnull String description) throws InternalException, CloudException {
         Param[] params = new Param[] { new Param("name", name), new Param("description", description) };
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
+        CSMethod method = new CSMethod(cloudstack);
         Document doc = method.get(method.buildUrl(CREATE_SECURITY_GROUP, params));
         NodeList matches = doc.getElementsByTagName("id");
         String groupId = null;
@@ -93,9 +105,10 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
-    public String createInVLAN(String name, String description, String providerVlanId) throws InternalException, CloudException {
+    public @Nonnull String createInVLAN(@Nonnull String name, @Nonnull String description, @Nonnull String providerVlanId) throws InternalException, CloudException {
+        /*
         Param[] params = new Param[] { new Param("name", name), new Param("description", description) };
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
+        CSMethod method = new CSMethod(cloudstack);
         Document doc = method.get(method.buildUrl(CREATE_SECURITY_GROUP, params));
         NodeList matches = doc.getElementsByTagName("id");
         String groupId = null;
@@ -106,32 +119,43 @@ public class SecurityGroup implements FirewallSupport {
         if( groupId == null ) {
             throw new CloudException("Failed to create firewall");
         }
-        return groupId;        
+        return groupId;
+              */
+        throw new OperationNotSupportedException("Firewalls may not be created for specified VLANs");
     }
     
     @Override
-    public void delete(String firewallId) throws InternalException, CloudException {
+    public void delete(@Nonnull String firewallId) throws InternalException, CloudException {
         for( FirewallRule rule : getRules(firewallId) ) {
-            revoke(firewallId, rule.getCidr(), rule.getProtocol(), rule.getStartPort(), rule.getEndPort());
+            String cidr = rule.getCidr();
+            Protocol p = rule.getProtocol();
+            Direction d = rule.getDirection();
+
+            revoke(firewallId, d == null ? Direction.INGRESS : d, cidr == null ? "0.0.0.0/0" : cidr, p == null ? Protocol.TCP : p, rule.getStartPort(), rule.getEndPort());
         }
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
+        CSMethod method = new CSMethod(cloudstack);
         
-        method.get(method.buildUrl(DELETE_SECURITY_GROUP, new Param[] { new Param("id", firewallId) }));
+        method.get(method.buildUrl(DELETE_SECURITY_GROUP, new Param("id", firewallId)));
     }
 
     @Override
-    public Firewall getFirewall(String firewallId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
+    public @Nullable Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
+        ProviderContext ctx = cloudstack.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(cloudstack);
         
         try {
-            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param[] {  new Param("id", firewallId) }));
+            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)));
             NodeList matches = doc.getElementsByTagName("securitygroup");
             
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
                 
                 if( node != null ) {
-                    Firewall fw = toFirewall(node);
+                    Firewall fw = toFirewall(node, ctx);
                 
                     if( fw != null ) {
                         return fw;
@@ -140,7 +164,7 @@ public class SecurityGroup implements FirewallSupport {
             }
             return null;
         }
-        catch( CloudstackException e ) {
+        catch( CSException e ) {
             if( e.getHttpCode() == 431 ) {
                 return null;
             }
@@ -149,14 +173,14 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
-    public String getProviderTermForFirewall(Locale locale) {
+    public @Nonnull String getProviderTermForFirewall(@Nonnull Locale locale) {
         return "security group";
     }
 
     @Override
-    public Collection<FirewallRule> getRules(String firewallId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param[] {  new Param("id", firewallId) }));
+    public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(cloudstack);
+        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)));
         ArrayList<FirewallRule> rules = new ArrayList<FirewallRule>();
         
         NodeList matches = doc.getElementsByTagName("ingressrule");
@@ -175,13 +199,28 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     public boolean isSubscribed() throws CloudException, InternalException {
-        return cloudstack.getDataCenterServices().supportsSecurityGroups(cloudstack.getContext().getRegionId(), false);
+        ProviderContext ctx = cloudstack.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        String regionId = ctx.getRegionId();
+
+        if( regionId == null ) {
+            throw new CloudException("No region was set for this request");
+        }
+        return cloudstack.getDataCenterServices().supportsSecurityGroups(regionId, false);
     }
     
     @Override
-    public Collection<Firewall> list() throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param[] {  }));
+    public @Nonnull Collection<Firewall> list() throws InternalException, CloudException {
+        ProviderContext ctx = cloudstack.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(cloudstack);
+        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS));
         ArrayList<Firewall> firewalls = new ArrayList<Firewall>();
         NodeList matches = doc.getElementsByTagName("securitygroup");
         
@@ -189,7 +228,7 @@ public class SecurityGroup implements FirewallSupport {
             Node node = matches.item(i);
             
             if( node != null ) {
-                Firewall fw = toFirewall(node);
+                Firewall fw = toFirewall(node, ctx);
             
                 if( fw != null ) {
                     firewalls.add(fw);
@@ -200,9 +239,14 @@ public class SecurityGroup implements FirewallSupport {
     }
 
 
-    public Iterable<String> listFirewallsForVM(String vmId) throws CloudException, InternalException {
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param[] { new Param("virtualmachineId", vmId) }));
+    public @Nonnull Iterable<String> listFirewallsForVM(@Nonnull String vmId) throws CloudException, InternalException {
+        ProviderContext ctx = cloudstack.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(cloudstack);
+        Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId)));
         ArrayList<String> firewalls = new ArrayList<String>();
         NodeList matches = doc.getElementsByTagName("securitygroup");
         
@@ -210,7 +254,7 @@ public class SecurityGroup implements FirewallSupport {
             Node node = matches.item(i);
             
             if( node != null ) {
-                Firewall fw = toFirewall(node);
+                Firewall fw = toFirewall(node, ctx);
             
                 if( fw != null ) {
                     firewalls.add(fw.getProviderFirewallId());
@@ -226,12 +270,18 @@ public class SecurityGroup implements FirewallSupport {
     }
 
     @Override
-    public void revoke(String firewallId, String cidr, Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        FirewallRule rule = null;
-        
+    public void revoke(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
+        revoke(firewallId, Direction.INGRESS, cidr, protocol, beginPort, endPort);
+    }
+
+    @Override
+    public void revoke(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {        FirewallRule rule = null;
+        if( !Direction.INGRESS.equals(direction) ) {
+            throw new OperationNotSupportedException("Only ingress rules are supported");
+        }
         for( FirewallRule r : getRules(firewallId) ) {
-            if( r.getCidr().equals(cidr) ) {
-                if( r.getProtocol().equals(protocol) ) {
+            if( cidr.equals(r.getCidr()) ) {
+                if( protocol.equals(r.getProtocol()) ) {
                     if( r.getStartPort() == beginPort ) {
                         if( r.getEndPort() == endPort ) {
                             rule = r;
@@ -246,23 +296,31 @@ public class SecurityGroup implements FirewallSupport {
             return;
         }
         Param[] params = new Param[] { new Param("id", rule.getProviderRuleId()) };
-        CloudstackMethod method = new CloudstackMethod(cloudstack);
-        
+        CSMethod method = new CSMethod(cloudstack);
+
         method.get(method.buildUrl(REVOKE_SECURITY_GROUP_INGRESS, params));
-           
     }
 
-    private Firewall toFirewall(Node node) {
+    @Override
+    public boolean supportsRules(@Nonnull Direction direction, boolean inVlan) throws CloudException, InternalException {
+        return (Direction.INGRESS.equals(direction) && !inVlan);
+    }
+
+    private @Nullable Firewall toFirewall(@Nullable Node node, @Nonnull ProviderContext ctx) throws CloudException, InternalException {
         if( node == null ) {
             return null;
         }
-        
+        String regionId = ctx.getRegionId();
+
+        if( regionId == null ) {
+            throw new CloudException("No region was specified for this request");
+        }
         NodeList attributes = node.getChildNodes();
         Firewall firewall = new Firewall();
         
         firewall.setActive(true);
         firewall.setAvailable(true);
-        firewall.setRegionId(cloudstack.getContext().getRegionId());
+        firewall.setRegionId(regionId);
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
@@ -274,13 +332,13 @@ public class SecurityGroup implements FirewallSupport {
             else {
                 value = null;
             }
-            if( name.equalsIgnoreCase("id") ) {
+            if( name.equalsIgnoreCase("id") && value != null ) {
                 firewall.setProviderFirewallId(value);
             }
-            else if( name.equalsIgnoreCase("description") ) {
+            else if( name.equalsIgnoreCase("description") && value != null ) {
                 firewall.setDescription(value);
             }
-            else if( name.equalsIgnoreCase("name") ) {
+            else if( name.equalsIgnoreCase("name") && value != null ) {
                 firewall.setName(value);
             }
         }
@@ -288,11 +346,19 @@ public class SecurityGroup implements FirewallSupport {
             logger.warn("Discovered firewall " + firewall.getProviderFirewallId() + " with an empty firewall ID");
             return null;
         }
-        if( firewall.getName() == null ) {
-            firewall.setName(firewall.getProviderFirewallId());
+        String id = firewall.getProviderFirewallId();
+        String name;
+
+        if( id == null ) {
+            return null;
+        }
+        name = firewall.getName();
+        if( name == null ) {
+            name = id;
+            firewall.setName(name);
         }
         if( firewall.getDescription() == null ) {
-            firewall.setDescription(firewall.getName());
+            firewall.setDescription(name);
         }
         return firewall;
     }
@@ -307,6 +373,7 @@ public class SecurityGroup implements FirewallSupport {
         rule.setFirewallId(firewallId);
         rule.setPermission(Permission.ALLOW);
         rule.setDirection(Direction.INGRESS);
+        rule.setCidr("0.0.0.0/0");
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
@@ -318,19 +385,19 @@ public class SecurityGroup implements FirewallSupport {
             else {
                 value = null;
             }
-            if( name.equalsIgnoreCase("cidr") ) {
+            if( name.equalsIgnoreCase("cidr") && value != null ) {
                 rule.setCidr(value);
             }
-            else if( name.equalsIgnoreCase("endport") ) {
+            else if( name.equalsIgnoreCase("endport") && value != null ) {
                 rule.setEndPort(Integer.parseInt(value));
             }
-            else if( name.equalsIgnoreCase("startport") ) {
+            else if( name.equalsIgnoreCase("startport") && value != null ) {
                 rule.setStartPort(Integer.parseInt(value));
             }
-            else if( name.equalsIgnoreCase("protocol") ) {
+            else if( name.equalsIgnoreCase("protocol") && value != null ) {
                 rule.setProtocol(Protocol.valueOf(value.toUpperCase()));
             }
-            else if( name.equalsIgnoreCase("ruleId") ) {
+            else if( name.equalsIgnoreCase("ruleId") && value != null ) {
                 rule.setProviderRuleId(value);
             }
         }

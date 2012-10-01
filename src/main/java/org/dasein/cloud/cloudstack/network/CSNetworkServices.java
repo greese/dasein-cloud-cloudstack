@@ -18,18 +18,17 @@
 
 package org.dasein.cloud.cloudstack.network;
 
-import org.dasein.cloud.cloudstack.CloudstackProvider;
-import org.dasein.cloud.cloudstack.CloudstackVersion;
-import org.dasein.cloud.cloudstack.ServiceProvider;
+import org.dasein.cloud.cloudstack.CSServiceProvider;
+import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.AbstractNetworkServices;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class CloudstackNetworkServices extends AbstractNetworkServices {
-    private CloudstackProvider cloud;
+public class CSNetworkServices extends AbstractNetworkServices {
+    private CSCloud cloud;
     
-    public CloudstackNetworkServices(@Nonnull CloudstackProvider cloud) { this.cloud = cloud; }
+    public CSNetworkServices(@Nonnull CSCloud cloud) { this.cloud = cloud; }
     
     @Override 
     public @Nullable SecurityGroup getFirewallSupport() {
@@ -38,7 +37,7 @@ public class CloudstackNetworkServices extends AbstractNetworkServices {
     
     @Override
     public @Nullable IpAddress getIpAddressSupport() {
-        if( cloud.getServiceProvider().equals(ServiceProvider.DATAPIPE) ) {
+        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
             return null;
         }
         return new IpAddress(cloud);
@@ -46,7 +45,7 @@ public class CloudstackNetworkServices extends AbstractNetworkServices {
     
     @Override
     public @Nullable LoadBalancers getLoadBalancerSupport() {
-        if( cloud.getServiceProvider().equals(ServiceProvider.DATAPIPE) ) {
+        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
             return null;
         }
         return new LoadBalancers(cloud);
@@ -54,7 +53,7 @@ public class CloudstackNetworkServices extends AbstractNetworkServices {
     
     @Override
     public @Nullable Network getVlanSupport() {
-        if( cloud.getServiceProvider().equals(ServiceProvider.DATAPIPE) ) {
+        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
             return null;
         }
         return new Network(cloud);

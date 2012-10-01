@@ -25,15 +25,6 @@ import org.dasein.cloud.test.TestConfigurationException;
 
 public class CloudstackTestSuite  {
     static public Test suite() throws TestConfigurationException {
-        String provider = System.getProperty("providerName");
-
-        if( provider == null || !provider.equalsIgnoreCase("datapipe") ) {
-            String version = System.getProperty("cloudstack.version", "22");
-
-            if( version.equals("21") ) {
-                return new ComprehensiveTestSuite(CloudstackProvider.class);
-            }
-        }
-        return new ComprehensiveTestSuite(Cloudstack22.class);
+        return new ComprehensiveTestSuite(CSCloud.class);
     }
 }

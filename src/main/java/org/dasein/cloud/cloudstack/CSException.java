@@ -16,26 +16,23 @@
  * ====================================================================
  */
 
-package org.dasein.cloud.cloudstack.identity;
+package org.dasein.cloud.cloudstack;
 
-import org.dasein.cloud.cloudstack.CloudstackProvider;
-import org.dasein.cloud.identity.AbstractIdentityServices;
+import org.dasein.cloud.CloudErrorType;
+import org.dasein.cloud.CloudException;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
-/**
- * Implements the identity services for Cloudstack.
- * @author George Reese (george.reese@imaginary.com)
- * @since 2012.02
- * @version 2012.02
- */
-public class CloudstackIdentityServices extends AbstractIdentityServices {
-    private CloudstackProvider provider;
+public class CSException extends CloudException {
+    public CSException(@Nonnull Throwable exception) {
+        super(CloudErrorType.GENERAL, 593, "593", exception.getMessage());
+    }
+
+    public CSException(@Nonnull CSMethod.ParsedError e) {
+        super(CloudErrorType.GENERAL, e.code, String.valueOf(e.code), e.message);
+    }
     
-    public CloudstackIdentityServices(@Nonnull CloudstackProvider provider) { this.provider = provider; }
-    
-    public @Nullable Keypair getShellKeySupport() {
-        return new Keypair(provider);
+    public CSException(@Nonnull CloudErrorType type, @Nonnull CSMethod.ParsedError e) {
+        super(type, e.code, String.valueOf(e.code), e.message);        
     }
 }

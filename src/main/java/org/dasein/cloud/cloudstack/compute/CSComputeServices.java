@@ -18,15 +18,15 @@
 
 package org.dasein.cloud.cloudstack.compute;
 
-import org.dasein.cloud.cloudstack.CloudstackProvider;
+import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.compute.AbstractComputeServices;
 
 import javax.annotation.Nonnull;
 
-public class CloudstackComputeServices extends AbstractComputeServices {
-    private CloudstackProvider cloud = null;
+public class CSComputeServices extends AbstractComputeServices {
+    private CSCloud cloud = null;
     
-    public CloudstackComputeServices(@Nonnull CloudstackProvider cloud) { this.cloud = cloud; }
+    public CSComputeServices(@Nonnull CSCloud cloud) { this.cloud = cloud; }
     
     @Override
     public @Nonnull Templates getImageSupport() {

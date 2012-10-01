@@ -18,16 +18,13 @@
 
 package org.dasein.cloud.cloudstack;
 
-import org.dasein.cloud.cloudstack.identity.CloudstackIdentityServices;
-
-import javax.annotation.Nonnull;
-
-public class Cloudstack22 extends CloudstackProvider {
-    public @Nonnull CloudstackVersion getVersion() {
-        return CloudstackVersion.CS22;
-    }
-    
-    public @Nonnull CloudstackIdentityServices getIdentityServices() {
-        return new CloudstackIdentityServices(this);
-    }
+/**
+ * Represents a specific cloud provider of CloudStack IaaS-based services. Enables support for custom functionality
+ * and extensions, where appropriate.
+ * @author George Reese
+ * @version 2012.09 minor updates
+ * @since unknown
+ */
+public enum CSServiceProvider {
+    DATAPIPE, KT, TATA, INTERNAL
 }

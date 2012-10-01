@@ -22,9 +22,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Properties;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
@@ -35,12 +37,12 @@ import org.w3c.dom.NodeList;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class Zones implements DataCenterServices {
+public class CSTopology implements DataCenterServices {
     static public final String LIST_ZONES = "listZones";
     
-    private CloudstackProvider provider;
+    private CSCloud provider;
     
-    public Zones(@Nonnull CloudstackProvider provider) {
+    public CSTopology(@Nonnull CSCloud provider) {
         this.provider = provider;
     }
     
@@ -73,7 +75,7 @@ public class Zones implements DataCenterServices {
     }
 
     public boolean requiresNetwork(@Nonnull String zoneId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
+        CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
         Document doc = method.get(url);
 
@@ -105,7 +107,7 @@ public class Zones implements DataCenterServices {
     }
     
     public boolean supportsSecurityGroups(@Nonnull String zoneId, boolean basicOnly) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
+        CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
         Document doc = method.get(url);
         boolean sg = false;
@@ -161,7 +163,7 @@ public class Zones implements DataCenterServices {
     }
 
     public @Nonnull Collection<Region> listRegions() throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
+        CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
         Document doc = method.get(url);
 
@@ -227,9 +229,10 @@ public class Zones implements DataCenterServices {
         else if( name.contains("London") ) {
             return "EU";
         }
-        String cc = Locale.getDefault().getCountry();
-        
-        return (cc == null ? "US" : cc);
+        ProviderContext ctx = provider.getContext();
+
+        Properties p = (ctx == null ? null : ctx.getCustomProperties());
+
+        return (p == null ? "US" : p.getProperty("locale." + name, "US"));
     }
-            
 }

@@ -18,13 +18,16 @@
 
 package org.dasein.cloud.cloudstack;
 
+import javax.annotation.Nonnull;
+
 /**
- * Created by IntelliJ IDEA.
- * User: greese
- * Date: 5/3/12
- * Time: 3:49 PM
- * To change this template use File | Settings | File Templates.
+ * Represents meaningful differences in CloudStack versions. Minor changes that don't impact Dasein functionality
+ * are not represented.
  */
-public enum ServiceProvider {
-    DATAPIPE, KT, TATA, INTERNAL;
+public enum CSVersion {
+    CS21, CS22, CS3;
+
+    public boolean greaterThan(@Nonnull CSVersion control) {
+        return (ordinal() > control.ordinal());
+    }
 }

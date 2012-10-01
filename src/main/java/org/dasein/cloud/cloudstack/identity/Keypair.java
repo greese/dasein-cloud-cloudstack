@@ -20,9 +20,11 @@ package org.dasein.cloud.cloudstack.identity;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.cloudstack.CloudstackMethod;
-import org.dasein.cloud.cloudstack.CloudstackProvider;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.identity.SSHKeypair;
 import org.dasein.cloud.identity.ServiceAction;
@@ -39,15 +41,15 @@ import java.util.Collection;
 import java.util.Locale;
 
 /**
- * Implements the Cloudstack 3.0 SSH keypair support
+ * Implements the CSCloud 3.0 SSH keypair support
  * @author George Reese
  * @since 2012.02
  * @version 2012.02
  */
 public class Keypair implements ShellKeySupport {
-    private CloudstackProvider provider;
+    private CSCloud provider;
     
-    Keypair(@Nonnull CloudstackProvider provider) { this.provider = provider; }
+    Keypair(@Nonnull CSCloud provider) { this.provider = provider; }
 
     @Override
     public @Nonnull SSHKeypair createKeypair(@Nonnull String name) throws InternalException, CloudException {
@@ -56,8 +58,8 @@ public class Keypair implements ShellKeySupport {
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(CloudstackMethod.CREATE_KEYPAIR, new Param("name", name)));
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(CSMethod.CREATE_KEYPAIR, new Param("name", name)));
         NodeList matches = doc.getElementsByTagName("keypair");
 
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -72,9 +74,9 @@ public class Keypair implements ShellKeySupport {
 
     @Override
     public void deleteKeypair(@Nonnull String providerId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
+        CSMethod method = new CSMethod(provider);
 
-        method.get(method.buildUrl(CloudstackMethod.DELETE_KEYPAIR, new Param("name", providerId)));
+        method.get(method.buildUrl(CSMethod.DELETE_KEYPAIR, new Param("name", providerId)));
     }
 
     @Override
@@ -85,14 +87,19 @@ public class Keypair implements ShellKeySupport {
     }
 
     @Override
+    public Requirement getKeyImportSupport() throws CloudException, InternalException {
+        return Requirement.NONE;
+    }
+
+    @Override
     public @Nullable SSHKeypair getKeypair(@Nonnull String providerId) throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(CloudstackMethod.LIST_KEYPAIRS, new Param("name", providerId)));
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("name", providerId)));
         NodeList matches = doc.getElementsByTagName("sshkeypair");
 
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -111,6 +118,11 @@ public class Keypair implements ShellKeySupport {
     }
 
     @Override
+    public @Nonnull SSHKeypair importKeypair(@Nonnull String name, @Nonnull String publicKey) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("Import of keypairs is not supported");
+    }
+
+    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         return provider.getComputeServices().getVirtualMachineSupport().isSubscribed();
     }
@@ -122,8 +134,8 @@ public class Keypair implements ShellKeySupport {
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
-        CloudstackMethod method = new CloudstackMethod(provider);
-        Document doc = method.get(method.buildUrl(CloudstackMethod.LIST_KEYPAIRS));
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS));
         ArrayList<SSHKeypair> keys = new ArrayList<SSHKeypair>();
         NodeList matches = doc.getElementsByTagName("sshkeypair");
 

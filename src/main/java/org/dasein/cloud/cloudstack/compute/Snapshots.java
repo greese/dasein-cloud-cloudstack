@@ -19,7 +19,6 @@
 package org.dasein.cloud.cloudstack.compute;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -27,10 +26,11 @@ import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.cloudstack.CloudstackException;
-import org.dasein.cloud.cloudstack.CloudstackMethod;
-import org.dasein.cloud.cloudstack.CloudstackProvider;
-import org.dasein.cloud.cloudstack.CloudstackVersion;
+import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSException;
+import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.SnapshotState;
@@ -42,6 +42,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
 public class Snapshots implements SnapshotSupport {
     static private final Logger logger = Logger.getLogger(Snapshots.class);
@@ -50,28 +51,28 @@ public class Snapshots implements SnapshotSupport {
     static private final String DELETE_SNAPSHOT = "deleteSnapshot";
     static private final String LIST_SNAPSHOTS  = "listSnapshots";
     
-    private CloudstackProvider provider;
+    private CSCloud provider;
     
-    Snapshots(CloudstackProvider provider) {
+    Snapshots(CSCloud provider) {
         this.provider = provider;
     }
     
     @Override
     public String create(String volumeId, String description) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        String url = method.buildUrl(CREATE_SNAPSHOT, new Param[] { new Param("volumeId", volumeId) });
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
         Document doc;
         
         try {
             doc = method.get(url);
         }
-        catch( CloudstackException e ) {
+        catch( CSException e ) {
             int code = e.getHttpCode();
 
             if( code == 431 ) {
                 return null;
             }
-            else if( provider.getVersion().equals(CloudstackVersion.CS21) && (code == 500 || code == 530) ) {
+            else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
                 if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
                     // a couple of problems here...
                     // this is not really an error condition, so we should look for the current in-progress snapshot
@@ -103,7 +104,7 @@ public class Snapshots implements SnapshotSupport {
         }
         NodeList matches;
         
-        if( provider.getVersion().greaterThan(CloudstackVersion.CS21) ) {
+        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
             matches = doc.getElementsByTagName("id");
         }
         else {
@@ -123,9 +124,9 @@ public class Snapshots implements SnapshotSupport {
         try {
             provider.waitForJob(doc, "Create Snapshot");
         }
-        catch( CloudstackException e ) {
+        catch( CSException e ) {
             if( e.getHttpCode() == 431 ) {
-                logger.warn("Cloudstack opted not to make a snapshot: " + e.getMessage());
+                logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
                 return null;
             }
             throw e;
@@ -143,8 +144,8 @@ public class Snapshots implements SnapshotSupport {
 
     @Override
     public void remove(String snapshotId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        String url = method.buildUrl(DELETE_SNAPSHOT, new Param[] { new Param("id", snapshotId) });
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
         Document doc;
         
         doc = method.get(url);
@@ -166,7 +167,7 @@ public class Snapshots implements SnapshotSupport {
         if( snapshotId == null ) {
             return null;
         }
-        for( Snapshot snapshot : listSnapshots(snapshotId) ) {
+        for( Snapshot snapshot : listSnapshots() ) {
             if( snapshot.getProviderSnapshotId().equals(snapshotId) ) {
                 return snapshot;
             }
@@ -195,13 +196,14 @@ public class Snapshots implements SnapshotSupport {
     }
 
     @Override
-    public Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
-        return listSnapshots(null);
-    }
-    
-    private Collection<Snapshot> listSnapshots(String snapshotId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param[] { new Param("zoneId", provider.getContext().getRegionId()) });
+    public @Nonnull Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
         Document doc;
         
         doc = method.get(url);
@@ -211,7 +213,7 @@ public class Snapshots implements SnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s);
+                Snapshot snapshot = toSnapshot(s, ctx);
                 
                 if( snapshot != null ) {
                     snapshots.add(snapshot);
@@ -222,8 +224,13 @@ public class Snapshots implements SnapshotSupport {
     }
 
     private Snapshot getLatestSnapshot(String forVolumeId) throws InternalException, CloudException {
-        CloudstackMethod method = new CloudstackMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param[] { new Param("zoneId", provider.getContext().getRegionId()), new Param("volumeId", forVolumeId) });
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("volumeId", forVolumeId));
         Document doc;
         
         doc = method.get(url);
@@ -234,7 +241,7 @@ public class Snapshots implements SnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s);
+                Snapshot snapshot = toSnapshot(s, ctx);
                 
                 if( snapshot != null && snapshot.getVolumeId() != null && snapshot.getVolumeId().equals(forVolumeId) ) {
                     if( latest == null || snapshot.getSnapshotTimestamp() > latest.getSnapshotTimestamp() ) {
@@ -251,15 +258,18 @@ public class Snapshots implements SnapshotSupport {
         throw new OperationNotSupportedException();
     }
 
-    private Snapshot toSnapshot(Node node) {
+    private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx) {
+        if( node == null ) {
+            return null;
+        }
         Snapshot snapshot = new Snapshot();
         NodeList attrs = node.getChildNodes();
         String type = null;
         
         snapshot.setCurrentState(SnapshotState.AVAILABLE);
-        snapshot.setOwner(provider.getContext().getAccountNumber());
+        snapshot.setOwner(ctx.getAccountNumber());
         snapshot.setProgress("100%");
-        snapshot.setRegionId(provider.getContext().getRegionId());
+        snapshot.setRegionId(ctx.getRegionId());
         snapshot.setSizeInGb(0);
         for( int i=0; i<attrs.getLength(); i++ ) {
             Node attr = attrs.item(i);
@@ -279,7 +289,7 @@ public class Snapshots implements SnapshotSupport {
             else if( name.equalsIgnoreCase("name") ) {
                 snapshot.setName(value);
             }
-            else if( name.equalsIgnoreCase("created") ) {
+            else if( value != null && name.equalsIgnoreCase("created") ) {
                 snapshot.setSnapshotTimestamp(provider.parseTime(value));
             }
             else if( name.equalsIgnoreCase("snapshottype") ) {
