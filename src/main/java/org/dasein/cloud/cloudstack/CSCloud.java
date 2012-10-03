@@ -156,7 +156,7 @@ public class CSCloud extends AbstractCloud {
             Properties properties = (ctx == null ? null : ctx.getCustomProperties());
             String versionString;
 
-            versionString = (properties == null ? "CS3" : properties.getProperty("csVersion", "CS3"));
+            versionString = (properties == null ? "CS3" : properties.getProperty("apiVersion", "CS3"));
             try {
                 version = CSVersion.valueOf(versionString);
             }

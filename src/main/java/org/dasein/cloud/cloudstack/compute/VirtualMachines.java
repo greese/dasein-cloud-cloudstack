@@ -452,17 +452,23 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
             securityGroupIds = str.toString();
         }
-        int count = 5;
-        
+        int count = 4;
+
+        if( userData != null && userData.length() > 0 ) {
+            count++;
+        }
         if( withKeypair != null ) {
             count++;
         }
         if( targetVlanId == null ) {
+            System.out.println("No target VLAN specified, looking one up...");
             Network vlan = provider.getNetworkServices().getVlanSupport();
             
             if( vlan != null && vlan.isSubscribed() ) {
+                System.out.println("Required: " + provider.getDataCenterServices().requiresNetwork(regionId));
                 if( provider.getDataCenterServices().requiresNetwork(regionId) ) {
                     vlans = vlan.findFreeNetworks();
+                    System.out.println("Found: " + vlans);
                 }
             }
         }
@@ -535,15 +541,15 @@ public class VirtualMachines implements VirtualMachineSupport {
         params[1] = new Param("serviceOfferingId", prdId);
         params[2] = new Param("templateId", imageId);
         params[3] = new Param("displayName", name);
-        try {
-            params[4] = new Param("userdata", new String(Base64.encodeBase64(userData.getBytes("utf-8")), "utf-8"));
+        int i = 4;
+        if( userData != null && userData.length() > 0 ) {
+            try {
+                params[i++] = new Param("userdata", new String(Base64.encodeBase64(userData.getBytes("utf-8")), "utf-8"));
+            }
+            catch( UnsupportedEncodingException e ) {
+                e.printStackTrace();
+            }
         }
-        catch( UnsupportedEncodingException e ) {
-            e.printStackTrace();
-            params[4] = new Param("userdata", "");
-        }
-        int i = 5;
-        
         if( withKeypair != null ) {
             params[i++] = new Param("keypair", withKeypair);
         }
@@ -809,11 +815,9 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public void stop(@Nonnull String serverId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", serverId)));
 
-        provider.waitForJob(doc, "Pause Server");
+        method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", serverId)));
     }
-
 
     @Override
     public boolean supportsAnalytics() throws CloudException, InternalException {
@@ -1018,14 +1022,14 @@ public class VirtualMachines implements VirtualMachineSupport {
 
                 //(Running, Stopped, Stopping, Starting, Creating, Migrating, HA).
                 if( value.equalsIgnoreCase("stopped") ) {
-                    state = VmState.PAUSED;
+                    state = VmState.STOPPED;
                     server.setImagable(true);
                 }
                 else if( value.equalsIgnoreCase("running") ) {
                     state = VmState.RUNNING;
                 }
                 else if( value.equalsIgnoreCase("stopping") ) {
-                    state = VmState.REBOOTING;
+                    state = VmState.STOPPING;
                 }
                 else if( value.equalsIgnoreCase("starting") ) {
                     state = VmState.PENDING;

@@ -192,7 +192,7 @@ public class Templates implements MachineImageSupport {
         if( server == null ) {
             throw new CloudException("No such server: " + vmId);
         }
-        if( !server.getCurrentState().equals(VmState.PAUSED) ) {
+        if( !server.getCurrentState().equals(VmState.STOPPED) ) {
             throw new CloudException("The server must be paused in order to create an image.");
         }
         final AsynchronousTask<String> task = new AsynchronousTask<String>();
