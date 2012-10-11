@@ -401,7 +401,7 @@ public class IpAddress implements IpAddressSupport {
                             rule.setProviderRuleId(attr.getFirstChild().getNodeValue());
                         } 
                         else if( attr.getNodeName().equals("virtualmachineid") ) {
-                            rule.setServerId(attr.getFirstChild().getNodeValue().toUpperCase());
+                            rule.setServerId(attr.getFirstChild().getNodeValue());
                         } 
                     }
                     if( logger.isDebugEnabled() ) {
