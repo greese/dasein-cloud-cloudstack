@@ -651,10 +651,14 @@ public class VirtualMachines implements VirtualMachineSupport {
             throw new CloudException("No context was configured for this request");
         }
         Map<Architecture,Collection<VirtualMachineProduct>> cached;
-        String endpoint = provider.getContext().getEndpoint();
-        
-        if( productCache.containsKey(endpoint) ) {
-            cached = productCache.get(endpoint);
+        //String endpoint = provider.getContext().getEndpoint();
+
+        // No longer caching by endpoint- different accounts may return different products...
+        //   so we'll cache by account instead.
+        String accountId = provider.getContext().getAccountNumber();
+
+        if( productCache.containsKey(accountId) ) {
+            cached = productCache.get(accountId);
             if( cached.containsKey(architecture) ) {
                 Collection<VirtualMachineProduct> products = cached.get(architecture);
                 
@@ -665,7 +669,7 @@ public class VirtualMachines implements VirtualMachineSupport {
         }
         else {
             cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
-            productCache.put(endpoint, cached);
+            productCache.put(accountId, cached);
         }
         List<VirtualMachineProduct> products;
         Set<String> mapping = null;
