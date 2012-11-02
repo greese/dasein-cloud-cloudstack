@@ -56,7 +56,7 @@
     
     <category name="dasein.cloud.cloudstack.std">
         <priority value="TRACE" />
-        <appender-ref ref="ASYNCUNIT" />
+        <appender-ref ref="ASYNCDASEIN" />
     </category>
     
     <category name="dasein.cloud.cloudstack.wire">

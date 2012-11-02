@@ -20,6 +20,7 @@ package org.dasein.cloud.cloudstack.compute;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 import org.apache.log4j.Logger;
@@ -35,6 +36,8 @@ import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.SnapshotState;
 import org.dasein.cloud.compute.SnapshotSupport;
+import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.util.CalendarWrapper;
 import org.w3c.dom.Document;
@@ -58,7 +61,33 @@ public class Snapshots implements SnapshotSupport {
     }
     
     @Override
-    public String create(String volumeId, String description) throws InternalException, CloudException {
+    public @Nonnull String create(@Nonnull String volumeId, @Nonnull String description) throws InternalException, CloudException {
+        Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId);
+
+        if( volume == null ) {
+            throw new CloudException("No such volume: " + volumeId);
+        }
+        if( volume.getProviderVirtualMachineId() == null ) {
+            throw new CloudException("You must attach this volume before you can snapshot it.");
+        }
+        long timeout = System.currentTimeMillis() +(CalendarWrapper.MINUTE * 10L);
+
+        while( timeout > System.currentTimeMillis() ) {
+            if( VolumeState.AVAILABLE.equals(volume.getCurrentState()) ) {
+                break;
+            }
+            if( VolumeState.DELETED.equals(volume.getCurrentState()) ) {
+                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
+            }
+            try { Thread.sleep(15000L); }
+            catch( InterruptedException ignore ) { }
+            try { volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId); }
+            catch( Throwable ignore ) { }
+            if( volume == null ) {
+                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
+            }
+        }
+
         CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
         Document doc;
@@ -69,8 +98,13 @@ public class Snapshots implements SnapshotSupport {
         catch( CSException e ) {
             int code = e.getHttpCode();
 
-            if( code == 431 ) {
-                return null;
+            if( code == 431 && e.getMessage() != null && e.getMessage().contains("no change since last snapshot")) {
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s.getProviderSnapshotId();
             }
             else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
                 if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
@@ -79,9 +113,9 @@ public class Snapshots implements SnapshotSupport {
                     // but cloud.com does not list in-progress snapshots
                     long then = (System.currentTimeMillis() - (CalendarWrapper.MINUTE*9));
                     long now = System.currentTimeMillis() - CalendarWrapper.MINUTE;
-                    long timeout = (now + (CalendarWrapper.MINUTE*20));
                     Snapshot wtf = null;
-                        
+
+                    timeout = (now + (CalendarWrapper.MINUTE*20));
                     while( System.currentTimeMillis() < timeout ) {
                         Snapshot latest = getLatestSnapshot(volumeId);
                             
@@ -90,7 +124,7 @@ public class Snapshots implements SnapshotSupport {
                         }
                         else if( latest != null && latest.getSnapshotTimestamp() >= then ) {
                             wtf = latest;
-                            }
+                        }
                         try { Thread.sleep(20000L); }
                         catch( InterruptedException ignore ) { /* ignore */ }
                     }
@@ -127,7 +161,12 @@ public class Snapshots implements SnapshotSupport {
         catch( CSException e ) {
             if( e.getHttpCode() == 431 ) {
                 logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
-                return null;
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s.getProviderSnapshotId();
             }
             throw e;
         }
@@ -135,10 +174,16 @@ public class Snapshots implements SnapshotSupport {
             String msg = e.getMessage();
             
             if( msg != null && msg.contains("no change since last snapshot") ) {
-                return null;
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s.getProviderSnapshotId();
             }
             throw e;
         }
+        System.out.println("Created: " + snapshotId);
         return snapshotId;
     }
 
@@ -163,15 +208,15 @@ public class Snapshots implements SnapshotSupport {
     }
 
     @Override
-    public Snapshot getSnapshot(String snapshotId) throws InternalException, CloudException {
-        if( snapshotId == null ) {
-            return null;
-        }
+    public @Nullable Snapshot getSnapshot(@Nonnull String snapshotId) throws InternalException, CloudException {
+        System.out.println("Fetching: " + snapshotId);
         for( Snapshot snapshot : listSnapshots() ) {
             if( snapshot.getProviderSnapshotId().equals(snapshotId) ) {
+                System.out.println("Matches: " + snapshotId);
                 return snapshot;
             }
         }
+        System.out.println("No match");
         return null;
     }
 
@@ -202,6 +247,7 @@ public class Snapshots implements SnapshotSupport {
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
+        Iterable<Volume> volumes = provider.getComputeServices().getVolumeSupport().listVolumes();
         CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
         Document doc;
@@ -213,7 +259,7 @@ public class Snapshots implements SnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s, ctx);
+                Snapshot snapshot = toSnapshot(s, ctx, volumes);
                 
                 if( snapshot != null ) {
                     snapshots.add(snapshot);
@@ -231,8 +277,16 @@ public class Snapshots implements SnapshotSupport {
         }
         CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("volumeId", forVolumeId));
+        Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(forVolumeId);
+        List<Volume> volumes;
         Document doc;
-        
+
+        if( volume == null ) {
+            volumes = Collections.emptyList();
+        }
+        else {
+            volumes = Collections.singletonList(volume);
+        }
         doc = method.get(url);
         Snapshot latest = null;
         
@@ -241,7 +295,7 @@ public class Snapshots implements SnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s, ctx);
+                Snapshot snapshot = toSnapshot(s, ctx, volumes);
                 
                 if( snapshot != null && snapshot.getVolumeId() != null && snapshot.getVolumeId().equals(forVolumeId) ) {
                     if( latest == null || snapshot.getSnapshotTimestamp() > latest.getSnapshotTimestamp() ) {
@@ -258,7 +312,7 @@ public class Snapshots implements SnapshotSupport {
         throw new OperationNotSupportedException();
     }
 
-    private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx) {
+    private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Iterable<Volume> volumes) throws CloudException, InternalException {
         if( node == null ) {
             return null;
         }
@@ -285,6 +339,19 @@ public class Snapshots implements SnapshotSupport {
             }
             else if( name.equalsIgnoreCase("volumeid") ) {
                 snapshot.setVolumeId(value);
+                if( value != null ) {
+                    Volume v = null;
+
+                    for( Volume volume : volumes ) {
+                        if( volume.getProviderVolumeId().equals(value) ) {
+                            v = volume;
+                            break;
+                        }
+                    }
+                    if( v != null ) {
+                        snapshot.setSizeInGb(v.getSize().intValue());
+                    }
+                }
             }
             else if( name.equalsIgnoreCase("name") ) {
                 snapshot.setName(value);

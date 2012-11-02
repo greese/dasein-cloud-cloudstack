@@ -461,14 +461,11 @@ public class VirtualMachines implements VirtualMachineSupport {
             count++;
         }
         if( targetVlanId == null ) {
-            System.out.println("No target VLAN specified, looking one up...");
             Network vlan = provider.getNetworkServices().getVlanSupport();
             
             if( vlan != null && vlan.isSubscribed() ) {
-                System.out.println("Required: " + provider.getDataCenterServices().requiresNetwork(regionId));
                 if( provider.getDataCenterServices().requiresNetwork(regionId) ) {
                     vlans = vlan.findFreeNetworks();
-                    System.out.println("Found: " + vlans);
                 }
             }
         }
@@ -613,16 +610,13 @@ public class VirtualMachines implements VirtualMachineSupport {
         long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE*20);
         VirtualMachine vm = null;
         
-        while( vm == null && (System.currentTimeMillis() < timeout) ) {
+        while( System.currentTimeMillis() < timeout ) {
             try { vm = getVirtualMachine(serverId); }
-            catch( Throwable ignore ) {
-                try { Thread.sleep(1000L); }
-                catch( InterruptedException second ) { /* ignore */ }
-            }
+            catch( Throwable ignore ) {  }
             if( vm != null ) {
                 return vm;
             }
-            try { Thread.sleep(200L); }
+            try { Thread.sleep(5000L); }
             catch( InterruptedException ignore ) { }
         }
         provider.waitForJob(doc, "Launch Server");

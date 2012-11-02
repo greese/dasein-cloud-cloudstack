@@ -41,6 +41,9 @@ import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.compute.Snapshot;
+import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.Volume;
 import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.compute.VolumeProduct;
@@ -48,6 +51,7 @@ import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.compute.VolumeSupport;
 import org.dasein.cloud.compute.VolumeType;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Storage;
 import org.w3c.dom.Document;
@@ -68,9 +72,10 @@ public class Volumes implements VolumeSupport {
     static public class DiskOffering {
         public String id;
         public long diskSize;
-        
+        public String name;
+        public String description;
+
         public String toString() {return "DiskOffering ["+id+"] of size "+diskSize;}
-        
     }
     
     private CSCloud provider;
@@ -85,6 +90,25 @@ public class Volumes implements VolumeSupport {
         
         if( logger.isInfoEnabled() ) {
             logger.info("attaching " + volumeId + " to " + serverId + " as " + deviceId);
+        }
+        VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+
+        if( vm == null ) {
+            throw new CloudException("No such virtual machine: " + serverId);
+        }
+        long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10L);
+
+        while( timeout > System.currentTimeMillis() ) {
+            if( VmState.RUNNING.equals(vm.getCurrentState()) || VmState.STOPPED.equals(vm.getCurrentState()) ) {
+                break;
+            }
+            try { Thread.sleep(15000L); }
+            catch( InterruptedException ignore ) { }
+            try { vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId); }
+            catch( Throwable ignore ) { }
+            if( vm == null ) {
+                throw new CloudException("Virtual machine " + serverId + " disappeared waiting for it to enter an attachable state");
+            }
         }
         if( deviceId == null ) {
             params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId) }; 
@@ -150,17 +174,25 @@ public class Volumes implements VolumeSupport {
                 }
             }
         }
-        Storage<Gigabyte> size = options.getVolumeSize();
+        Storage<Gigabyte> size;
 
         if( snapshotId == null ) {
             if( product == null ) {
+                size = options.getVolumeSize();
+                if( size.intValue() < getMinimumVolumeSize().intValue() ) {
+                    size = getMinimumVolumeSize();
+                }
                 Iterable<VolumeProduct> products = listVolumeProducts();
                 VolumeProduct best = null;
 
                 for( VolumeProduct p : products ) {
                     Storage<Gigabyte> s = p.getVolumeSize();
 
-                    long currentSize = (s == null ? 0L : s.getQuantity().longValue());
+                    if( s  == null || s.intValue() == 0 ) {
+                        product = p;
+                        break;
+                    }
+                    long currentSize = s.getQuantity().longValue();
 
                     s = (best == null ? null : best.getVolumeSize());
 
@@ -191,22 +223,66 @@ public class Volumes implements VolumeSupport {
                     product = best;
                 }
             }
+            else {
+                size = product.getVolumeSize();
+                if( size == null || size.intValue() < 1 ) {
+                    size = options.getVolumeSize();
+                }
+            }
             if( product == null && size.longValue() < 1L ) {
                 throw new CloudException("No offering matching " + options.getVolumeProductId());
             }
         }
-        Param[] params = new Param[3];
+        else {
+            Snapshot snapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(snapshotId);
 
-        params[0] = new Param("name", options.getName());
-        params[1] = new Param("zoneId", ctx.getRegionId());
-        if( snapshotId != null ) {
-            params[2] = new Param("snapshotId", snapshotId);
+            if( snapshot == null ) {
+                throw new CloudException("No such snapshot: " + snapshotId);
+            }
+            int s = snapshot.getSizeInGb();
+
+            if( s < 1 || s < getMinimumVolumeSize().intValue() ) {
+                size = getMinimumVolumeSize();
+            }
+            else {
+                size = new Storage<Gigabyte>(s, Storage.GIGABYTE);
+            }
         }
-        else if( product != null ) {
-            params[2] = new Param("diskOfferingId", product.getProviderProductId());
+        Param[] params;
+
+        if( product == null && snapshotId == null ) {
+            params = new Param[] {
+                    new Param("name", options.getName()),
+                    new Param("zoneId", ctx.getRegionId()),
+                    new Param("size", String.valueOf(size.longValue()))
+            };
+        }
+        else if( snapshotId != null ) {
+            params = new Param[] {
+                    new Param("name", options.getName()),
+                    new Param("zoneId", ctx.getRegionId()),
+                    new Param("snapshotId", snapshotId),
+                    new Param("size", String.valueOf(size.longValue()))
+            };
         }
         else {
-            params[2] = new Param("size", String.valueOf(size.longValue()));
+            Storage<Gigabyte> s = product.getVolumeSize();
+
+            if( s == null || s.intValue() < 1 ) {
+                params = new Param[] {
+                        new Param("name", options.getName()),
+                        new Param("zoneId", ctx.getRegionId()),
+                        new Param("diskOfferingId", product.getProviderProductId()),
+                        new Param("size", String.valueOf(size.longValue()))
+                };
+            }
+            else {
+                params = new Param[] {
+                        new Param("name", options.getName()),
+                        new Param("zoneId", ctx.getRegionId()),
+                        new Param("diskOfferingId", product.getProviderProductId())
+                };
+            }
         }
 
         CSMethod method = new CSMethod(provider);
@@ -295,11 +371,25 @@ public class Volumes implements VolumeSupport {
                 else if( n.getNodeName().equals("disksize") ) {
                     offering.diskSize = Long.parseLong(value);
                 }
-                if( offering.id != null && offering.diskSize > 0 ) {
-                    break;
+                else if( n.getNodeName().equalsIgnoreCase("name") ) {
+                    offering.name = value;
+                }
+                else if( n.getNodeName().equalsIgnoreCase("displayText") ) {
+                    offering.description = value;
                 }
             }
             if( offering.id != null ) {
+                if( offering.name == null ) {
+                    if( offering.diskSize > 0 ) {
+                        offering.name = offering.diskSize + " GB";
+                    }
+                    else {
+                        offering.name = "Custom #" + offering.id;
+                    }
+                }
+                if( offering.description == null ) {
+                    offering.description = offering.name;
+                }
                 offerings.add(offering);
             }
         }
@@ -557,7 +647,12 @@ public class Volumes implements VolumeSupport {
         if( offering == null ) {
             return null;
         }
-        return VolumeProduct.getInstance(offering.id, offering.diskSize + " GB", offering.diskSize + " GB", VolumeType.HDD);
+        if( offering.diskSize < 1 ) {
+            return VolumeProduct.getInstance(offering.id, offering.name, offering.description, VolumeType.HDD);
+        }
+        else {
+            return VolumeProduct.getInstance(offering.id, offering.name, offering.description, VolumeType.HDD, new Storage<Gigabyte>(offering.diskSize, Storage.GIGABYTE));
+        }
     }
 
     private @Nullable Volume toVolume(@Nullable Node node, boolean rootOnly) throws InternalException, CloudException {
@@ -616,7 +711,7 @@ public class Volumes implements VolumeSupport {
                     if( state == null ) {
                         volume.setCurrentState(VolumeState.PENDING);
                     }
-                    else if( state.equalsIgnoreCase("created") || state.equalsIgnoreCase("allocated") || state.equalsIgnoreCase("ready") ) {
+                    else if( state.equalsIgnoreCase("created") || state.equalsIgnoreCase("ready") || state.equalsIgnoreCase("allocated") ) {
                         volume.setCurrentState(VolumeState.AVAILABLE);
                     }
                     else {
