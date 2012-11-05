@@ -743,9 +743,10 @@ public class Templates implements MachineImageSupport {
         if( image.getPlatform() == null && image.getName() != null ) {
             image.setPlatform(Platform.guess(image.getName()));
         }
-        else {
+        if (image.getPlatform() == null) {
             image.setPlatform(Platform.UNKNOWN);
         }
+        
         if( image.getArchitecture() == null ) {
             image.setArchitecture(bestArchitectureGuess);
         }
