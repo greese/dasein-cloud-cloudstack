@@ -52,6 +52,7 @@ import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.CSServiceProvider;
 import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
@@ -197,6 +198,9 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Requirement identifyVlanRequirement() throws CloudException, InternalException {
+        if( provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+            return Requirement.NONE;
+        }
         if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
             ProviderContext ctx = provider.getContext();
 

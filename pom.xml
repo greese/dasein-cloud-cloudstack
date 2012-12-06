@@ -233,7 +233,7 @@
                 </property>                
             </systemProperties> 
           <includes>
-            <!-- <include>**/CloudstackTestSuite.java</include> -->
+            <include>**/CloudstackTestSuite.java</include> 
           </includes>
         </configuration>
       </plugin>   
