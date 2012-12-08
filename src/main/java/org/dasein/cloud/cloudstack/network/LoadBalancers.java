@@ -33,6 +33,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -299,7 +300,39 @@ public class LoadBalancers implements LoadBalancerSupport {
     public String getProviderTermForLoadBalancer(Locale locale) {
         return "load balancer";
     }
-    
+
+    @Override
+    public Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
+        HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+        CSMethod method = new CSMethod(provider);
+
+        try {
+            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES));
+            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+            for( int i=0; i<rules.getLength(); i++ ) {
+                Node node = rules.item(i);
+
+                toRule(node, matches);
+            }
+            ArrayList<ResourceStatus> results = new ArrayList<ResourceStatus>();
+
+            for( LoadBalancer lb : matches.values() ) {
+                if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
+                    results.add(new ResourceStatus(lb.getProviderLoadBalancerId(), lb.getCurrentState()));
+                }
+            }
+            return results;
+        }
+        catch( CloudException e ) {
+            if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
+                return Collections.emptyList();
+            }
+            e.printStackTrace();
+            throw e;
+        }
+    }
+
     static private volatile List<LbAlgorithm> algorithms = null;
     
     @Override

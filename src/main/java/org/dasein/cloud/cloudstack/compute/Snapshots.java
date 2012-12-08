@@ -28,6 +28,9 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -59,136 +62,37 @@ public class Snapshots implements SnapshotSupport {
     Snapshots(CSCloud provider) {
         this.provider = provider;
     }
-    
+
     @Override
-    public @Nonnull String create(@Nonnull String volumeId, @Nonnull String description) throws InternalException, CloudException {
-        Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId);
-
-        if( volume == null ) {
-            throw new CloudException("No such volume: " + volumeId);
-        }
-        if( volume.getProviderVirtualMachineId() == null ) {
-            throw new CloudException("You must attach this volume before you can snapshot it.");
-        }
-        long timeout = System.currentTimeMillis() +(CalendarWrapper.MINUTE * 10L);
-
-        while( timeout > System.currentTimeMillis() ) {
-            if( VolumeState.AVAILABLE.equals(volume.getCurrentState()) ) {
-                break;
-            }
-            if( VolumeState.DELETED.equals(volume.getCurrentState()) ) {
-                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
-            }
-            try { Thread.sleep(15000L); }
-            catch( InterruptedException ignore ) { }
-            try { volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId); }
-            catch( Throwable ignore ) { }
-            if( volume == null ) {
-                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
-            }
-        }
-
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
-        Document doc;
-        
-        try {
-            doc = method.get(url);
-        }
-        catch( CSException e ) {
-            int code = e.getHttpCode();
-
-            if( code == 431 && e.getMessage() != null && e.getMessage().contains("no change since last snapshot")) {
-                Snapshot s = getLatestSnapshot(volumeId);
-
-                if( s == null ) {
-                    throw e;
-                }
-                return s.getProviderSnapshotId();
-            }
-            else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
-                if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
-                    // a couple of problems here...
-                    // this is not really an error condition, so we should look for the current in-progress snapshot
-                    // but cloud.com does not list in-progress snapshots
-                    long then = (System.currentTimeMillis() - (CalendarWrapper.MINUTE*9));
-                    long now = System.currentTimeMillis() - CalendarWrapper.MINUTE;
-                    Snapshot wtf = null;
-
-                    timeout = (now + (CalendarWrapper.MINUTE*20));
-                    while( System.currentTimeMillis() < timeout ) {
-                        Snapshot latest = getLatestSnapshot(volumeId);
-                            
-                        if( latest != null && latest.getSnapshotTimestamp() >= now ) {
-                            return latest.getProviderSnapshotId();
-                        }
-                        else if( latest != null && latest.getSnapshotTimestamp() >= then ) {
-                            wtf = latest;
-                        }
-                        try { Thread.sleep(20000L); }
-                        catch( InterruptedException ignore ) { /* ignore */ }
-                    }
-                    if( wtf != null ) {
-                        return wtf.getProviderSnapshotId();
-                    }
-                    return create(volumeId, description);
-                }
-            }
-            throw e;
-        }
-        NodeList matches;
-        
-        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
-            matches = doc.getElementsByTagName("id");
-        }
-        else {
-            matches = doc.getElementsByTagName("snapshotid");
-            if( matches.getLength() < 1 ) {
-                matches = doc.getElementsByTagName("id");
-            }
-        }
-        String snapshotId = null;
-        
-        if( matches.getLength() > 0 ) {
-            snapshotId = matches.item(0).getFirstChild().getNodeValue();
-        }
-        if( snapshotId == null ) {
-            throw new CloudException("Failed to create a snapshot");
-        }
-        try {
-            provider.waitForJob(doc, "Create Snapshot");
-        }
-        catch( CSException e ) {
-            if( e.getHttpCode() == 431 ) {
-                logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
-                Snapshot s = getLatestSnapshot(volumeId);
-
-                if( s == null ) {
-                    throw e;
-                }
-                return s.getProviderSnapshotId();
-            }
-            throw e;
-        }
-        catch( CloudException e ) {
-            String msg = e.getMessage();
-            
-            if( msg != null && msg.contains("no change since last snapshot") ) {
-                Snapshot s = getLatestSnapshot(volumeId);
-
-                if( s == null ) {
-                    throw e;
-                }
-                return s.getProviderSnapshotId();
-            }
-            throw e;
-        }
-        System.out.println("Created: " + snapshotId);
-        return snapshotId;
+    public void addSnapshotShare(@Nonnull String providerSnapshotId, @Nonnull String accountNumber) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Snapshot sharing is not supported");
     }
 
     @Override
-    public void remove(String snapshotId) throws InternalException, CloudException {
+    public void addPublicShare(@Nonnull String providerSnapshotId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Snapshot sharing is not supported");
+    }
+
+    @Override
+    @Deprecated
+    public @Nonnull String create(@Nonnull String volumeId, @Nonnull String description) throws InternalException, CloudException {
+        @SuppressWarnings("ConstantConditions") String name = (description == null ? ("From " + volumeId) : description);
+
+        return snapshot(volumeId, name, name).getProviderSnapshotId();
+    }
+
+    @Override
+    public @Nullable Snapshot getSnapshot(@Nonnull String snapshotId) throws InternalException, CloudException {
+        for( Snapshot snapshot : listSnapshots() ) {
+            if( snapshot.getProviderSnapshotId().equals(snapshotId) ) {
+                return snapshot;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public void remove(@Nonnull String snapshotId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
         String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
         Document doc;
@@ -198,30 +102,84 @@ public class Snapshots implements SnapshotSupport {
     }
 
     @Override
-    public String getProviderTermForSnapshot(Locale locale) {
+    public void removeAllSnapshotShares(@Nonnull String providerSnapshotId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Snapshot sharing is not supported");
+    }
+
+    @Override
+    public void removeSnapshotShare(@Nonnull String providerSnapshotId, @Nonnull String accountNumber) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Snapshot sharing is not supported");
+    }
+
+    @Override
+    public void removePublicShare(@Nonnull String providerSnapshotId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Snapshot sharing is not supported");
+    }
+
+    @Override
+    public @Nonnull Iterable<Snapshot> searchSnapshots(@Nullable String ownerId, @Nullable String keyword) throws InternalException, CloudException {
+        ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
+
+        if( keyword != null ) {
+            keyword = keyword.toLowerCase();
+        }
+        for( Snapshot s : listSnapshots() ) {
+            if( ownerId != null && !ownerId.equals(s.getOwner()) ) {
+                continue;
+            }
+            if( keyword != null && (!s.getName().toLowerCase().contains(keyword) && !s.getDescription().toLowerCase().contains(keyword)) ) {
+                continue;
+            }
+            snapshots.add(s);
+        }
+        return snapshots;
+    }
+
+    @Override
+    public @Nonnull String getProviderTermForSnapshot(@Nonnull Locale locale) {
         return "snapshot";
     }
 
     @Override
-    public Iterable<String> listShares(String snapshotId) throws InternalException, CloudException {
+    public @Nonnull Iterable<String> listShares(@Nonnull String snapshotId) throws InternalException, CloudException {
         return Collections.emptyList();
     }
 
     @Override
-    public @Nullable Snapshot getSnapshot(@Nonnull String snapshotId) throws InternalException, CloudException {
-        System.out.println("Fetching: " + snapshotId);
-        for( Snapshot snapshot : listSnapshots() ) {
-            if( snapshot.getProviderSnapshotId().equals(snapshotId) ) {
-                System.out.println("Matches: " + snapshotId);
-                return snapshot;
+    public @Nonnull Iterable<ResourceStatus> listSnapshotStatus() throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
+        Document doc;
+
+        doc = method.get(url);
+        ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
+        NodeList matches = doc.getElementsByTagName("snapshot");
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node s = matches.item(i);
+
+            if( s != null ) {
+                ResourceStatus snapshot = toStatus(s);
+
+                if( snapshot != null ) {
+                    snapshots.add(snapshot);
+                }
             }
         }
-        System.out.println("No match");
-        return null;
+        return snapshots;
     }
 
     @Override
-    public boolean isPublic(String snapshotId) throws InternalException, CloudException {
+    public @Nonnull Requirement identifyAttachmentRequirement() throws InternalException, CloudException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
+    public boolean isPublic(@Nonnull String snapshotId) throws InternalException, CloudException {
         return false;
     }
 
@@ -308,8 +266,144 @@ public class Snapshots implements SnapshotSupport {
     }
     
     @Override
-    public void shareSnapshot(String arg0, String arg1, boolean arg2) throws InternalException, CloudException {
+    public void shareSnapshot(@Nonnull String arg0, String arg1, boolean arg2) throws InternalException, CloudException {
         throw new OperationNotSupportedException();
+    }
+
+    @Override
+    public @Nonnull Snapshot snapshot(@Nonnull String volumeId, @Nonnull String name, @Nonnull String description, @Nullable Tag... tags) throws InternalException, CloudException {
+        Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId);
+
+        if( volume == null ) {
+            throw new CloudException("No such volume: " + volumeId);
+        }
+        if( volume.getProviderVirtualMachineId() == null ) {
+            throw new CloudException("You must attach this volume before you can snapshot it.");
+        }
+        long timeout = System.currentTimeMillis() +(CalendarWrapper.MINUTE * 10L);
+
+        while( timeout > System.currentTimeMillis() ) {
+            if( VolumeState.AVAILABLE.equals(volume.getCurrentState()) ) {
+                break;
+            }
+            if( VolumeState.DELETED.equals(volume.getCurrentState()) ) {
+                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
+            }
+            try { Thread.sleep(15000L); }
+            catch( InterruptedException ignore ) { }
+            try { volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId); }
+            catch( Throwable ignore ) { }
+            if( volume == null ) {
+                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
+            }
+        }
+
+        CSMethod method = new CSMethod(provider);
+        String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
+        Document doc;
+
+        try {
+            doc = method.get(url);
+        }
+        catch( CSException e ) {
+            int code = e.getHttpCode();
+
+            if( code == 431 && e.getMessage() != null && e.getMessage().contains("no change since last snapshot")) {
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s;
+            }
+            else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
+                if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
+                    // a couple of problems here...
+                    // this is not really an error condition, so we should look for the current in-progress snapshot
+                    // but cloud.com does not list in-progress snapshots
+                    long then = (System.currentTimeMillis() - (CalendarWrapper.MINUTE*9));
+                    long now = System.currentTimeMillis() - CalendarWrapper.MINUTE;
+                    Snapshot wtf = null;
+
+                    timeout = (now + (CalendarWrapper.MINUTE*20));
+                    while( System.currentTimeMillis() < timeout ) {
+                        Snapshot latest = getLatestSnapshot(volumeId);
+
+                        if( latest != null && latest.getSnapshotTimestamp() >= now ) {
+                            return latest;
+                        }
+                        else if( latest != null && latest.getSnapshotTimestamp() >= then ) {
+                            wtf = latest;
+                        }
+                        try { Thread.sleep(20000L); }
+                        catch( InterruptedException ignore ) { /* ignore */ }
+                    }
+                    if( wtf != null ) {
+                        return wtf;
+                    }
+                    return snapshot(volumeId, name, description, tags);
+                }
+            }
+            throw e;
+        }
+        NodeList matches;
+
+        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+            matches = doc.getElementsByTagName("id");
+        }
+        else {
+            matches = doc.getElementsByTagName("snapshotid");
+            if( matches.getLength() < 1 ) {
+                matches = doc.getElementsByTagName("id");
+            }
+        }
+        String snapshotId = null;
+
+        if( matches.getLength() > 0 ) {
+            snapshotId = matches.item(0).getFirstChild().getNodeValue();
+        }
+        if( snapshotId == null ) {
+            throw new CloudException("Failed to create a snapshot");
+        }
+        try {
+            provider.waitForJob(doc, "Create Snapshot");
+        }
+        catch( CSException e ) {
+            if( e.getHttpCode() == 431 ) {
+                logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s;
+            }
+            throw e;
+        }
+        catch( CloudException e ) {
+            String msg = e.getMessage();
+
+            if( msg != null && msg.contains("no change since last snapshot") ) {
+                Snapshot s = getLatestSnapshot(volumeId);
+
+                if( s == null ) {
+                    throw e;
+                }
+                return s;
+            }
+            throw e;
+        }
+        Snapshot s = getSnapshot(snapshotId);
+
+        if( s == null ) {
+            throw new CloudException("Created snapshot " + snapshotId + " but it does not really exist");
+        }
+        return s;
+    }
+
+    @Override
+    public boolean supportsSnapshotCreation() throws CloudException, InternalException {
+        return true;
     }
 
     private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Iterable<Volume> volumes) throws CloudException, InternalException {
@@ -319,18 +413,18 @@ public class Snapshots implements SnapshotSupport {
         Snapshot snapshot = new Snapshot();
         NodeList attrs = node.getChildNodes();
         String type = null;
-        
+
         snapshot.setCurrentState(SnapshotState.AVAILABLE);
         snapshot.setOwner(ctx.getAccountNumber());
         snapshot.setProgress("100%");
         snapshot.setRegionId(ctx.getRegionId());
-        snapshot.setSizeInGb(0);
+        snapshot.setSizeInGb(1);
         for( int i=0; i<attrs.getLength(); i++ ) {
             Node attr = attrs.item(i);
-            
+
             String name = attr.getNodeName();
             String value = null;
-            
+
             if( attr.hasChildNodes() ) {
                 value = attr.getFirstChild().getNodeValue();
             }
@@ -365,7 +459,7 @@ public class Snapshots implements SnapshotSupport {
             else if( name.equals("account") ) {
                 snapshot.setOwner(value);
             }
-        } 
+        }
         if( snapshot.getProviderSnapshotId() == null ) {
             return null;
         }
@@ -377,11 +471,39 @@ public class Snapshots implements SnapshotSupport {
                 snapshot.setDescription(snapshot.getName());
             }
             else {
-                snapshot.setDescription(snapshot.getName() + " (" + type + ")");            
+                snapshot.setDescription(snapshot.getName() + " (" + type + ")");
             }
         }
         return snapshot;
     }
+
+    private @Nullable ResourceStatus toStatus(@Nullable Node node) throws CloudException, InternalException {
+        if( node == null ) {
+            return null;
+        }
+        NodeList attrs = node.getChildNodes();
+        String snapId = null;
+
+        for( int i=0; i<attrs.getLength(); i++ ) {
+            Node attr = attrs.item(i);
+
+            String name = attr.getNodeName();
+            String value = null;
+
+            if( attr.hasChildNodes() ) {
+                value = attr.getFirstChild().getNodeValue();
+            }
+            if( name.equalsIgnoreCase("id") ) {
+                snapId = value;
+                break;
+            }
+        }
+        if( snapId == null ) {
+            return null;
+        }
+        return new ResourceStatus(snapId, SnapshotState.AVAILABLE);
+    }
+
 
     @Override
     public boolean isSubscribed() throws InternalException, CloudException {

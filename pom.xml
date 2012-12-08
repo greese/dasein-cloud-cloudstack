@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   
 <!--
-    Copyright (C) 2010 enStratus Networks LLC (http://www.enstratus.com)
+    Copyright (C) 2010-2013 enStratus Networks LLC (http://www.enstratus.com)
 
     ====================================================================
     Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-cloudstack</artifactId>
-  <version>2012.09.3-SNAPSHOT</version>
+  <version>2013.01-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-cloudstack</name>
@@ -57,20 +57,14 @@
   </parent>
         
   <dependencies>
+      <!-- Compile -->
     <dependency>
         <groupId>org.dasein</groupId>
         <artifactId>dasein-cloud-core</artifactId>
-        <version>2012.09</version>
+        <version>2013.01</version>
         <scope>compile</scope>
         <optional>false</optional>
-    </dependency>   
-    <dependency>
-        <groupId>org.dasein</groupId>
-        <artifactId>dasein-cloud-test</artifactId>
-        <version>2012.09.8</version>
-        <scope>test</scope>
-        <optional>false</optional>
-    </dependency>      
+    </dependency>
     <dependency>
         <groupId>org.dasein</groupId>
         <artifactId>dasein-util</artifactId>
@@ -81,14 +75,8 @@
       <dependency>
           <groupId>org.apache.httpcomponents</groupId>
           <artifactId>httpclient</artifactId>
-          <version>4.2</version>
+          <version>4.2.1</version>
       </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.9</version>
-      <scope>test</scope>
-    </dependency>
     <dependency>
         <groupId>log4j</groupId>
         <artifactId>log4j</artifactId>
@@ -96,6 +84,21 @@
         <scope>compile</scope>
         <optional>false</optional>
     </dependency>
+
+      <!-- Test -->
+      <dependency>
+          <groupId>org.dasein</groupId>
+          <artifactId>dasein-cloud-test</artifactId>
+          <version>2013.01.1-SNAPSHOT</version>
+          <scope>test</scope>
+          <optional>false</optional>
+      </dependency>
+      <dependency>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+          <version>4.9</version>
+          <scope>test</scope>
+      </dependency>
   </dependencies>
   
   <build>
@@ -149,7 +152,7 @@
                     <exclude>**/LICENSE-APACHE.txt</exclude>
                 </excludes>
                 <properties>
-                    <year>2009-2012</year>
+                    <year>2009-2013</year>
                     <copyrightHolder>enStratus Networks Inc</copyrightHolder>
                 </properties>
             </configuration>

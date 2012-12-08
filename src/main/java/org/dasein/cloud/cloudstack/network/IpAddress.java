@@ -34,6 +34,8 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -237,6 +239,11 @@ public class IpAddress implements IpAddressSupport {
     }
 
     @Override
+    public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
     public boolean isAssigned(@Nonnull AddressType type) {
         return false;
     }
@@ -350,6 +357,39 @@ public class IpAddress implements IpAddressSupport {
             return addresses;
         }
         return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version) throws InternalException, CloudException {
+        if( !IPVersion.IPV4.equals(version) ) {
+            return Collections.emptyList();
+        }
+        HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
+        LoadBalancerSupport support = provider.getNetworkServices().getLoadBalancerSupport();
+
+        if( support != null ) {
+            for( LoadBalancer lb : support.listLoadBalancers() ) {
+                loadBalancers.put(lb.getProviderLoadBalancerId(), lb);
+            }
+        }
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())));
+        ArrayList<ResourceStatus> addresses = new ArrayList<ResourceStatus>();
+        NodeList matches = doc.getElementsByTagName("publicipaddress");
+
+        for( int i=0; i<matches.getLength(); i++ ) {
+            ResourceStatus addr = toStatus(matches.item(i), loadBalancers);
+
+            if( addr != null ) {
+                addresses.add(addr);
+            }
+        }
+        return addresses;
     }
 
     @Override
@@ -511,9 +551,12 @@ public class IpAddress implements IpAddressSupport {
     }
 
     @Override
-    public @Nonnull String requestForVLAN(IPVersion version) throws InternalException, CloudException {
+    public @Nonnull String requestForVLAN(@Nonnull IPVersion version) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Not yet supported since CloudStack requires you to name the network");
-        /*
+    }
+
+    @Override
+    public @Nonnull String requestForVLAN(@Nonnull IPVersion version, @Nonnull String vlanId) throws InternalException, CloudException {
         if( !version.equals(IPVersion.IPV4) ) {
             throw new OperationNotSupportedException("Only IPv4 is currently supported");
         }
@@ -526,7 +569,7 @@ public class IpAddress implements IpAddressSupport {
         Document doc;
 
         //if( isBasic() ) {
-        doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId()), new Param("networkId")));
+        doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId()), new Param("networkId", vlanId)));
         // }
         //else {
         //  throw new
@@ -549,7 +592,6 @@ public class IpAddress implements IpAddressSupport {
         }
         provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
         return id;
-        */
     }
 
     @Override
@@ -574,7 +616,7 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
-        return false; // TODO: change when specific network support is added
+        return true;
     }
 
     private @Nullable org.dasein.cloud.network.IpAddress toAddress(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Map<String,LoadBalancer> loadBalancers) throws InternalException, CloudException {
@@ -646,6 +688,62 @@ public class IpAddress implements IpAddressSupport {
         }
         return address;
     }
+
+    private @Nullable ResourceStatus toStatus(@Nullable Node node, @Nonnull Map<String,LoadBalancer> loadBalancers) throws InternalException, CloudException {
+        if( node == null ) {
+            return null;
+        }
+        NodeList attributes = node.getChildNodes();
+        String addressId = null, address = null;
+        Boolean available = null;
+        boolean hasState = false;
+
+        for( int i=0; i<attributes.getLength(); i++ ) {
+            Node n = attributes.item(i);
+            String name = n.getNodeName().toLowerCase();
+            String value;
+
+            if( n.getChildNodes().getLength() > 0 ) {
+                value = n.getFirstChild().getNodeValue();
+            }
+            else {
+                value = null;
+            }
+            if( name.equalsIgnoreCase("id") && value != null ) {
+                addressId = value;
+            }
+            else if( name.equalsIgnoreCase("ipaddress") && value != null ) {
+                address = value;
+            }
+            else if( name.equalsIgnoreCase("virtualmachineid") ) {
+                available = (value != null && !value.equals(""));
+            }
+            else if( name.equalsIgnoreCase("state") ) {
+                if( value != null && !value.equalsIgnoreCase("allocated") ) {
+                    return null;
+                }
+                hasState = true;
+            }
+            if( addressId != null && address != null && available != null && hasState ) {
+                break;
+            }
+        }
+        if( addressId == null ) {
+            return null;
+        }
+        if( address != null ) {
+            LoadBalancer lb = loadBalancers.get(address);
+
+            if( lb != null ) {
+                available = false;
+            }
+        }
+        if( available == null ) {
+            available = true;
+        }
+        return new ResourceStatus(addressId, available);
+    }
+
 
     /*
     private FirewallRule toRule(String ipAddressId, Node node) {

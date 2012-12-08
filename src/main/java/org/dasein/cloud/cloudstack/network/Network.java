@@ -33,6 +33,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -616,6 +617,11 @@ public class Network implements VLANSupport {
     }
 
     @Override
+    public @Nonnull Iterable<ResourceStatus> listNetworkInterfaceStatus() throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
     public @Nonnull Iterable<NetworkInterface> listNetworkInterfaces() throws CloudException, InternalException {
         return Collections.emptyList();
     }
@@ -653,6 +659,32 @@ public class Network implements VLANSupport {
     @Override
     public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
         return Collections.singletonList(IPVersion.IPV4);
+    }
+
+    @Override
+    public @Nonnull Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
+        ProviderContext ctx = cloudstack.getContext();
+
+        if( ctx == null ) {
+            throw new InternalException("No context was established");
+        }
+        CSMethod method = new CSMethod(cloudstack);
+        Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())));
+        ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
+        NodeList matches = doc.getElementsByTagName("network");
+
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node node = matches.item(i);
+
+            if( node != null ) {
+                ResourceStatus vlan = toVLANStatus(node);
+
+                if( vlan != null ) {
+                    networks.add(vlan);
+                }
+            }
+        }
+        return networks;
     }
 
     @Override
@@ -709,4 +741,34 @@ public class Network implements VLANSupport {
         network.append(String.valueOf(cidr));
         return network.toString();
     }
+
+    public @Nullable ResourceStatus toVLANStatus(@Nullable Node node) {
+        if( node == null ) {
+            return null;
+        }
+        NodeList attributes = node.getChildNodes();
+        String networkId = null;
+
+        for( int i=0; i<attributes.getLength(); i++ ) {
+            Node attribute = attributes.item(i);
+            String name = attribute.getNodeName().toLowerCase();
+            String value;
+
+            if( attribute.getChildNodes().getLength() > 0 ) {
+                value = attribute.getFirstChild().getNodeValue();
+            }
+            else {
+                value = null;
+            }
+            if( name.equalsIgnoreCase("id") ) {
+                networkId = value;
+                break;
+            }
+        }
+        if( networkId == null ) {
+            return null;
+        }
+        return new ResourceStatus(networkId, VLANState.AVAILABLE);
+    }
+
 }

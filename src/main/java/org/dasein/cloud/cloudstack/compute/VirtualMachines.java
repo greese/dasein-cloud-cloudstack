@@ -48,6 +48,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
@@ -59,8 +60,11 @@ import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
 import org.dasein.cloud.compute.Architecture;
+import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VMLaunchOptions;
+import org.dasein.cloud.compute.VMScalingCapabilities;
+import org.dasein.cloud.compute.VMScalingOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VirtualMachineSupport;
@@ -99,12 +103,22 @@ public class VirtualMachines implements VirtualMachineSupport {
     public VirtualMachines(CSCloud provider) {
         this.provider = provider;
     }
-    
+
+    @Override
+    public VirtualMachine alterVirtualMachine(@Nonnull String vmId, @Nonnull VMScalingOptions options) throws InternalException, CloudException {
+        throw new OperationNotSupportedException("Vertical scaling is not supported");
+    }
+
     @Override
     public @Nonnull VirtualMachine clone(@Nonnull String serverId, @Nonnull String intoDcId, @Nonnull String name, @Nonnull String description, boolean powerOn, @Nullable String ... firewallIds) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Instances cannot be cloned.");
     }
-    
+
+    @Override
+    public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
+        return null;
+    }
+
 
     @Override
     public void disableAnalytics(@Nonnull String vmId) throws InternalException, CloudException {
@@ -120,6 +134,11 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public @Nonnull String getConsoleOutput(@Nonnull String serverId) throws InternalException, CloudException {
         return "";
+    }
+
+    @Override
+    public int getCostFactor(@Nonnull VmState state) throws InternalException, CloudException {
+        return 100;
     }
 
     @Override
@@ -182,6 +201,11 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
+    public @Nonnull Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
+        return (cls.equals(ImageClass.MACHINE) ? Requirement.REQUIRED : Requirement.NONE);
+    }
+
+    @Override
     public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -194,6 +218,11 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public @Nonnull Requirement identifyShellKeyRequirement() throws CloudException, InternalException {
         return Requirement.OPTIONAL;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
+        return Requirement.NONE;
     }
 
     @Override
@@ -760,6 +789,32 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
+    public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
+        ProviderContext ctx = provider.getContext();
+
+        if( ctx == null ) {
+            throw new CloudException("No context was specified for this request");
+        }
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
+        ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
+        NodeList matches = doc.getElementsByTagName("virtualmachine");
+
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node node = matches.item(i);
+
+            if( node != null ) {
+                ResourceStatus vm = toStatus(node);
+
+                if( vm != null ) {
+                    servers.add(vm);
+                }
+            }
+        }
+        return servers;
+    }
+
+    @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
@@ -816,9 +871,23 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public void stop(@Nonnull String serverId) throws InternalException, CloudException {
+        stop(serverId, false);
+        VirtualMachine vm = getVirtualMachine(serverId);
+
+        if( vm == null ) {
+            return;
+        }
+        if( VmState.STOPPED.equals(vm.getCurrentState()) ) {
+            return;
+        }
+        stop(serverId, true);
+    }
+
+    @Override
+    public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
 
-        method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", serverId)));
+        method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))));
     }
 
     @Override
@@ -858,6 +927,11 @@ public class VirtualMachines implements VirtualMachineSupport {
         throw new OperationNotSupportedException(provider.getCloudName() + " does not support pause/unpause operations");
     }
 
+    @Override
+    public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+        // NO-OP
+    }
+
     private @Nullable String translateZone(@Nullable String zoneId) throws InternalException, CloudException {
         if( zoneId == null ) {
             Iterable<Region> regions = provider.getDataCenterServices().listRegions();
@@ -883,6 +957,80 @@ public class VirtualMachines implements VirtualMachineSupport {
             }
         }      
         return zoneId;
+    }
+
+    private @Nullable ResourceStatus toStatus(@Nullable Node node) throws CloudException, InternalException {
+        if( node == null ) {
+            return null;
+        }
+        NodeList attributes = node.getChildNodes();
+        VmState state = null;
+        String serverId = null;
+
+        for( int i=0; i<attributes.getLength(); i++ ) {
+            Node attribute = attributes.item(i);
+            String name = attribute.getNodeName().toLowerCase();
+            String value;
+
+            if( attribute.getChildNodes().getLength() > 0 ) {
+                value = attribute.getFirstChild().getNodeValue();
+            }
+            else {
+                value = null;
+            }
+            if( name.equals("virtualmachineid") || name.equals("id") ) {
+                serverId = value;
+            }
+            else if( name.equals("state") ) {
+                if( value == null ) {
+                    state = VmState.PENDING;
+                }
+                else if( value.equalsIgnoreCase("stopped") ) {
+                    state = VmState.STOPPED;
+                }
+                else if( value.equalsIgnoreCase("running") ) {
+                    state = VmState.RUNNING;
+                }
+                else if( value.equalsIgnoreCase("stopping") ) {
+                    state = VmState.STOPPING;
+                }
+                else if( value.equalsIgnoreCase("starting") ) {
+                    state = VmState.PENDING;
+                }
+                else if( value.equalsIgnoreCase("creating") ) {
+                    state = VmState.PENDING;
+                }
+                else if( value.equalsIgnoreCase("migrating") ) {
+                    state = VmState.REBOOTING;
+                }
+                else if( value.equalsIgnoreCase("destroyed") ) {
+                    state = VmState.TERMINATED;
+                }
+                else if( value.equalsIgnoreCase("error") ) {
+                    logger.warn("VM is in an error state.");
+                    return null;
+                }
+                else if( value.equalsIgnoreCase("expunging") ) {
+                    state = VmState.TERMINATED;
+                }
+                else if( value.equalsIgnoreCase("ha") ) {
+                    state = VmState.REBOOTING;
+                }
+                else {
+                    throw new CloudException("Unexpected server state: " + value);
+                }
+            }
+            if( serverId != null && state != null ) {
+                break;
+            }
+        }
+        if( serverId == null ) {
+            return null;
+        }
+        if( state == null ) {
+            state = VmState.PENDING;
+        }
+        return new ResourceStatus(serverId, state);
     }
 
     private @Nullable VirtualMachine toVirtualMachine(@Nullable Node node) throws CloudException, InternalException {
