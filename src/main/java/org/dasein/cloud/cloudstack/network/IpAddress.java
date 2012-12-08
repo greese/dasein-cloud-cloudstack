@@ -566,15 +566,7 @@ public class IpAddress implements IpAddressSupport {
             throw new CloudException("No context was set for this request");
         }
         CSMethod method = new CSMethod(provider);
-        Document doc;
-
-        //if( isBasic() ) {
-        doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId()), new Param("networkId", vlanId)));
-        // }
-        //else {
-        //  throw new
-        //doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param[] { new Param("zoneId", provider.getContext().getRegionId())  }))
-        //}
+        Document doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId()), new Param("networkId", vlanId)));
         NodeList matches;
 
         if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
@@ -616,7 +608,7 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public boolean supportsVLANAddresses(@Nonnull IPVersion ofVersion) throws InternalException, CloudException {
-        return true;
+        return IPVersion.IPV4.equals(ofVersion);
     }
 
     private @Nullable org.dasein.cloud.network.IpAddress toAddress(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Map<String,LoadBalancer> loadBalancers) throws InternalException, CloudException {
@@ -665,6 +657,11 @@ public class IpAddress implements IpAddressSupport {
             else if( name.equalsIgnoreCase("state") ) {
                 if( value != null && !value.equalsIgnoreCase("allocated") ) {
                     return null;
+                }
+            }
+            else if( name.equalsIgnoreCase("associatednetworkid") ) {
+                if( value != null ) {
+                    address.setForVlan(true);
                 }
             }
         }

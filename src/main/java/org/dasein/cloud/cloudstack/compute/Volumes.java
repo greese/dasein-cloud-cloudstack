@@ -735,10 +735,10 @@ public class Volumes implements VolumeSupport {
                 else if( name.equals("state") && attribute.hasChildNodes() ) {
                     String state = attribute.getFirstChild().getNodeValue();
 
-                    if( state == null ) {
+                    if( state == null || state.equalsIgnoreCase("allocated") ) {
                         volume.setCurrentState(VolumeState.PENDING);
                     }
-                    else if( state.equalsIgnoreCase("created") || state.equalsIgnoreCase("ready") || state.equalsIgnoreCase("allocated") ) {
+                    else if( state.equalsIgnoreCase("created") || state.equalsIgnoreCase("ready") ) {
                         volume.setCurrentState(VolumeState.AVAILABLE);
                     }
                     else {
