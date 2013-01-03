@@ -177,7 +177,7 @@ public class Templates implements MachineImageSupport {
             if( e.getHttpCode() == 431 ) {
                 return null;
             }
-            if( e.getMessage() != null && e.getMessage().contains("specify a valid template ID") ) {
+            if( e.getMessage() != null && (e.getMessage().contains("specify a valid template ID") || e.getMessage().contains("does not have permission")) ) {
                 return null;
             }
             throw e;
