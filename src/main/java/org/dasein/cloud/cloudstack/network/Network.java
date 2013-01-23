@@ -38,15 +38,9 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.NICCreateOptions;
-import org.dasein.cloud.network.NetworkInterface;
-import org.dasein.cloud.network.RoutingTable;
-import org.dasein.cloud.network.Subnet;
-import org.dasein.cloud.network.VLANState;
-import org.dasein.cloud.network.VLANSupport;
-import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.*;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -639,6 +633,46 @@ public class Network implements VLANSupport {
     @Override
     public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInVLAN(@Nonnull String vlanId) throws CloudException, InternalException {
         return Collections.emptyList();
+    }
+
+    @Override
+    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
+        ArrayList<Networkable> resources = new ArrayList<Networkable>();
+        NetworkServices network = cloudstack.getNetworkServices();
+
+        FirewallSupport fwSupport = network.getFirewallSupport();
+
+        if( fwSupport != null ) {
+            for( Firewall fw : fwSupport.list() ) {
+                if( inVlanId.equals(fw.getProviderVlanId()) ) {
+                    resources.add(fw);
+                }
+            }
+        }
+
+        IpAddressSupport ipSupport = network.getIpAddressSupport();
+
+        if( ipSupport != null ) {
+            for( IPVersion version : ipSupport.listSupportedIPVersions() ) {
+                for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
+                    if( inVlanId.equals(addr.getProviderVlanId()) ) {
+                        resources.add(addr);
+                    }
+                }
+
+            }
+        }
+        for( RoutingTable table : listRoutingTables(inVlanId) ) {
+            resources.add(table);
+        }
+        Iterable<VirtualMachine> vms = cloudstack.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+
+        for( VirtualMachine vm : vms ) {
+            if( inVlanId.equals(vm.getProviderVlanId()) ) {
+                resources.add(vm);
+            }
+        }
+        return resources;
     }
 
     @Override

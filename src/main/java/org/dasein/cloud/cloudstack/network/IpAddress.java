@@ -254,6 +254,11 @@ public class IpAddress implements IpAddressSupport {
     }
 
     @Override
+    public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
     public boolean isForwarding() {
         return true;
     }

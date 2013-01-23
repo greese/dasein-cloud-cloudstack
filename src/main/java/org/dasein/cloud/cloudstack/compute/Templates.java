@@ -216,6 +216,11 @@ public class Templates implements MachineImageSupport {
         return "template";
     }
 
+    @Override
+    public @Nonnull String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
+        return getProviderTermForImage(locale, cls);
+    }
+
     private @Nullable String getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
         return provider.getComputeServices().getVolumeSupport().getRootVolumeId(serverId);
     }
@@ -710,22 +715,27 @@ public class Templates implements MachineImageSupport {
     
     @Override
     public void remove(@Nonnull String templateId) throws InternalException, CloudException {
+        remove(templateId, false);
+    }
+
+    @Override
+    public void remove(@Nonnull String providerImageId, boolean checkState) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
-        
+
         if( ctx == null ) {
             throw new CloudException("No context was set for the request");
         }
         String accountNumber = ctx.getAccountNumber();
-        MachineImage img = getImage(templateId);
-        
+        MachineImage img = getImage(providerImageId);
+
         if( img == null ) {
-            throw new CloudException("No such machine image: " + templateId);
+            throw new CloudException("No such machine image: " + providerImageId);
         }
         if( !accountNumber.equals(img.getProviderOwnerId()) ) {
             throw new CloudException(accountNumber + " cannot remove images belonging to " + img.getProviderOwnerId());
         }
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", templateId)));
+        Document doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", providerImageId)));
 
         provider.waitForJob(doc, "Delete Template");
     }
