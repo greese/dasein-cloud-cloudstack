@@ -47,6 +47,7 @@ import org.dasein.cloud.network.LbListener;
 import org.dasein.cloud.network.LbProtocol;
 import org.dasein.cloud.network.LoadBalancer;
 import org.dasein.cloud.network.LoadBalancerAddressType;
+import org.dasein.cloud.network.LoadBalancerServer;
 import org.dasein.cloud.network.LoadBalancerState;
 import org.dasein.cloud.network.LoadBalancerSupport;
 import org.w3c.dom.Document;
@@ -290,7 +291,17 @@ public class LoadBalancers implements LoadBalancerSupport {
             throw e;
         }
     }
-    
+
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId, String... serverIdsToCheck) throws CloudException, InternalException {
+        return Collections.emptyList();
+    }
+
     @Override
     public int getMaxPublicPorts() throws CloudException, InternalException {
         return 0;
