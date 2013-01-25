@@ -942,6 +942,21 @@ public class VirtualMachines implements VirtualMachineSupport {
         // NO-OP
     }
 
+    @Override
+    public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+        // NO-OP
+    }
+
+    @Override
+    public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+        // NO-OP
+    }
+
+    @Override
+    public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+        // NO-OP
+    }
+
     private @Nullable String translateZone(@Nullable String zoneId) throws InternalException, CloudException {
         if( zoneId == null ) {
             Iterable<Region> regions = provider.getDataCenterServices().listRegions();
