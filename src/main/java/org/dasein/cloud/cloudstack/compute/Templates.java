@@ -36,19 +36,19 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
-import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.compute.AbstractImageSupport;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.ImageCreateOptions;
+import org.dasein.cloud.compute.ImageFilterOptions;
 import org.dasein.cloud.compute.MachineImage;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageSupport;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.Snapshot;
@@ -60,7 +60,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Templates implements MachineImageSupport {
+public class Templates extends AbstractImageSupport {
     static private final String CREATE_TEMPLATE             = "createTemplate";
     static private final String DELETE_TEMPLATE             = "deleteTemplate";
     static private final String LIST_OS_TYPES               = "listOsTypes";
@@ -71,6 +71,7 @@ public class Templates implements MachineImageSupport {
     private CSCloud provider;
     
     public Templates(CSCloud provider) {
+        super(provider);
         this.provider = provider;
     }
 
@@ -131,33 +132,6 @@ public class Templates implements MachineImageSupport {
     }
 
     @Override
-    public @Nonnull MachineImage captureImage(@Nonnull ImageCreateOptions options) throws CloudException, InternalException {
-        return imageVirtualMachine(options);
-    }
-
-    @Override
-    public void captureImageAsync(final @Nonnull ImageCreateOptions options, final @Nonnull AsynchronousTask<MachineImage> taskTracker) throws CloudException, InternalException {
-        Thread t = new Thread() {
-            public void run() {
-                try {
-                    taskTracker.completeWithResult(imageVirtualMachine(options));
-                }
-                catch( Throwable t ) {
-                    taskTracker.complete(t);
-                }
-                finally {
-                    provider.release();
-                }
-            }
-        };
-
-        provider.hold();
-        t.setName("Imaging " + options.getVirtualMachineId() + " as " + options.getName());
-        t.setDaemon(true);
-        t.start();
-    }
-
-    @Override
     public MachineImage getImage(@Nonnull String providerImageId) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
@@ -196,29 +170,12 @@ public class Templates implements MachineImageSupport {
     }
 
     @Override
-    @Deprecated
-    public @Nullable MachineImage getMachineImage(@Nonnull String templateId) throws InternalException, CloudException {
-        return getImage(templateId);
-    }
-    
-    @Override
-    @Deprecated
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale) {
-        return getProviderTermForImage(locale, ImageClass.MACHINE);
-    }
-
-    @Override
     public @Nonnull String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
         switch( cls ) {
             case KERNEL: return "kernel template";
             case RAMDISK: return "ramdisk template";
         }
         return "template";
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        return getProviderTermForImage(locale, cls);
     }
 
     private @Nullable String getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
@@ -279,11 +236,6 @@ public class Templates implements MachineImageSupport {
         }
         image.setSoftware(software.toString());
     }
-    
-    @Override
-    public boolean hasPublicLibrary() {
-        return true;
-    }
 
     @Override
     public @Nonnull Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
@@ -291,54 +243,7 @@ public class Templates implements MachineImageSupport {
     }
 
     @Override
-    @Deprecated
-    public @Nonnull AsynchronousTask<String> imageVirtualMachine(@Nonnull String vmId, @Nonnull String name, @Nonnull String description) throws CloudException, InternalException {
-        @SuppressWarnings("ConstantConditions") VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
-
-        if( vm == null ) {
-            throw new CloudException("No such virtual machine: " + vmId);
-        }
-        final AsynchronousTask<MachineImage> task = new AsynchronousTask<MachineImage>();
-        final AsynchronousTask<String> oldTask = new AsynchronousTask<String>();
-
-        captureImageAsync(ImageCreateOptions.getInstance(vm,  name, description), task);
-
-        final long timeout = System.currentTimeMillis() + (CalendarWrapper.HOUR * 2);
-
-        Thread t = new Thread() {
-            public void run() {
-                while( timeout > System.currentTimeMillis() ) {
-                    try { Thread.sleep(15000L); }
-                    catch( InterruptedException ignore ) { }
-                    oldTask.setPercentComplete(task.getPercentComplete());
-
-                    Throwable error = task.getTaskError();
-                    MachineImage img = task.getResult();
-
-                    if( error != null ) {
-                        oldTask.complete(error);
-                        return;
-                    }
-                    else if( img != null ) {
-                        oldTask.completeWithResult(img.getProviderMachineImageId());
-                        return;
-                    }
-                    else if( task.isComplete() ) {
-                        oldTask.complete(new CloudException("Task completed without info"));
-                        return;
-                    }
-                }
-                oldTask.complete(new CloudException("Image creation task timed out"));
-            }
-        };
-
-        t.setDaemon(true);
-        t.start();
-
-        return oldTask;
-    }
-    
-    private @Nonnull MachineImage imageVirtualMachine(@Nonnull ImageCreateOptions options) throws CloudException, InternalException {
+    protected @Nonnull MachineImage capture(@Nonnull ImageCreateOptions options, @Nullable AsynchronousTask<MachineImage> task) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
@@ -409,6 +314,9 @@ public class Templates implements MachineImageSupport {
         img = getImage(templateId);
         if( img == null ) {
             throw new CloudException("Machine image job completed successfully, but no image " + templateId + " exists.");
+        }
+        if( task != null ) {
+            task.completeWithResult(img);
         }
         return img;
     }
@@ -532,44 +440,28 @@ public class Templates implements MachineImageSupport {
     }
 
     @Override
-    public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        if( !cls.equals(ImageClass.MACHINE) ) {
+    public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
+        ImageClass cls = (options == null ? null : options.getImageClass());
+        String account = (options == null ? null : options.getAccountNumber());
+
+        if( cls != null && !cls.equals(ImageClass.MACHINE) ) {
             return Collections.emptyList();
         }
+
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId())));
-        ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
-        NodeList matches = doc.getElementsByTagName("template");
+        Document doc;
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-
-            MachineImage image = toImage(node, ctx, false);
-
-            if( image != null ) {
-                templates.add(image);
-            }
+        if( account == null ) {
+            doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId())));
         }
-        return templates;
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> listImages(@Nonnull ImageClass cls, @Nonnull String ownedBy) throws CloudException, InternalException {
-        if( !cls.equals(ImageClass.MACHINE) ) {
-            return Collections.emptyList();
+        else {
+            doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"), new Param("account", account), new Param("zoneId", ctx.getRegionId())));
         }
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"), new Param("account", ownedBy), new Param("zoneId", ctx.getRegionId())));
         ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
         NodeList matches = doc.getElementsByTagName("template");
 
@@ -589,35 +481,6 @@ public class Templates implements MachineImageSupport {
     @Deprecated
     public @Nonnull Iterable<MachineImage> listMachineImages() throws InternalException, CloudException {
         return listImages(ImageClass.MACHINE);
-    }
-    
-
-    @Override
-    @Deprecated
-    public @Nonnull Iterable<MachineImage> listMachineImagesOwnedBy(@Nullable String accountId) throws CloudException, InternalException {
-        if( accountId != null ) {
-            return listImages(ImageClass.MACHINE, accountId);
-        }
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "featured"), new Param("zoneId", ctx.getRegionId())));
-        ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
-        NodeList matches = doc.getElementsByTagName("template");
-
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-
-            MachineImage image = toImage(node, ctx, false);
-
-            if( image != null ) {
-                templates.add(image);
-            }
-        }
-        return templates;
     }
     
     @Override
@@ -666,9 +529,19 @@ public class Templates implements MachineImageSupport {
         params[0] = new Param("name", name);
         params[1] = new Param("displayText", name);
         params[2] = new Param("url", atStorageLocation);
-        // TODO: support RAW and QCOW2
+        MachineImageFormat fmt = options.getBundleFormat();
+
+        if( fmt == null ) {
+            throw new CloudException("You must specify the bundle format for the new bundle");
+        }
         if( MachineImageFormat.VHD.equals(options.getBundleFormat()) ) {
             params[3] = new Param("format", "VHD");
+        }
+        else if( MachineImageFormat.RAW.equals(fmt) ) {
+            params[3] = new Param("format", "RAW");
+        }
+        else if( MachineImageFormat.QCOW2.equals(fmt) ) {
+            params[3] = new Param("format", "QCOW2");
         }
         else {
             throw new CloudException("Unsupported bundle format: " + options.getBundleFormat());
@@ -711,11 +584,6 @@ public class Templates implements MachineImageSupport {
     @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
-    }
-    
-    @Override
-    public void remove(@Nonnull String templateId) throws InternalException, CloudException {
-        remove(templateId, false);
     }
 
     @Override
@@ -1001,25 +869,6 @@ public class Templates implements MachineImageSupport {
         }
         return templates;
     }
-
-    @Override
-    @Deprecated
-    public void shareMachineImage(@Nonnull String templateId, @Nullable String withAccountId, boolean allow) throws CloudException, InternalException {
-        if( allow ) {
-            if( withAccountId == null ) {
-                addPublicShare(templateId);
-            }
-            else {
-                addImageShare(templateId, withAccountId);
-            }
-        }
-        else if( withAccountId == null ) {
-            removePublicShare(templateId);
-        }
-        else {
-            removeImageShare(templateId, withAccountId);
-        }
-    }
     
     @Override
     public boolean supportsCustomImages() {
@@ -1049,26 +898,6 @@ public class Templates implements MachineImageSupport {
     @Override
     public boolean supportsPublicLibrary(@Nonnull ImageClass cls) throws CloudException, InternalException {
         return true;
-    }
-
-    @Override
-    public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
     }
 
     private @Nullable MachineImage toImage(@Nullable Node node, @Nonnull ProviderContext ctx, boolean onlyIfPublic) throws CloudException, InternalException {
@@ -1158,7 +987,9 @@ public class Templates implements MachineImageSupport {
             }
             else if( name.equals("created") ) {
                 // 2010-06-29T20:49:28+1000
-                // TODO: implement when dasein cloud supports template creation timestamps
+                if( value != null ) {
+                    image.setCreationTimestamp(provider.parseTime(value));
+                }
             }
             else if( name.equals("isready") ) {
                 if( value != null && value.equalsIgnoreCase("true") ) {

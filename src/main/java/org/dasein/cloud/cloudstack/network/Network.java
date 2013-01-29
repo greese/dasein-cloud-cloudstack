@@ -45,7 +45,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Network implements VLANSupport {
+public class Network extends AbstractVLANSupport {
     static public final String CREATE_NETWORK         = "createNetwork";
     static public final String LIST_NETWORK_OFFERINGS = "listNetworkOfferings";
     static public final String LIST_NETWORKS          = "listNetworks";
@@ -429,7 +429,6 @@ public class Network implements VLANSupport {
         }
         CSMethod method = new CSMethod(cloudstack);
         Document doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)));
-        // TODO: specify subnet
         NodeList matches = doc.getElementsByTagName("network");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -551,7 +550,7 @@ public class Network implements VLANSupport {
     }
 
     @Override
-    public @Nonnull Subnet createSubnet(@Nonnull String cidr, @Nonnull String inProviderVlanId, @Nonnull String name, @Nonnull String description) throws CloudException, InternalException {
+    public @Nonnull Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
         throw new OperationNotSupportedException("Unable to create subnets");
     }
 

@@ -62,6 +62,7 @@ import org.dasein.cloud.cloudstack.network.SecurityGroup;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.compute.VMFilterOptions;
 import org.dasein.cloud.compute.VMLaunchOptions;
 import org.dasein.cloud.compute.VMScalingCapabilities;
 import org.dasein.cloud.compute.VMScalingOptions;
@@ -826,6 +827,11 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
+        return listVirtualMachines(null);
+    }
+
+    @Override
+    public @Nonnull Iterable<VirtualMachine> listVirtualMachines(@Nullable VMFilterOptions options) throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
@@ -835,16 +841,75 @@ public class VirtualMachines implements VirtualMachineSupport {
         Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
         ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
         NodeList matches = doc.getElementsByTagName("virtualmachine");
-        
+
         for( int i=0; i<matches.getLength(); i++ ) {
             Node node = matches.item(i);
-            
+
             if( node != null ) {
-            	VirtualMachine vm = toVirtualMachine(node);
-            
-            	if( vm != null ) {
-            		servers.add(vm);
-            	}
+                VirtualMachine vm = toVirtualMachine(node);
+
+                if( vm != null ) {
+                    if( options == null ) {
+                        servers.add(vm);
+                    }
+                    else {
+                        Map<String,String> tags = options.getTags();
+
+                        if( tags == null || tags.isEmpty() ) {
+                            servers.add(vm);
+                        }
+                        else {
+                            boolean ok = true;
+
+                            for( Map.Entry<String,String> entry : tags.entrySet() ) {
+                                String v = (entry.getValue() == null ? null : entry.getValue().toLowerCase());
+                                Object t = vm.getTag(entry.getKey());
+
+                                if( entry.getKey().equals("Name") ) {
+
+                                    if( v != null ) {
+                                        String n = vm.getName().toLowerCase();
+
+                                        if( n.contains(v) || (t != null && t.toString().toLowerCase().contains(v)) ) {
+                                            continue;
+                                        }
+                                    }
+                                    ok = false;
+                                    break;
+                                }
+                                if( entry.getKey().equals("Description") ) {
+                                    if( v != null ) {
+                                        String d = vm.getDescription().toLowerCase();
+
+                                        if( d.contains(v) || (t != null && t.toString().toLowerCase().contains(v)) ) {
+                                            continue;
+                                        }
+                                    }
+                                    ok = false;
+                                    break;
+                                }
+                                if( t == null && v == null ) {
+                                    continue;
+                                }
+                                if( t == null ) {
+                                    ok = false;
+                                    break;
+                                }
+                                if( v == null ) {
+                                    ok = false;
+                                    break;
+                                }
+                                if( !t.toString().contains(v) ) {
+                                    ok = false;
+                                    break;
+                                }
+                            }
+                            if( ok ) {
+                                servers.add(vm);
+                            }
+                        }
+                    }
+                }
             }
         }
         return servers;
