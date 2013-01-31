@@ -52,7 +52,10 @@ public class Network extends AbstractVLANSupport {
     
     private CSCloud cloudstack;
     
-    Network(CSCloud cloudstack) { this.cloudstack = cloudstack; }
+    Network(CSCloud cloudstack) {
+        super(cloudstack);
+        this.cloudstack = cloudstack;
+    }
 
     @Override
     public boolean allowsNewSubnetCreation() throws CloudException, InternalException {

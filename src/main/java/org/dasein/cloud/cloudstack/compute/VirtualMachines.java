@@ -59,16 +59,15 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
+import org.dasein.cloud.compute.AbstractVMSupport;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VMFilterOptions;
 import org.dasein.cloud.compute.VMLaunchOptions;
 import org.dasein.cloud.compute.VMScalingCapabilities;
 import org.dasein.cloud.compute.VMScalingOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineProduct;
-import org.dasein.cloud.compute.VirtualMachineSupport;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.VmStatistics;
 import org.dasein.cloud.dc.DataCenter;
@@ -82,7 +81,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class VirtualMachines implements VirtualMachineSupport {
+public class VirtualMachines extends AbstractVMSupport {
     static public final Logger logger = Logger.getLogger(VirtualMachines.class);
     
     static private final String DEPLOY_VIRTUAL_MACHINE  = "deployVirtualMachine";
@@ -102,6 +101,7 @@ public class VirtualMachines implements VirtualMachineSupport {
     private CSCloud provider;
     
     public VirtualMachines(CSCloud provider) {
+        super(provider);
         this.provider = provider;
     }
 
@@ -207,11 +207,6 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-    public @Nonnull Requirement identifyPasswordRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
     public @Nonnull Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -219,11 +214,6 @@ public class VirtualMachines implements VirtualMachineSupport {
     @Override
     public @Nonnull Requirement identifyRootVolumeRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyShellKeyRequirement() throws CloudException, InternalException {
-        return Requirement.OPTIONAL;
     }
 
     @Override
@@ -318,13 +308,6 @@ public class VirtualMachines implements VirtualMachineSupport {
         else {
             return launch21(withLaunchOptions.getMachineImageId(), product, withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName());
         }
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nonnull String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String usingKey, @Nullable String withVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String... protectedByFirewalls) throws InternalException, CloudException {
-        //noinspection deprecation
-        return launch(imageId, product, inZoneId, name, description, usingKey, withVlanId, withMonitoring, asSandbox, protectedByFirewalls, new Tag[0]);
     }
 
     @Override
@@ -827,11 +810,6 @@ public class VirtualMachines implements VirtualMachineSupport {
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        return listVirtualMachines(null);
-    }
-
-    @Override
-    public @Nonnull Iterable<VirtualMachine> listVirtualMachines(@Nullable VMFilterOptions options) throws InternalException, CloudException {
         ProviderContext ctx = provider.getContext();
 
         if( ctx == null ) {
@@ -849,75 +827,11 @@ public class VirtualMachines implements VirtualMachineSupport {
                 VirtualMachine vm = toVirtualMachine(node);
 
                 if( vm != null ) {
-                    if( options == null ) {
-                        servers.add(vm);
-                    }
-                    else {
-                        Map<String,String> tags = options.getTags();
-
-                        if( tags == null || tags.isEmpty() ) {
-                            servers.add(vm);
-                        }
-                        else {
-                            boolean ok = true;
-
-                            for( Map.Entry<String,String> entry : tags.entrySet() ) {
-                                String v = (entry.getValue() == null ? null : entry.getValue().toLowerCase());
-                                Object t = vm.getTag(entry.getKey());
-
-                                if( entry.getKey().equals("Name") ) {
-
-                                    if( v != null ) {
-                                        String n = vm.getName().toLowerCase();
-
-                                        if( n.contains(v) || (t != null && t.toString().toLowerCase().contains(v)) ) {
-                                            continue;
-                                        }
-                                    }
-                                    ok = false;
-                                    break;
-                                }
-                                if( entry.getKey().equals("Description") ) {
-                                    if( v != null ) {
-                                        String d = vm.getDescription().toLowerCase();
-
-                                        if( d.contains(v) || (t != null && t.toString().toLowerCase().contains(v)) ) {
-                                            continue;
-                                        }
-                                    }
-                                    ok = false;
-                                    break;
-                                }
-                                if( t == null && v == null ) {
-                                    continue;
-                                }
-                                if( t == null ) {
-                                    ok = false;
-                                    break;
-                                }
-                                if( v == null ) {
-                                    ok = false;
-                                    break;
-                                }
-                                if( !t.toString().contains(v) ) {
-                                    ok = false;
-                                    break;
-                                }
-                            }
-                            if( ok ) {
-                                servers.add(vm);
-                            }
-                        }
-                    }
+                    servers.add(vm);
                 }
             }
         }
         return servers;
-    }
-
-    @Override
-    public void pause(@Nonnull String vmId) throws InternalException, CloudException {
-        throw new OperationNotSupportedException(provider.getCloudName() + " does not support pause/unpause operations");
     }
 
     @Override
@@ -933,11 +847,6 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-    public void resume(@Nonnull String vmId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException(provider.getCloudName() + " does not support suspend/resume operations");
-    }
-
-    @Override
     public void start(@Nonnull String serverId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
 
@@ -945,29 +854,10 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-    public void stop(@Nonnull String serverId) throws InternalException, CloudException {
-        stop(serverId, false);
-        VirtualMachine vm = getVirtualMachine(serverId);
-
-        if( vm == null ) {
-            return;
-        }
-        if( VmState.STOPPED.equals(vm.getCurrentState()) ) {
-            return;
-        }
-        stop(serverId, true);
-    }
-
-    @Override
     public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
 
         method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))));
-    }
-
-    @Override
-    public boolean supportsAnalytics() throws CloudException, InternalException {
-        return false;
     }
 
     @Override
@@ -986,40 +876,10 @@ public class VirtualMachines implements VirtualMachineSupport {
     }
 
     @Override
-    public void suspend(@Nonnull String vmId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException(provider.getCloudName() + " does not support suspend/resume operations");
-    }
-
-    @Override
     public void terminate(@Nonnull String serverId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
         
         method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)));
-    }
-
-    @Override
-    public void unpause(@Nonnull String vmId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException(provider.getCloudName() + " does not support pause/unpause operations");
-    }
-
-    @Override
-    public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
-    }
-
-    @Override
-    public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-        // NO-OP
     }
 
     private @Nullable String translateZone(@Nullable String zoneId) throws InternalException, CloudException {
