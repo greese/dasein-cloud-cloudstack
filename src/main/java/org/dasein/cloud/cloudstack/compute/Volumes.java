@@ -27,7 +27,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -41,6 +40,7 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.VirtualMachine;
@@ -50,7 +50,6 @@ import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.compute.VolumeFormat;
 import org.dasein.cloud.compute.VolumeProduct;
 import org.dasein.cloud.compute.VolumeState;
-import org.dasein.cloud.compute.VolumeSupport;
 import org.dasein.cloud.compute.VolumeType;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.util.CalendarWrapper;
@@ -60,7 +59,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Volumes implements VolumeSupport {
+public class Volumes extends AbstractVolumeSupport {
     static private final Logger logger = Logger.getLogger(Volumes.class);
     
     static private final String ATTACH_VOLUME = "attachVolume";
@@ -83,6 +82,7 @@ public class Volumes implements VolumeSupport {
     private CSCloud provider;
     
     Volumes(CSCloud provider) {
+        super(provider);
         this.provider = provider;
     }
     
@@ -129,32 +129,6 @@ public class Volumes implements VolumeSupport {
             throw new CloudException("No such volume or server");
         }
         provider.waitForJob(doc, "Attach Volume");
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull String create(@Nullable String snapshotId, @Nonnegative int size, @Nullable String zoneId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was provided for this request");
-        }
-        String name = "vol_" + System.currentTimeMillis();
-        VolumeCreateOptions options;
-
-        if( size < 0 ) {
-            size = 0;
-        }
-        if( snapshotId == null ) {
-            options = VolumeCreateOptions.getInstance(new Storage<Gigabyte>(size, Storage.GIGABYTE), name, name);
-        }
-        else {
-            options = VolumeCreateOptions.getInstanceForSnapshot(snapshotId, new Storage<Gigabyte>(size, Storage.GIGABYTE), name, name);
-        }
-        if( zoneId != null ) {
-            options = options.inDataCenter(zoneId);
-        }
-        return createVolume(options);
     }
 
     @Override
@@ -306,11 +280,6 @@ public class Volumes implements VolumeSupport {
         }
         provider.waitForJob(doc, "Create Volume");
         return volumeId;
-    }
-
-    @Override
-    public void detach(@Nonnull String volumeId) throws InternalException, CloudException {
-        detach(volumeId, false);
     }
 
     @Override
