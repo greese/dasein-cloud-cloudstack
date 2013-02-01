@@ -35,10 +35,10 @@ import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.AbstractFirewallSupport;
 import org.dasein.cloud.network.Direction;
 import org.dasein.cloud.network.Firewall;
 import org.dasein.cloud.network.FirewallRule;
-import org.dasein.cloud.network.FirewallSupport;
 import org.dasein.cloud.network.Permission;
 import org.dasein.cloud.network.Protocol;
 import org.dasein.cloud.network.RuleTarget;
@@ -51,7 +51,7 @@ import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class SecurityGroup implements FirewallSupport {
+public class SecurityGroup extends AbstractFirewallSupport {
     static private final Logger logger = Logger.getLogger(SecurityGroup.class);
 
     static public final String AUTHORIZE_SECURITY_GROUP_EGRESS  = "authorizeSecurityGroupEgress";
@@ -63,37 +63,9 @@ public class SecurityGroup implements FirewallSupport {
 
     private CSCloud cloudstack;
     
-    SecurityGroup(CSCloud cloudstack) { this.cloudstack = cloudstack; }
-    
-    @Override
-    @Deprecated
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, Direction.INGRESS, Permission.ALLOW, cidr, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, direction, Permission.ALLOW, cidr, protocol, beginPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String cidr, @Nonnull Protocol protocol, int beginPort, int endPort) throws CloudException, InternalException {
-        return authorize(firewallId, direction, permission, cidr, protocol, RuleTarget.getCIDR(cidr), beginPort, endPort);
-    }
-
-    @Override
-    public @Nonnull String authorize(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull String source, @Nonnull Protocol protocol, @Nonnull RuleTarget target, int beginPort, int endPort) throws CloudException, InternalException {
-        RuleTarget sourceEndpoint, destinationEndpoint;
-
-        if( direction.equals(Direction.INGRESS) ) {
-            sourceEndpoint = RuleTarget.getCIDR(source);
-            destinationEndpoint = target;
-        }
-        else {
-            sourceEndpoint = target;
-            destinationEndpoint = RuleTarget.getCIDR(source);
-        }
-        return authorize(firewallId, direction, permission, sourceEndpoint, protocol, destinationEndpoint, beginPort, endPort, 0);
+    SecurityGroup(CSCloud cloudstack) {
+        super(cloudstack);
+        this.cloudstack = cloudstack;
     }
 
     @Override
