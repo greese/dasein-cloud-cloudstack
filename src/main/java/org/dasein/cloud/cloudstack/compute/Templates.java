@@ -56,6 +56,9 @@ import org.dasein.cloud.compute.SnapshotState;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.util.CalendarWrapper;
+import org.dasein.util.Jiterator;
+import org.dasein.util.JiteratorPopulator;
+import org.dasein.util.PopulatorThread;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -267,9 +270,13 @@ public class Templates extends AbstractImageSupport {
             throw new CloudException("No root volume is attached to the target server.");
         }
         Snapshot baseSnapshot = provider.getComputeServices().getSnapshotSupport().snapshot(rootVolumeId, "Template Builder " + (new Date()), "Template Builder from " + server.getProviderVirtualMachineId());
+
+        if( baseSnapshot == null ) {
+            throw new CloudException("Unable to make a new snapshot for machine image");
+        }
         long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 30L);
         
-        while( !baseSnapshot.getCurrentState().equals(SnapshotState.AVAILABLE) ) {
+        while( !SnapshotState.AVAILABLE.equals(baseSnapshot.getCurrentState()) ) {
             if( System.currentTimeMillis() > timeout ) {
                 throw new CloudException("Timeout in snapshotting root volume.");
             }
@@ -804,72 +811,84 @@ public class Templates extends AbstractImageSupport {
     }
 
     @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass... imageClasses) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+        return searchPublicImages(null, options);
+    }
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        Param[] params;
+    private @Nonnull Iterable<MachineImage> searchPublicImages(final @Nullable String keyword, final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+        final Param[] params;
 
         if( keyword == null ) {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", ctx.getRegionId()) };
+            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()) };
         }
         else {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", ctx.getRegionId()), new Param("keyword", keyword) };
+            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("keyword", keyword) };
         }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params));
-        ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
-        NodeList matches = doc.getElementsByTagName("template");
+        final CSMethod method = new CSMethod(provider);
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            MachineImage img = toImage(matches.item(i), ctx, false);
+        provider.hold();
+        PopulatorThread<MachineImage> populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
+            @Override
+            public void populate(@Nonnull Jiterator<MachineImage> iterator) throws Exception {
+                try {
+                    Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params));
+                    NodeList matches = doc.getElementsByTagName("template");
 
-            if( img != null ) {
-                if( architecture != null && !architecture.equals(img.getArchitecture()) ) {
-                    continue;
-                }
-                if( platform != null && !platform.equals(Platform.UNKNOWN) ) {
-                    Platform mine = img.getPlatform();
+                    for( int i=0; i<matches.getLength(); i++ ) {
+                        MachineImage img = toImage(matches.item(i), getContext(), false);
 
-                    if( platform.isWindows() && !mine.isWindows() ) {
-                        continue;
-                    }
-                    if( platform.isUnix() && !mine.isUnix() ) {
-                        continue;
-                    }
-                    if( platform.isBsd() && !mine.isBsd() ) {
-                        continue;
-                    }
-                    if( platform.isLinux() && !mine.isLinux() ) {
-                        continue;
-                    }
-                    if( platform.equals(Platform.UNIX) ) {
-                        if( !mine.isUnix() ) {
-                            continue;
-                        }
-                    }
-                    else if( !platform.equals(mine) ) {
-                        continue;
-                    }
-                }
-                if( keyword != null && !keyword.equals("") ) {
-                    keyword = keyword.toLowerCase();
-                    if( !img.getProviderMachineImageId().toLowerCase().contains(keyword) ) {
-                        if( !img.getName().toLowerCase().contains(keyword) ) {
-                            if( !img.getDescription().toLowerCase().contains(keyword) ) {
-                                continue;
-                            }
+                        if( img != null && options.matches(img) ) {
+                            iterator.push(img);
                         }
                     }
                 }
-                templates.add(img);
+                finally {
+                    provider.release();
+                }
             }
-        }
-        return templates;
+        });
+
+        populator.populate();
+        return populator.getResult();
     }
-    
+
+
+    @Override
+    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass ... imageClasses) throws CloudException, InternalException {
+        if( imageClasses == null || imageClasses.length < 2 ) {
+            ImageFilterOptions options = ImageFilterOptions.getInstance();
+
+            if( platform != null ) {
+                options.onPlatform(platform);
+            }
+            if( architecture != null ) {
+                options.withArchitecture(architecture);
+            }
+            if( imageClasses != null && imageClasses.length == 1 ) {
+                options.withImageClass(imageClasses[0]);
+            }
+            return searchPublicImages(keyword, options);
+        }
+        else {
+            ArrayList<MachineImage> matches = new ArrayList<MachineImage>();
+
+            for( ImageClass cls : imageClasses ) {
+                ImageFilterOptions options = ImageFilterOptions.getInstance(cls);
+
+                if( platform != null ) {
+                    options.onPlatform(platform);
+                }
+                if( architecture != null ) {
+                    options.withArchitecture(architecture);
+                }
+                for( MachineImage img : searchPublicImages(keyword, options) ) {
+                    matches.add(img);
+                }
+            }
+            return matches;
+        }
+    }
+
     @Override
     public boolean supportsCustomImages() {
         return true;

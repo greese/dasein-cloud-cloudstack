@@ -205,25 +205,6 @@ public class Snapshots extends AbstractSnapshotSupport {
     }
 
     @Override
-    public @Nonnull Iterable<Snapshot> searchSnapshots(@Nullable String ownerId, @Nullable String keyword) throws InternalException, CloudException {
-        ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
-
-        if( keyword != null ) {
-            keyword = keyword.toLowerCase();
-        }
-        for( Snapshot s : listSnapshots() ) {
-            if( ownerId != null && !ownerId.equals(s.getOwner()) ) {
-                continue;
-            }
-            if( keyword != null && (!s.getName().toLowerCase().contains(keyword) && !s.getDescription().toLowerCase().contains(keyword)) ) {
-                continue;
-            }
-            snapshots.add(s);
-        }
-        return snapshots;
-    }
-
-    @Override
     public @Nonnull String getProviderTermForSnapshot(@Nonnull Locale locale) {
         return "snapshot";
     }
