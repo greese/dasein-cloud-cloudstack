@@ -31,6 +31,10 @@ import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Minute;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -174,19 +178,31 @@ public class CSTopology implements DataCenterServices {
     public @Nonnull Collection<DataCenter> listDataCenters(@Nonnull String regionId) throws InternalException, CloudException {
         APITrace.begin(provider, "DC.listDataCenters");
         try {
-            Region region = getRegion(regionId);
+            Cache<DataCenter> cache = Cache.getInstance(provider, "dataCenters", DataCenter.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
+            ProviderContext ctx = provider.getContext();
 
-            if( region == null ) {
-                throw new CloudException("No such region: " + regionId);
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
             }
-            DataCenter zone = new DataCenter();
+            Collection<DataCenter> dcs = (Collection<DataCenter>)cache.get(ctx);
 
-            zone.setActive(true);
-            zone.setAvailable(true);
-            zone.setName(region.getName() + " (DC)");
-            zone.setProviderDataCenterId(regionId);
-            zone.setRegionId(regionId);
-            return Collections.singletonList(zone);
+            if( dcs == null ) {
+                Region region = getRegion(regionId);
+
+                if( region == null ) {
+                    throw new CloudException("No such region: " + regionId);
+                }
+                DataCenter zone = new DataCenter();
+
+                zone.setActive(true);
+                zone.setAvailable(true);
+                zone.setName(region.getName() + " (DC)");
+                zone.setProviderDataCenterId(regionId);
+                zone.setRegionId(regionId);
+                dcs = Collections.singletonList(zone);
+                cache.put(ctx, dcs);
+            }
+            return dcs;
         }
         finally {
             APITrace.end();
@@ -196,18 +212,29 @@ public class CSTopology implements DataCenterServices {
     public @Nonnull Collection<Region> listRegions() throws InternalException, CloudException {
         APITrace.begin(provider, "DC.listRegions");
         try {
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-            Document doc = method.get(url, LIST_ZONES);
+            Cache<Region> cache = Cache.getInstance(provider, "regions", Region.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
+            ProviderContext ctx = provider.getContext();
 
-            ArrayList<Region> regions = new ArrayList<Region>();
-            NodeList matches = doc.getElementsByTagName("zone");
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Region r = toRegion(matches.item(i));
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
+            }
+            Collection<Region> regions = (Collection<Region>)cache.get(ctx);
 
-                if( r != null ) {
-                    regions.add(r);
+            if( regions == null ) {
+                CSMethod method = new CSMethod(provider);
+                String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
+                Document doc = method.get(url, LIST_ZONES);
+
+                regions = new ArrayList<Region>();
+                NodeList matches = doc.getElementsByTagName("zone");
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Region r = toRegion(matches.item(i));
+
+                    if( r != null ) {
+                        regions.add(r);
+                    }
                 }
+                cache.put(ctx, regions);
             }
             return regions;
         }
