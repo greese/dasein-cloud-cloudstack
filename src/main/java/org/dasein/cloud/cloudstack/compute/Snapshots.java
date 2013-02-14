@@ -41,6 +41,7 @@ import org.dasein.cloud.compute.SnapshotCreateOptions;
 import org.dasein.cloud.compute.SnapshotState;
 import org.dasein.cloud.compute.Volume;
 import org.dasein.cloud.compute.VolumeState;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -65,143 +66,156 @@ public class Snapshots extends AbstractSnapshotSupport {
 
     @Override
     public @Nonnull String createSnapshot(@Nonnull SnapshotCreateOptions options) throws InternalException, CloudException {
-        String volumeId = options.getVolumeId();
-
-        if( volumeId == null ) {
-            throw new OperationNotSupportedException("Snapshot copying is not supported in " + getProvider().getCloudName());
-        }
-        Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId);
-
-        if( volume == null ) {
-            throw new CloudException("No such volume: " + volumeId);
-        }
-        if( volume.getProviderVirtualMachineId() == null ) {
-            throw new CloudException("You must attach this volume before you can snapshot it.");
-        }
-        long timeout = System.currentTimeMillis() +(CalendarWrapper.MINUTE * 10L);
-
-        while( timeout > System.currentTimeMillis() ) {
-            if( VolumeState.AVAILABLE.equals(volume.getCurrentState()) ) {
-                break;
-            }
-            if( VolumeState.DELETED.equals(volume.getCurrentState()) ) {
-                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
-            }
-            try { Thread.sleep(15000L); }
-            catch( InterruptedException ignore ) { }
-            try { volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId); }
-            catch( Throwable ignore ) { }
-            if( volume == null ) {
-                throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
-            }
-        }
-
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
-        Document doc;
-
+        APITrace.begin(getProvider(), "Snapshot.createSnapshot");
         try {
-            doc = method.get(url);
-        }
-        catch( CSException e ) {
-            int code = e.getHttpCode();
+            String volumeId = options.getVolumeId();
 
-            if( code == 431 && e.getMessage() != null && e.getMessage().contains("no change since last snapshot")) {
-                Snapshot s = getLatestSnapshot(volumeId);
-
-                if( s == null ) {
-                    throw e;
-                }
-                return s.getProviderSnapshotId();
+            if( volumeId == null ) {
+                throw new OperationNotSupportedException("Snapshot copying is not supported in " + getProvider().getCloudName());
             }
-            else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
-                if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
-                    // a couple of problems here...
-                    // this is not really an error condition, so we should look for the current in-progress snapshot
-                    // but cloud.com does not list in-progress snapshots
-                    long then = (System.currentTimeMillis() - (CalendarWrapper.MINUTE*9));
-                    long now = System.currentTimeMillis() - CalendarWrapper.MINUTE;
-                    Snapshot wtf = null;
+            Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId);
 
-                    timeout = (now + (CalendarWrapper.MINUTE*20));
-                    while( System.currentTimeMillis() < timeout ) {
-                        Snapshot latest = getLatestSnapshot(volumeId);
+            if( volume == null ) {
+                throw new CloudException("No such volume: " + volumeId);
+            }
+            if( volume.getProviderVirtualMachineId() == null ) {
+                throw new CloudException("You must attach this volume before you can snapshot it.");
+            }
+            long timeout = System.currentTimeMillis() +(CalendarWrapper.MINUTE * 10L);
 
-                        if( latest != null && latest.getSnapshotTimestamp() >= now ) {
-                            return latest.getProviderSnapshotId();
-                        }
-                        else if( latest != null && latest.getSnapshotTimestamp() >= then ) {
-                            wtf = latest;
-                        }
-                        try { Thread.sleep(20000L); }
-                        catch( InterruptedException ignore ) { /* ignore */ }
-                    }
-                    if( wtf != null ) {
-                        return wtf.getProviderSnapshotId();
-                    }
-                    return createSnapshot(options);
+            while( timeout > System.currentTimeMillis() ) {
+                if( VolumeState.AVAILABLE.equals(volume.getCurrentState()) ) {
+                    break;
+                }
+                if( VolumeState.DELETED.equals(volume.getCurrentState()) ) {
+                    throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
+                }
+                try { Thread.sleep(15000L); }
+                catch( InterruptedException ignore ) { }
+                try { volume = provider.getComputeServices().getVolumeSupport().getVolume(volumeId); }
+                catch( Throwable ignore ) { }
+                if( volume == null ) {
+                    throw new CloudException("Volume " + volumeId + " disappeared before a snapshot could be taken");
                 }
             }
-            throw e;
-        }
-        NodeList matches;
 
-        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
-            matches = doc.getElementsByTagName("id");
-        }
-        else {
-            matches = doc.getElementsByTagName("snapshotid");
-            if( matches.getLength() < 1 ) {
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
+            Document doc;
+
+            try {
+                doc = method.get(url);
+            }
+            catch( CSException e ) {
+                int code = e.getHttpCode();
+
+                if( code == 431 && e.getMessage() != null && e.getMessage().contains("no change since last snapshot")) {
+                    Snapshot s = getLatestSnapshot(volumeId);
+
+                    if( s == null ) {
+                        throw e;
+                    }
+                    return s.getProviderSnapshotId();
+                }
+                else if( provider.getVersion().equals(CSVersion.CS21) && (code == 500 || code == 530) ) {
+                    if( e.getMessage() != null && e.getMessage().contains("Snapshot could not be scheduled") ) {
+                        // a couple of problems here...
+                        // this is not really an error condition, so we should look for the current in-progress snapshot
+                        // but cloud.com does not list in-progress snapshots
+                        long then = (System.currentTimeMillis() - (CalendarWrapper.MINUTE*9));
+                        long now = System.currentTimeMillis() - CalendarWrapper.MINUTE;
+                        Snapshot wtf = null;
+
+                        timeout = (now + (CalendarWrapper.MINUTE*20));
+                        while( System.currentTimeMillis() < timeout ) {
+                            Snapshot latest = getLatestSnapshot(volumeId);
+
+                            if( latest != null && latest.getSnapshotTimestamp() >= now ) {
+                                return latest.getProviderSnapshotId();
+                            }
+                            else if( latest != null && latest.getSnapshotTimestamp() >= then ) {
+                                wtf = latest;
+                            }
+                            try { Thread.sleep(20000L); }
+                            catch( InterruptedException ignore ) { /* ignore */ }
+                        }
+                        if( wtf != null ) {
+                            return wtf.getProviderSnapshotId();
+                        }
+                        return createSnapshot(options);
+                    }
+                }
+                throw e;
+            }
+            NodeList matches;
+
+            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
             }
-        }
-        String snapshotId = null;
-
-        if( matches.getLength() > 0 ) {
-            snapshotId = matches.item(0).getFirstChild().getNodeValue();
-        }
-        if( snapshotId == null ) {
-            throw new CloudException("Failed to create a snapshot");
-        }
-        try {
-            provider.waitForJob(doc, "Create Snapshot");
-        }
-        catch( CSException e ) {
-            if( e.getHttpCode() == 431 ) {
-                logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
-                Snapshot s = getLatestSnapshot(volumeId);
-
-                if( s == null ) {
-                    throw e;
+            else {
+                matches = doc.getElementsByTagName("snapshotid");
+                if( matches.getLength() < 1 ) {
+                    matches = doc.getElementsByTagName("id");
                 }
-                return s.getProviderSnapshotId();
             }
-            throw e;
-        }
-        catch( CloudException e ) {
-            String msg = e.getMessage();
+            String snapshotId = null;
 
-            if( msg != null && msg.contains("no change since last snapshot") ) {
-                Snapshot s = getLatestSnapshot(volumeId);
+            if( matches.getLength() > 0 ) {
+                snapshotId = matches.item(0).getFirstChild().getNodeValue();
+            }
+            if( snapshotId == null ) {
+                throw new CloudException("Failed to create a snapshot");
+            }
+            try {
+                provider.waitForJob(doc, "Create Snapshot");
+            }
+            catch( CSException e ) {
+                if( e.getHttpCode() == 431 ) {
+                    logger.warn("CSCloud opted not to make a snapshot: " + e.getMessage());
+                    Snapshot s = getLatestSnapshot(volumeId);
 
-                if( s == null ) {
-                    throw e;
+                    if( s == null ) {
+                        throw e;
+                    }
+                    return s.getProviderSnapshotId();
                 }
-                return s.getProviderSnapshotId();
+                throw e;
             }
-            throw e;
+            catch( CloudException e ) {
+                String msg = e.getMessage();
+
+                if( msg != null && msg.contains("no change since last snapshot") ) {
+                    Snapshot s = getLatestSnapshot(volumeId);
+
+                    if( s == null ) {
+                        throw e;
+                    }
+                    return s.getProviderSnapshotId();
+                }
+                throw e;
+            }
+            return snapshotId;
         }
-        return snapshotId;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void remove(@Nonnull String snapshotId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
-        Document doc;
-        
-        doc = method.get(url);
-        provider.waitForJob(doc, "Delete Snapshot");
+        APITrace.begin(getProvider(), "Snapshot.remove");
+
+        try {
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
+            Document doc;
+
+            doc = method.get(url);
+            provider.waitForJob(doc, "Delete Snapshot");
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -211,30 +225,36 @@ public class Snapshots extends AbstractSnapshotSupport {
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listSnapshotStatus() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "Snapshot.listSnapshotStatus");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-        Document doc;
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
+            }
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
+            Document doc;
 
-        doc = method.get(url);
-        ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
-        NodeList matches = doc.getElementsByTagName("snapshot");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node s = matches.item(i);
+            doc = method.get(url);
+            ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
+            NodeList matches = doc.getElementsByTagName("snapshot");
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node s = matches.item(i);
 
-            if( s != null ) {
-                ResourceStatus snapshot = toStatus(s);
+                if( s != null ) {
+                    ResourceStatus snapshot = toStatus(s);
 
-                if( snapshot != null ) {
-                    snapshots.add(snapshot);
+                    if( snapshot != null ) {
+                        snapshots.add(snapshot);
+                    }
                 }
             }
+            return snapshots;
         }
-        return snapshots;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -249,31 +269,37 @@ public class Snapshots extends AbstractSnapshotSupport {
 
     @Override
     public @Nonnull Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "Snapshot.listSnapshots");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        Iterable<Volume> volumes = provider.getComputeServices().getVolumeSupport().listVolumes();
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-        Document doc;
-        
-        doc = method.get(url);
-        ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
-        NodeList matches = doc.getElementsByTagName("snapshot");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node s = matches.item(i);
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
+            }
+            Iterable<Volume> volumes = provider.getComputeServices().getVolumeSupport().listVolumes();
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
+            Document doc;
 
-            if( s != null ) {
-                Snapshot snapshot = toSnapshot(s, ctx, volumes);
-                
-                if( snapshot != null ) {
-                    snapshots.add(snapshot);
+            doc = method.get(url);
+            ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
+            NodeList matches = doc.getElementsByTagName("snapshot");
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node s = matches.item(i);
+
+                if( s != null ) {
+                    Snapshot snapshot = toSnapshot(s, ctx, volumes);
+
+                    if( snapshot != null ) {
+                        snapshots.add(snapshot);
+                    }
                 }
             }
+            return snapshots;
         }
-        return snapshots;
+        finally {
+            APITrace.end();
+        }
     }
 
     private Snapshot getLatestSnapshot(String forVolumeId) throws InternalException, CloudException {
@@ -420,6 +446,12 @@ public class Snapshots extends AbstractSnapshotSupport {
 
     @Override
     public boolean isSubscribed() throws InternalException, CloudException {
-        return provider.getComputeServices().getVolumeSupport().isSubscribed();
+        APITrace.begin(getProvider(), "Snapshot.isSubscribed");
+        try {
+            return provider.getComputeServices().getVolumeSupport().isSubscribed();
+        }
+        finally {
+            APITrace.end();
+        }
     }
 }

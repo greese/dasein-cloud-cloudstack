@@ -33,6 +33,7 @@ import org.dasein.cloud.cloudstack.identity.CSIdentityServices;
 import org.dasein.cloud.cloudstack.network.CSNetworkServices;
 import org.dasein.cloud.storage.BlobStoreSupport;
 import org.dasein.cloud.storage.StorageServices;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -42,6 +43,8 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
 public class CSCloud extends AbstractCloud {
+    static private final Logger logger = getLogger(CSCloud.class, "std");
+
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
         
@@ -187,11 +190,7 @@ public class CSCloud extends AbstractCloud {
     
     @Override
     public @Nullable String testContext() {
-        Logger logger = getLogger(CSCloud.class, "std");
-        
-        if( logger.isTraceEnabled() ) {
-            logger.trace("enter - " + CSCloud.class.getName() + ".testContext()");
-        }
+        APITrace.begin(this, "testContext");
         try {
             try {
                 ProviderContext ctx = getContext();
@@ -239,9 +238,7 @@ public class CSCloud extends AbstractCloud {
             }
         }
         finally {
-            if( logger.isDebugEnabled() ) {
-                logger.debug("exit - " + CSCloud.class.getName() + ".testContext()");
-            }
+            APITrace.end();
         }
     }
     
@@ -253,66 +250,72 @@ public class CSCloud extends AbstractCloud {
         return null;
     }
     
-    public Document waitForJob(String jobId, String jobName) throws CloudException, InternalException { 
-        CSMethod method = new CSMethod(this);
-        String url = method.buildUrl("queryAsyncJobResult", new Param("jobId", jobId));
+    public Document waitForJob(String jobId, String jobName) throws CloudException, InternalException {
+        APITrace.begin(this, "waitForJob");
+        try {
+            CSMethod method = new CSMethod(this);
+            String url = method.buildUrl("queryAsyncJobResult", new Param("jobId", jobId));
 
-        while( true ) {
-            try { Thread.sleep(5000L); }
-            catch( InterruptedException e ) { /* ignore */ }
-            Document doc = method.get(url);
-            
-            NodeList matches = doc.getElementsByTagName("jobstatus");
-            int status = 0;
-            
-            if( matches.getLength() > 0 ) {
-                status = Integer.parseInt(matches.item(0).getFirstChild().getNodeValue());
-            }
-            if( status > 0 ) {
-                int code = status;
-                
-                if( status == 1 ) {
-                    return doc;
+            while( true ) {
+                try { Thread.sleep(5000L); }
+                catch( InterruptedException e ) { /* ignore */ }
+                Document doc = method.get(url);
+
+                NodeList matches = doc.getElementsByTagName("jobstatus");
+                int status = 0;
+
+                if( matches.getLength() > 0 ) {
+                    status = Integer.parseInt(matches.item(0).getFirstChild().getNodeValue());
                 }
-                if( status == 2 ) {
-                    matches = doc.getElementsByTagName("jobresult");
-                    if( matches.getLength() > 0 ) {
-                        String str = matches.item(0).getFirstChild().getNodeValue();
-                        
-                        if( str == null || str.trim().length() < 1 ) {
-                            NodeList nodes = matches.item(0).getChildNodes();
-                            String message = null;
-                            
-                            for( int i=0; i<nodes.getLength(); i++ ) {
-                                Node n = nodes.item(i);
-                                
-                                if( n.getNodeName().equalsIgnoreCase("errorcode") ) {
-                                    try {
-                                        code = Integer.parseInt(n.getFirstChild().getNodeValue().trim());
+                if( status > 0 ) {
+                    int code = status;
+
+                    if( status == 1 ) {
+                        return doc;
+                    }
+                    if( status == 2 ) {
+                        matches = doc.getElementsByTagName("jobresult");
+                        if( matches.getLength() > 0 ) {
+                            String str = matches.item(0).getFirstChild().getNodeValue();
+
+                            if( str == null || str.trim().length() < 1 ) {
+                                NodeList nodes = matches.item(0).getChildNodes();
+                                String message = null;
+
+                                for( int i=0; i<nodes.getLength(); i++ ) {
+                                    Node n = nodes.item(i);
+
+                                    if( n.getNodeName().equalsIgnoreCase("errorcode") ) {
+                                        try {
+                                            code = Integer.parseInt(n.getFirstChild().getNodeValue().trim());
+                                        }
+                                        catch( NumberFormatException ignore ) {
+                                            // ignore
+                                        }
                                     }
-                                    catch( NumberFormatException ignore ) {
-                                        // ignore
+                                    else if( n.getNodeName().equalsIgnoreCase("errortext") ) {
+                                        message = n.getFirstChild().getNodeValue().trim();
                                     }
                                 }
-                                else if( n.getNodeName().equalsIgnoreCase("errortext") ) {
-                                    message = n.getFirstChild().getNodeValue().trim();
-                                }
+                                CSMethod.ParsedError error = new CSMethod.ParsedError();
+
+                                error.code = code;
+                                error.message = message;
+                                throw new CSException(error);
                             }
-                            CSMethod.ParsedError error = new CSMethod.ParsedError();
-                            
-                            error.code = code;
-                            error.message = message;
-                            throw new CSException(error);
+                            else {
+                                throw new CloudException(str);
+                            }
                         }
                         else {
-                            throw new CloudException(str);
+                            throw new CloudException(jobName + " failed with an unexplained error.");
                         }
-                    }
-                    else {
-                        throw new CloudException(jobName + " failed with an unexplained error.");
                     }
                 }
             }
+        }
+        finally {
+            APITrace.end();
         }
     }
 }

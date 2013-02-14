@@ -51,7 +51,7 @@ import org.dasein.cloud.compute.VolumeFormat;
 import org.dasein.cloud.compute.VolumeProduct;
 import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.compute.VolumeType;
-import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Storage;
@@ -88,206 +88,224 @@ public class Volumes extends AbstractVolumeSupport {
     
     @Override
     public void attach(@Nonnull String volumeId, @Nonnull String serverId, @Nullable String deviceId) throws InternalException, CloudException {
-        Param[] params;
-        
-        if( logger.isInfoEnabled() ) {
-            logger.info("attaching " + volumeId + " to " + serverId + " as " + deviceId);
-        }
-        VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+        APITrace.begin(getProvider(), "Volume.attach");
+        try {
+            Param[] params;
 
-        if( vm == null ) {
-            throw new CloudException("No such virtual machine: " + serverId);
-        }
-        long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10L);
-
-        while( timeout > System.currentTimeMillis() ) {
-            if( VmState.RUNNING.equals(vm.getCurrentState()) || VmState.STOPPED.equals(vm.getCurrentState()) ) {
-                break;
+            if( logger.isInfoEnabled() ) {
+                logger.info("attaching " + volumeId + " to " + serverId + " as " + deviceId);
             }
-            try { Thread.sleep(15000L); }
-            catch( InterruptedException ignore ) { }
-            try { vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId); }
-            catch( Throwable ignore ) { }
+            VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+
             if( vm == null ) {
-                throw new CloudException("Virtual machine " + serverId + " disappeared waiting for it to enter an attachable state");
+                throw new CloudException("No such virtual machine: " + serverId);
             }
-        }
-        if( deviceId == null ) {
-            params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId) }; 
-        }
-        else {
-            deviceId = toDeviceNumber(deviceId);
-            if( logger.isDebugEnabled() ) {
-                logger.debug("Device mapping is: " + deviceId);
-            }
-            params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId), new Param("deviceId", deviceId) };
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params));
+            long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10L);
 
-        if( doc == null ) {
-            throw new CloudException("No such volume or server");
+            while( timeout > System.currentTimeMillis() ) {
+                if( VmState.RUNNING.equals(vm.getCurrentState()) || VmState.STOPPED.equals(vm.getCurrentState()) ) {
+                    break;
+                }
+                try { Thread.sleep(15000L); }
+                catch( InterruptedException ignore ) { }
+                try { vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId); }
+                catch( Throwable ignore ) { }
+                if( vm == null ) {
+                    throw new CloudException("Virtual machine " + serverId + " disappeared waiting for it to enter an attachable state");
+                }
+            }
+            if( deviceId == null ) {
+                params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId) };
+            }
+            else {
+                deviceId = toDeviceNumber(deviceId);
+                if( logger.isDebugEnabled() ) {
+                    logger.debug("Device mapping is: " + deviceId);
+                }
+                params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId), new Param("deviceId", deviceId) };
+            }
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params));
+
+            if( doc == null ) {
+                throw new CloudException("No such volume or server");
+            }
+            provider.waitForJob(doc, "Attach Volume");
         }
-        provider.waitForJob(doc, "Attach Volume");
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "Volume.createVolume");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was provided for this request");
-        }
-        String snapshotId = options.getSnapshotId();
-        String productId = options.getVolumeProductId();
-        VolumeProduct product = null;
+            if( ctx == null ) {
+                throw new CloudException("No context was provided for this request");
+            }
+            String snapshotId = options.getSnapshotId();
+            String productId = options.getVolumeProductId();
+            VolumeProduct product = null;
 
-        if( productId != null ) {
-            for( VolumeProduct prd : listVolumeProducts() ) {
-                if( productId.equals(prd.getProviderProductId()) ) {
-                    product = prd;
-                    break;
+            if( productId != null ) {
+                for( VolumeProduct prd : listVolumeProducts() ) {
+                    if( productId.equals(prd.getProviderProductId()) ) {
+                        product = prd;
+                        break;
+                    }
                 }
             }
-        }
-        Storage<Gigabyte> size;
+            Storage<Gigabyte> size;
 
-        if( snapshotId == null ) {
-            if( product == null ) {
-                size = options.getVolumeSize();
-                if( size.intValue() < getMinimumVolumeSize().intValue() ) {
-                    size = getMinimumVolumeSize();
-                }
-                Iterable<VolumeProduct> products = listVolumeProducts();
-                VolumeProduct best = null;
-
-                for( VolumeProduct p : products ) {
-                    Storage<Gigabyte> s = p.getVolumeSize();
-
-                    if( s  == null || s.intValue() == 0 ) {
-                        product = p;
-                        break;
+            if( snapshotId == null ) {
+                if( product == null ) {
+                    size = options.getVolumeSize();
+                    if( size.intValue() < getMinimumVolumeSize().intValue() ) {
+                        size = getMinimumVolumeSize();
                     }
-                    long currentSize = s.getQuantity().longValue();
+                    Iterable<VolumeProduct> products = listVolumeProducts();
+                    VolumeProduct best = null;
 
-                    s = (best == null ? null : best.getVolumeSize());
+                    for( VolumeProduct p : products ) {
+                        Storage<Gigabyte> s = p.getVolumeSize();
 
-                    long bestSize = (s == null ? 0L : s.getQuantity().longValue());
-
-                    if( size.longValue() > 0L && size.longValue() == currentSize ) {
-                        product = p;
-                        break;
-                    }
-                    if( best == null ) {
-                        best = p;
-                    }
-                    else if( bestSize > 0L || currentSize > 0L ) {
-                        if( size.longValue() > 0L ) {
-                            if( bestSize < size.longValue() && bestSize >0L && currentSize > size.longValue() ) {
-                                best = p;
-                            }
-                            else if( bestSize > size.longValue() && currentSize > size.longValue() && currentSize < bestSize ) {
-                                best = p;
-                            }
+                        if( s  == null || s.intValue() == 0 ) {
+                            product = p;
+                            break;
                         }
-                        else if( currentSize > 0L && currentSize < bestSize ) {
+                        long currentSize = s.getQuantity().longValue();
+
+                        s = (best == null ? null : best.getVolumeSize());
+
+                        long bestSize = (s == null ? 0L : s.getQuantity().longValue());
+
+                        if( size.longValue() > 0L && size.longValue() == currentSize ) {
+                            product = p;
+                            break;
+                        }
+                        if( best == null ) {
                             best = p;
                         }
+                        else if( bestSize > 0L || currentSize > 0L ) {
+                            if( size.longValue() > 0L ) {
+                                if( bestSize < size.longValue() && bestSize >0L && currentSize > size.longValue() ) {
+                                    best = p;
+                                }
+                                else if( bestSize > size.longValue() && currentSize > size.longValue() && currentSize < bestSize ) {
+                                    best = p;
+                                }
+                            }
+                            else if( currentSize > 0L && currentSize < bestSize ) {
+                                best = p;
+                            }
+                        }
+                    }
+                    if( product == null ) {
+                        product = best;
                     }
                 }
-                if( product == null ) {
-                    product = best;
+                else {
+                    size = product.getVolumeSize();
+                    if( size == null || size.intValue() < 1 ) {
+                        size = options.getVolumeSize();
+                    }
+                }
+                if( product == null && size.longValue() < 1L ) {
+                    throw new CloudException("No offering matching " + options.getVolumeProductId());
                 }
             }
             else {
-                size = product.getVolumeSize();
-                if( size == null || size.intValue() < 1 ) {
-                    size = options.getVolumeSize();
+                Snapshot snapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(snapshotId);
+
+                if( snapshot == null ) {
+                    throw new CloudException("No such snapshot: " + snapshotId);
+                }
+                int s = snapshot.getSizeInGb();
+
+                if( s < 1 || s < getMinimumVolumeSize().intValue() ) {
+                    size = getMinimumVolumeSize();
+                }
+                else {
+                    size = new Storage<Gigabyte>(s, Storage.GIGABYTE);
                 }
             }
-            if( product == null && size.longValue() < 1L ) {
-                throw new CloudException("No offering matching " + options.getVolumeProductId());
-            }
-        }
-        else {
-            Snapshot snapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(snapshotId);
+            Param[] params;
 
-            if( snapshot == null ) {
-                throw new CloudException("No such snapshot: " + snapshotId);
-            }
-            int s = snapshot.getSizeInGb();
-
-            if( s < 1 || s < getMinimumVolumeSize().intValue() ) {
-                size = getMinimumVolumeSize();
-            }
-            else {
-                size = new Storage<Gigabyte>(s, Storage.GIGABYTE);
-            }
-        }
-        Param[] params;
-
-        if( product == null && snapshotId == null ) {
-            params = new Param[] {
-                    new Param("name", options.getName()),
-                    new Param("zoneId", ctx.getRegionId()),
-                    new Param("size", String.valueOf(size.longValue()))
-            };
-        }
-        else if( snapshotId != null ) {
-            params = new Param[] {
-                    new Param("name", options.getName()),
-                    new Param("zoneId", ctx.getRegionId()),
-                    new Param("snapshotId", snapshotId),
-                    new Param("size", String.valueOf(size.longValue()))
-            };
-        }
-        else {
-            Storage<Gigabyte> s = product.getVolumeSize();
-
-            if( s == null || s.intValue() < 1 ) {
+            if( product == null && snapshotId == null ) {
                 params = new Param[] {
                         new Param("name", options.getName()),
                         new Param("zoneId", ctx.getRegionId()),
-                        new Param("diskOfferingId", product.getProviderProductId()),
+                        new Param("size", String.valueOf(size.longValue()))
+                };
+            }
+            else if( snapshotId != null ) {
+                params = new Param[] {
+                        new Param("name", options.getName()),
+                        new Param("zoneId", ctx.getRegionId()),
+                        new Param("snapshotId", snapshotId),
                         new Param("size", String.valueOf(size.longValue()))
                 };
             }
             else {
-                params = new Param[] {
-                        new Param("name", options.getName()),
-                        new Param("zoneId", ctx.getRegionId()),
-                        new Param("diskOfferingId", product.getProviderProductId())
-                };
+                Storage<Gigabyte> s = product.getVolumeSize();
+
+                if( s == null || s.intValue() < 1 ) {
+                    params = new Param[] {
+                            new Param("name", options.getName()),
+                            new Param("zoneId", ctx.getRegionId()),
+                            new Param("diskOfferingId", product.getProviderProductId()),
+                            new Param("size", String.valueOf(size.longValue()))
+                    };
+                }
+                else {
+                    params = new Param[] {
+                            new Param("name", options.getName()),
+                            new Param("zoneId", ctx.getRegionId()),
+                            new Param("diskOfferingId", product.getProviderProductId())
+                    };
+                }
             }
-        }
 
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(CREATE_VOLUME, params));
-        NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
-        String volumeId = null;
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(CREATE_VOLUME, params));
+            NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
+            String volumeId = null;
 
-        if( matches.getLength() > 0 ) {
-            volumeId = matches.item(0).getFirstChild().getNodeValue();
-        }
-        if( volumeId == null ) {
-            matches = doc.getElementsByTagName("id"); // v2.2
             if( matches.getLength() > 0 ) {
                 volumeId = matches.item(0).getFirstChild().getNodeValue();
             }
+            if( volumeId == null ) {
+                matches = doc.getElementsByTagName("id"); // v2.2
+                if( matches.getLength() > 0 ) {
+                    volumeId = matches.item(0).getFirstChild().getNodeValue();
+                }
+            }
+            if( volumeId == null ) {
+                throw new CloudException("Failed to create volume");
+            }
+            provider.waitForJob(doc, "Create Volume");
+            return volumeId;
         }
-        if( volumeId == null ) {
-            throw new CloudException("Failed to create volume");
+        finally {
+            APITrace.end();
         }
-        provider.waitForJob(doc, "Create Volume");
-        return volumeId;
     }
 
     @Override
     public void detach(@Nonnull String volumeId, boolean force) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)));
+        APITrace.begin(getProvider(), "Volume.detach");
+        try {
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)));
 
-        provider.waitForJob(doc, "Detach Volume");
+            provider.waitForJob(doc, "Detach Volume");
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -369,12 +387,6 @@ public class Volumes extends AbstractVolumeSupport {
         return (volume == null ? null : volume.getProviderVolumeId());
     }
 
-    /*
-    @Nonnull String getRootVolumeOffering(@Nonnull String serverId) throws InternalException, CloudException {
-        return getRootVolume(serverId).offeringId;
-    }
-    */
-
     private @Nullable Volume getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("virtualMachineId", serverId)));
@@ -396,30 +408,31 @@ public class Volumes extends AbstractVolumeSupport {
     
     @Override
     public @Nullable Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was configured for this request");
-        }
+        APITrace.begin(getProvider(), "Volume.getVolume");
         try {
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", ctx.getRegionId())));
-            NodeList matches = doc.getElementsByTagName("volume");
+            try {
+                CSMethod method = new CSMethod(provider);
+                Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId())));
+                NodeList matches = doc.getElementsByTagName("volume");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node v = matches.item(i);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node v = matches.item(i);
 
-                if( v != null ) {
-                    return toVolume(v, false);
+                    if( v != null ) {
+                        return toVolume(v, false);
+                    }
                 }
-            }
-            return null;
-        }
-        catch( CSException e ) {
-            if( e.getHttpCode() == 431 ) {
                 return null;
             }
-            throw e;
+            catch( CSException e ) {
+                if( e.getHttpCode() == 431 ) {
+                    return null;
+                }
+                throw e;
+            }
+        }
+        finally {
+            APITrace.end();
         }
     }
 
@@ -435,7 +448,13 @@ public class Volumes extends AbstractVolumeSupport {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        return provider.getComputeServices().getVirtualMachineSupport().isSubscribed();
+        APITrace.begin(getProvider(), "Volume.isSubscribed");
+        try {
+            return provider.getComputeServices().getVirtualMachineSupport().isSubscribed();
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     private List<String> unixDeviceIdList    = null;
@@ -483,50 +502,68 @@ public class Volumes extends AbstractVolumeSupport {
 
     @Override
     public @Nonnull Iterable<VolumeProduct> listVolumeProducts() throws InternalException, CloudException {
-        if( products == null ) {
-            ArrayList<VolumeProduct> list = new ArrayList<VolumeProduct>();
+        APITrace.begin(getProvider(), "Volume.listVolumeProducts");
+        try {
+            if( products == null ) {
+                ArrayList<VolumeProduct> list = new ArrayList<VolumeProduct>();
 
-            for( DiskOffering offering : getDiskOfferings() ) {
-                VolumeProduct p = toProduct(offering);
+                for( DiskOffering offering : getDiskOfferings() ) {
+                    VolumeProduct p = toProduct(offering);
 
-                if( p != null ) {
-                    list.add(p);
+                    if( p != null ) {
+                        list.add(p);
+                    }
                 }
+                products = Collections.unmodifiableList(list);
             }
-            products = Collections.unmodifiableList(list);
+            return products;
         }
-        return products;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listVolumeStatus() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "Volume.listVolumeStatus");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was specified for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())));
-        ArrayList<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
-        NodeList matches = doc.getElementsByTagName("volume");
+            if( ctx == null ) {
+                throw new CloudException("No context was specified for this request");
+            }
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())));
+            ArrayList<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
+            NodeList matches = doc.getElementsByTagName("volume");
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node v = matches.item(i);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node v = matches.item(i);
 
-            if( v != null ) {
-                ResourceStatus volume = toStatus(v);
+                if( v != null ) {
+                    ResourceStatus volume = toStatus(v);
 
-                if( volume != null ) {
-                    volumes.add(volume);
+                    if( volume != null ) {
+                        volumes.add(volume);
+                    }
                 }
             }
+            return volumes;
         }
-        return volumes;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull Iterable<Volume> listVolumes() throws InternalException, CloudException {
-        return listVolumes(false);
+        APITrace.begin(getProvider(), "Volume.listVolumes");
+        try {
+            return listVolumes(false);
+        }
+        finally {
+            APITrace.end();
+        }
     }
      
     private @Nonnull Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
@@ -555,16 +592,17 @@ public class Volumes extends AbstractVolumeSupport {
     }
 
     @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-
-    @Override
     public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)));
+        APITrace.begin(getProvider(), "Volume.remove");
+        try {
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)));
 
-        provider.waitForJob(doc, "Delete Volume");
+            provider.waitForJob(doc, "Delete Volume");
+        }
+        finally {
+            APITrace.end();
+        }
     }
     
     private @Nonnull String toDeviceNumber(@Nonnull String deviceId) {

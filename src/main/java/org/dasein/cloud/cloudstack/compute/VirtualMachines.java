@@ -36,7 +36,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 
-import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
@@ -45,7 +44,6 @@ import org.apache.commons.codec.binary.Base64;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
@@ -64,15 +62,13 @@ import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VMLaunchOptions;
-import org.dasein.cloud.compute.VMScalingCapabilities;
-import org.dasein.cloud.compute.VMScalingOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.compute.VmStatistics;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.Region;
-import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.RawAddress;
+import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Megabyte;
@@ -106,38 +102,6 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     @Override
-    public VirtualMachine alterVirtualMachine(@Nonnull String vmId, @Nonnull VMScalingOptions options) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Vertical scaling is not supported");
-    }
-
-    @Override
-    public @Nonnull VirtualMachine clone(@Nonnull String serverId, @Nonnull String intoDcId, @Nonnull String name, @Nonnull String description, boolean powerOn, @Nullable String ... firewallIds) throws InternalException, CloudException {
-        throw new OperationNotSupportedException("Instances cannot be cloned.");
-    }
-
-    @Override
-    public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
-        return null;
-    }
-
-
-    @Override
-    public void disableAnalytics(@Nonnull String vmId) throws InternalException, CloudException {
-        // NO-OP
-        
-    }
-
-    @Override
-    public void enableAnalytics(@Nonnull String vmId) throws InternalException, CloudException {
-        // NO-OP
-    }
-    
-    @Override
-    public @Nonnull String getConsoleOutput(@Nonnull String serverId) throws InternalException, CloudException {
-        return "";
-    }
-
-    @Override
     public int getCostFactor(@Nonnull VmState state) throws InternalException, CloudException {
         return 100;
     }
@@ -149,17 +113,23 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override 
     public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
-        for( Architecture architecture : Architecture.values() ) {
-            for( VirtualMachineProduct product : listProducts(architecture) ) {
-                if( product.getProviderProductId().equals(productId) ) {
-                    return product;
+        APITrace.begin(getProvider(), "VM.getProduct");
+        try {
+            for( Architecture architecture : Architecture.values() ) {
+                for( VirtualMachineProduct product : listProducts(architecture) ) {
+                    if( product.getProviderProductId().equals(productId) ) {
+                        return product;
+                    }
                 }
             }
+            if( logger.isDebugEnabled() ) {
+                logger.debug("Unknown product ID for cloud.com: " + productId);
+            }
+            return null;
         }
-        if( logger.isDebugEnabled() ) {
-            logger.debug("Unknown product ID for cloud.com: " + productId);
+        finally {
+            APITrace.end();
         }
-        return null;
     }
     
     @Override
@@ -169,36 +139,28 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nullable VirtualMachine getVirtualMachine(@Nonnull String serverId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "VM.getVirtualMachine");
+        try {
 
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
-        NodeList matches = doc.getElementsByTagName("virtualmachine");
-        
-        if( matches.getLength() < 1 ) {
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", getContext().getRegionId())));
+            NodeList matches = doc.getElementsByTagName("virtualmachine");
+
+            if( matches.getLength() < 1 ) {
+                return null;
+            }
+            for( int i=0; i<matches.getLength(); i++ ) {
+                VirtualMachine s = toVirtualMachine(matches.item(i));
+
+                if( s != null && s.getProviderVirtualMachineId().equals(serverId) ) {
+                    return s;
+                }
+            }
             return null;
         }
-        for( int i=0; i<matches.getLength(); i++ ) {
-            VirtualMachine s = toVirtualMachine(matches.item(i));
-            
-            if( s != null && s.getProviderVirtualMachineId().equals(serverId) ) {
-                return s;
-            }
+        finally {
+            APITrace.end();
         }
-        return null;
-     }
-    
-    @Override
-    public @Nonnull VmStatistics getVMStatistics(@Nonnull String serverId, @Nonnegative long startTimestamp, @Nonnegative long endTimestamp) throws InternalException, CloudException {
-        return new VmStatistics();
-    }
-    
-    @Override
-    public @Nonnull Iterable<VmStatistics> getVMStatisticsForPeriod(@Nonnull String serverId, @Nonnegative long arg1, @Nonnegative long arg2) throws InternalException, CloudException {
-        return Collections.emptyList();
     }
 
     @Override
@@ -228,23 +190,29 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull Requirement identifyVlanRequirement() throws CloudException, InternalException {
-        if( provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-            return Requirement.NONE;
-        }
-        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                 throw new CloudException("No context was set for this request");
+        APITrace.begin(getProvider(), "VM.identifyVlanRequirement");
+        try {
+            if( provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+                return Requirement.NONE;
             }
-            String regionId = ctx.getRegionId();
+            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+                ProviderContext ctx = provider.getContext();
 
-            if( regionId == null ) {
-                throw new CloudException("No region was set for this request");
+                if( ctx == null ) {
+                     throw new CloudException("No context was set for this request");
+                }
+                String regionId = ctx.getRegionId();
+
+                if( regionId == null ) {
+                    throw new CloudException("No region was set for this request");
+                }
+                return (provider.getDataCenterServices().requiresNetwork(regionId) ? Requirement.REQUIRED : Requirement.OPTIONAL);
             }
-            return (provider.getDataCenterServices().requiresNetwork(regionId) ? Requirement.REQUIRED : Requirement.OPTIONAL);
+            return Requirement.OPTIONAL;
         }
-        return Requirement.OPTIONAL;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -264,27 +232,33 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
-        
+        APITrace.begin(getProvider(), "VM.isSubscribed");
         try {
-            method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")));
-            return true;
-        }
-        catch( CSException e ) {
-            int code = e.getHttpCode();
+            CSMethod method = new CSMethod(provider);
 
-            if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
-                return false;
+            try {
+                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")));
+                return true;
             }
-            throw e;
+            catch( CSException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
+                    return false;
+                }
+                throw e;
+            }
+            catch( CloudException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == HttpServletResponse.SC_UNAUTHORIZED ) {
+                    return false;
+                }
+                throw e;
+            }
         }
-        catch( CloudException e ) {
-            int code = e.getHttpCode();
-            
-            if( code == HttpServletResponse.SC_FORBIDDEN || code == HttpServletResponse.SC_UNAUTHORIZED ) {
-                return false;
-            }
-            throw e;
+        finally {
+            APITrace.end();
         }
     }
 
@@ -295,23 +269,30 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull VirtualMachine launch(@Nonnull VMLaunchOptions withLaunchOptions) throws CloudException, InternalException {
-        String id = withLaunchOptions.getStandardProductId();
+        APITrace.begin(getProvider(), "VM.launch");
+        try {
+            String id = withLaunchOptions.getStandardProductId();
 
-        VirtualMachineProduct product = getProduct(id);
+            VirtualMachineProduct product = getProduct(id);
 
-        if( product == null ) {
-            throw new CloudException("Invalid product ID: " + id);
+            if( product == null ) {
+                throw new CloudException("Invalid product ID: " + id);
+            }
+            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+                return launch22(withLaunchOptions.getMachineImageId(), product,  withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName(), withLaunchOptions.getBootstrapKey(), withLaunchOptions.getVlanId(), withLaunchOptions.getFirewallIds(), withLaunchOptions.getUserData());
+            }
+            else {
+                return launch21(withLaunchOptions.getMachineImageId(), product, withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName());
+            }
         }
-        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
-            return launch22(withLaunchOptions.getMachineImageId(), product,  withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName(), withLaunchOptions.getBootstrapKey(), withLaunchOptions.getVlanId(), withLaunchOptions.getFirewallIds(), withLaunchOptions.getUserData());
-        }
-        else {
-            return launch21(withLaunchOptions.getMachineImageId(), product, withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName());
+        finally {
+            APITrace.end();
         }
     }
 
     @Override
     @Deprecated
+    @SuppressWarnings("deprecation")
     public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nonnull String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String usingKey, @Nullable String withVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String[] protectedByFirewalls, @Nullable Tag ... tags) throws InternalException, CloudException {
         if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
             StringBuilder userData = new StringBuilder();
@@ -656,116 +637,128 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull Iterable<String> listFirewalls(@Nonnull String vmId) throws InternalException, CloudException {
-        SecurityGroup support = provider.getNetworkServices().getFirewallSupport();
-        
-        if( support == null ) {
-            return Collections.emptyList();
+        APITrace.begin(getProvider(), "VM.listFirewalls");
+        try {
+            SecurityGroup support = provider.getNetworkServices().getFirewallSupport();
+
+            if( support == null ) {
+                return Collections.emptyList();
+            }
+            return support.listFirewallsForVM(vmId);
         }
-        return support.listFirewallsForVM(vmId);
+        finally {
+            APITrace.end();
+        }
     }
     
     @Override
     public @Nonnull Iterable<VirtualMachineProduct> listProducts(@Nonnull Architecture architecture) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "VM.listProducts");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was configured for this request");
-        }
-        Map<Architecture,Collection<VirtualMachineProduct>> cached;
-        //String endpoint = provider.getContext().getEndpoint();
+            if( ctx == null ) {
+                throw new CloudException("No context was configured for this request");
+            }
+            Map<Architecture,Collection<VirtualMachineProduct>> cached;
+            //String endpoint = provider.getContext().getEndpoint();
 
-        // No longer caching by endpoint- different accounts may return different products...
-        //   so we'll cache by account instead.
-        String accountId = provider.getContext().getAccountNumber();
+            // No longer caching by endpoint- different accounts may return different products...
+            //   so we'll cache by account instead.
+            String accountId = provider.getContext().getAccountNumber();
 
-        if( productCache.containsKey(accountId) ) {
-            cached = productCache.get(accountId);
-            if( cached.containsKey(architecture) ) {
-                Collection<VirtualMachineProduct> products = cached.get(architecture);
-                
-                if( products != null ) {
-                    return products;
+            if( productCache.containsKey(accountId) ) {
+                cached = productCache.get(accountId);
+                if( cached.containsKey(architecture) ) {
+                    Collection<VirtualMachineProduct> products = cached.get(architecture);
+
+                    if( products != null ) {
+                        return products;
+                    }
                 }
             }
-        }
-        else {
-            cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
-            productCache.put(accountId, cached);
-        }
-        List<VirtualMachineProduct> products;
-        Set<String> mapping = null;
+            else {
+                cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
+                productCache.put(accountId, cached);
+            }
+            List<VirtualMachineProduct> products;
+            Set<String> mapping = null;
 
-        if( customServiceMappings == null ) {
-            load();
-        }
-        if( customServiceMappings != null ) {
-            String cloudId = cloudMappings.getProperty(provider.getContext().getEndpoint());
-            
-            if( cloudId != null ) {
-                Map<String,Set<String>> map = customServiceMappings.get(cloudId);
-                
-                if( map != null ) {
-                    mapping = map.get(provider.getContext().getRegionId());
-                }
+            if( customServiceMappings == null ) {
+                load();
             }
-        }
-        products = new ArrayList<VirtualMachineProduct>();
-        
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())));
-        NodeList matches = doc.getElementsByTagName("serviceoffering");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
-            String id = null, name = null;
-            Node node = matches.item(i);
-            NodeList attributes;
-            int memory = 0;
-            int cpu = 0;
-            
-            attributes = node.getChildNodes();
-            for( int j=0; j<attributes.getLength(); j++ ) {
-                Node n = attributes.item(j);
-                String value;
+            if( customServiceMappings != null ) {
+                String cloudId = cloudMappings.getProperty(provider.getContext().getEndpoint());
 
-                if( n.getChildNodes().getLength() > 0 ) {
-                    value = n.getFirstChild().getNodeValue();
-                }
-                else {
-                    value = null;
-                }
-                if( n.getNodeName().equals("id") ) {
-                    id = value;
-                }
-                else if( n.getNodeName().equals("name") ) {
-                    name = value;
-                }
-                else if( n.getNodeName().equals("cpunumber") ) {
-                    cpu = Integer.parseInt(value);
-                }
-                else if( n.getNodeName().equals("memory") ) {
-                    memory = Integer.parseInt(value);
-                }
-                if( id != null && name != null && cpu > 0 && memory > 0 ) {
-                    break;
+                if( cloudId != null ) {
+                    Map<String,Set<String>> map = customServiceMappings.get(cloudId);
+
+                    if( map != null ) {
+                        mapping = map.get(provider.getContext().getRegionId());
+                    }
                 }
             }
-            if( id != null ) {
-                if( mapping == null || mapping.contains(id) ) {
-                    VirtualMachineProduct product;
-    
-                    product = new VirtualMachineProduct();
-                    product.setProviderProductId(id);
-                    product.setName(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
-                    product.setDescription(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
-                    product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
-                    product.setCpuCount(cpu);
-                    product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
-                    products.add(product);
+            products = new ArrayList<VirtualMachineProduct>();
+
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())));
+            NodeList matches = doc.getElementsByTagName("serviceoffering");
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                String id = null, name = null;
+                Node node = matches.item(i);
+                NodeList attributes;
+                int memory = 0;
+                int cpu = 0;
+
+                attributes = node.getChildNodes();
+                for( int j=0; j<attributes.getLength(); j++ ) {
+                    Node n = attributes.item(j);
+                    String value;
+
+                    if( n.getChildNodes().getLength() > 0 ) {
+                        value = n.getFirstChild().getNodeValue();
+                    }
+                    else {
+                        value = null;
+                    }
+                    if( n.getNodeName().equals("id") ) {
+                        id = value;
+                    }
+                    else if( n.getNodeName().equals("name") ) {
+                        name = value;
+                    }
+                    else if( n.getNodeName().equals("cpunumber") ) {
+                        cpu = Integer.parseInt(value);
+                    }
+                    else if( n.getNodeName().equals("memory") ) {
+                        memory = Integer.parseInt(value);
+                    }
+                    if( id != null && name != null && cpu > 0 && memory > 0 ) {
+                        break;
+                    }
+                }
+                if( id != null ) {
+                    if( mapping == null || mapping.contains(id) ) {
+                        VirtualMachineProduct product;
+
+                        product = new VirtualMachineProduct();
+                        product.setProviderProductId(id);
+                        product.setName(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
+                        product.setDescription(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
+                        product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
+                        product.setCpuCount(cpu);
+                        product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+                        products.add(product);
+                    }
                 }
             }
+            cached.put(architecture, products);
+            return products;
         }
-        cached.put(architecture, products);
-        return products;
+        finally {
+            APITrace.end();
+        }
     }
 
     private transient Collection<Architecture> architectures;
@@ -784,80 +777,105 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "VM.listVirtualMachineStatus");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was specified for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
-        ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
-        NodeList matches = doc.getElementsByTagName("virtualmachine");
+            if( ctx == null ) {
+                throw new CloudException("No context was specified for this request");
+            }
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
+            ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
+            NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
 
-            if( node != null ) {
-                ResourceStatus vm = toStatus(node);
+                if( node != null ) {
+                    ResourceStatus vm = toStatus(node);
 
-                if( vm != null ) {
-                    servers.add(vm);
+                    if( vm != null ) {
+                        servers.add(vm);
+                    }
                 }
             }
+            return servers;
         }
-        return servers;
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        APITrace.begin(getProvider(), "VM.listVirtualMachines");
+        try {
+            ProviderContext ctx = provider.getContext();
 
-        if( ctx == null ) {
-            throw new CloudException("No context was specified for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
-        ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
-        NodeList matches = doc.getElementsByTagName("virtualmachine");
+            if( ctx == null ) {
+                throw new CloudException("No context was specified for this request");
+            }
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
+            ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
+            NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
 
-            if( node != null ) {
-                VirtualMachine vm = toVirtualMachine(node);
+                if( node != null ) {
+                    VirtualMachine vm = toVirtualMachine(node);
 
-                if( vm != null ) {
-                    servers.add(vm);
+                    if( vm != null ) {
+                        servers.add(vm);
+                    }
                 }
             }
+            return servers;
         }
-        return servers;
-    }
-
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void reboot(@Nonnull String serverId) throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
+        APITrace.begin(getProvider(), "VM.reboot");
+        try {
+            CSMethod method = new CSMethod(provider);
         
-        method.get(method.buildUrl(REBOOT_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(REBOOT_VIRTUAL_MACHINE, new Param("id", serverId)));
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void start(@Nonnull String serverId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        APITrace.begin(getProvider(), "VM.start");
+        try {
+            CSMethod method = new CSMethod(provider);
 
-        method.get(method.buildUrl(START_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(START_VIRTUAL_MACHINE, new Param("id", serverId)));
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        APITrace.begin(getProvider(), "VM.stop");
+        try {
+            CSMethod method = new CSMethod(provider);
 
-        method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))));
+            method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))));
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -877,9 +895,15 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public void terminate(@Nonnull String serverId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        APITrace.begin(getProvider(), "VM.terminate");
+        try {
+            CSMethod method = new CSMethod(provider);
         
-        method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)));
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     private @Nullable String translateZone(@Nullable String zoneId) throws InternalException, CloudException {
@@ -1026,10 +1050,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
             else if( name.equals("ipaddress") ) { // v2.1
                 if( value != null ) {
-                    server.setPrivateIpAddresses(new String[] { value });
-                }
-                else {
-                    server.setPrivateIpAddresses(new String[0]);
+                    server.setPrivateAddresses(new RawAddress(value));
                 }
                 server.setPrivateDnsAddress(value);
             }
@@ -1084,13 +1105,13 @@ public class VirtualMachines extends AbstractVMSupport {
                             }
                         }
                         if( pub ) {
-                            server.setPublicIpAddresses(new String[] { addr });
+                            server.setPublicAddresses(new RawAddress(addr));
                             if( server.getPublicDnsAddress() == null ) {
                                 server.setPublicDnsAddress(addr);
                             }
                         }
                         else {
-                            server.setPrivateIpAddresses(new String[] { addr });
+                            server.setPrivateAddresses(new RawAddress(addr));
                             if( server.getPrivateDnsAddress() == null ) {
                                 server.setPrivateDnsAddress(addr);
                             }
