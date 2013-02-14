@@ -143,7 +143,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", getContext().getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", getContext().getRegionId())), LIST_VIRTUAL_MACHINES);
             NodeList matches = doc.getElementsByTagName("virtualmachine");
 
             if( matches.getLength() < 1 ) {
@@ -237,7 +237,7 @@ public class VirtualMachines extends AbstractVMSupport {
             CSMethod method = new CSMethod(provider);
 
             try {
-                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")));
+                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
                 return true;
             }
             catch( CSException e ) {
@@ -318,7 +318,7 @@ public class VirtualMachines extends AbstractVMSupport {
     private VirtualMachine launch21(String imageId, VirtualMachineProduct product, String inZoneId, String name) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
         
-        return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", translateZone(inZoneId)), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) )));
+        return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", translateZone(inZoneId)), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) ), DEPLOY_VIRTUAL_MACHINE));
     }
     
     private void load() {
@@ -570,7 +570,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 try {
                     CSMethod method = new CSMethod(provider);
 
-                    return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params)));
+                    return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params), DEPLOY_VIRTUAL_MACHINE));
                 }
                 catch( CloudException e ) {
                     if( e.getMessage().contains("sufficient address capacity") ) {
@@ -588,7 +588,7 @@ public class VirtualMachines extends AbstractVMSupport {
         else {
             CSMethod method = new CSMethod(provider);
 
-            return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params)));
+            return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params), DEPLOY_VIRTUAL_MACHINE));
         }
     }
     
@@ -701,7 +701,7 @@ public class VirtualMachines extends AbstractVMSupport {
             products = new ArrayList<VirtualMachineProduct>();
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())), LIST_SERVICE_OFFERINGS);
             NodeList matches = doc.getElementsByTagName("serviceoffering");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -785,7 +785,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("No context was specified for this request");
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
             NodeList matches = doc.getElementsByTagName("virtualmachine");
 
@@ -817,7 +817,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("No context was specified for this request");
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
             NodeList matches = doc.getElementsByTagName("virtualmachine");
 
@@ -845,7 +845,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
         
-            method.get(method.buildUrl(REBOOT_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(REBOOT_VIRTUAL_MACHINE, new Param("id", serverId)), REBOOT_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();
@@ -858,7 +858,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
 
-            method.get(method.buildUrl(START_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(START_VIRTUAL_MACHINE, new Param("id", serverId)), START_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();
@@ -871,7 +871,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
 
-            method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))));
+            method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))), STOP_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();
@@ -899,7 +899,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
         
-            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)));
+            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)), DESTROY_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();

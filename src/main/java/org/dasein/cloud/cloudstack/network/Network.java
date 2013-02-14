@@ -39,8 +39,8 @@ import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -55,66 +55,6 @@ public class Network extends AbstractVLANSupport {
     Network(CSCloud cloudstack) {
         super(cloudstack);
         this.cloudstack = cloudstack;
-    }
-
-    @Override
-    public boolean allowsNewSubnetCreation() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public void assignRoutingTableToSubnet(@Nonnull String subnetId, @Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot assign routing tables");
-    }
-
-    @Override
-    public void assignRoutingTableToVlan(@Nonnull String vlanId, @Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot assign routing tables");
-    }
-
-    @Override
-    public void attachNetworkInterface(@Nonnull String nicId, @Nonnull String vmId, int index) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage network interfaces");
-    }
-
-    @Override
-    public String createInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage internet gateways");
-    }
-
-    @Override
-    public @Nonnull String createRoutingTable(@Nonnull String forVlanId, @Nonnull String name, @Nonnull String description) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot assign routing tables");
-    }
-
-    @Override
-    public @Nonnull NetworkInterface createNetworkInterface(@Nonnull NICCreateOptions options) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage network interfaces");
-    }
-
-    @Override
-    public void addRouteToAddress(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String address) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage routing tables");
-    }
-
-    @Override
-    public void addRouteToGateway(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String gatewayId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage internet gateways");
-    }
-
-    @Override
-    public void addRouteToNetworkInterface(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage network interfaces");
-    }
-
-    @Override
-    public void addRouteToVirtualMachine(@Nonnull String toRoutingTableId, @Nonnull IPVersion version, @Nullable String destinationCidr, @Nonnull String vmId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage routing tables");
-    }
-
-    @Override
-    public boolean allowsNewNetworkInterfaceCreation() throws CloudException, InternalException {
-        return false;
     }
 
     @Override
@@ -177,7 +117,7 @@ public class Network extends AbstractVLANSupport {
     
     public @Nonnull Collection<NetworkOffering> getNetworkOfferings(@Nonnull String regionId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(LIST_NETWORK_OFFERINGS, new Param("zoneId", regionId)));
+        Document doc = method.get(method.buildUrl(LIST_NETWORK_OFFERINGS, new Param("zoneId", regionId)), LIST_NETWORK_OFFERINGS);
         NodeList matches = doc.getElementsByTagName("networkoffering");
         ArrayList<NetworkOffering> offerings = new ArrayList<NetworkOffering>();
         
@@ -222,34 +162,40 @@ public class Network extends AbstractVLANSupport {
     
     @Override
     public @Nullable VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
+        APITrace.begin(getProvider(), "VLAN.getVlan");
         try {
-            CSMethod method = new CSMethod(cloudstack);
-            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("id", vlanId)));
-            NodeList matches = doc.getElementsByTagName("network");
+            ProviderContext ctx = cloudstack.getContext();
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            if( ctx == null ) {
+                throw new CloudException("No context was set for this request");
+            }
+            try {
+                CSMethod method = new CSMethod(cloudstack);
+                Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("id", vlanId)), Network.LIST_NETWORKS);
+                NodeList matches = doc.getElementsByTagName("network");
 
-                if( node != null ) {
-                    VLAN vlan = toNetwork(node, ctx);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
 
-                    if( vlan != null ) {
-                        return vlan;
+                    if( node != null ) {
+                        VLAN vlan = toNetwork(node, ctx);
+
+                        if( vlan != null ) {
+                            return vlan;
+                        }
                     }
                 }
-            }
-            return null;
-        }
-        catch( CSException e ) {
-            if( e.getHttpCode() == 431 ) {
                 return null;
             }
-            throw e;
+            catch( CSException e ) {
+                if( e.getHttpCode() == 431 ) {
+                    return null;
+                }
+                throw e;
+            }
+        }
+        finally {
+            APITrace.end();
         }
     }
 
@@ -298,71 +244,63 @@ public class Network extends AbstractVLANSupport {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
-
-        if( ctx == null ) {
-            throw new InternalException("No context was established");
-        }
-        CSMethod method = new CSMethod(cloudstack);
-        
+        APITrace.begin(getProvider(), "VLAN.isSubscribed");
         try {
-            method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())));
-            return true;
-        }
-        catch( CSException e ) {
-            int code = e.getHttpCode();
+            ProviderContext ctx = cloudstack.getContext();
 
-            if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
-                return false;
+            if( ctx == null ) {
+                throw new InternalException("No context was established");
             }
-            throw e;
+            CSMethod method = new CSMethod(cloudstack);
+
+            try {
+                method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+                return true;
+            }
+            catch( CSException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
+                    return false;
+                }
+                throw e;
+            }
+        }
+        finally {
+            APITrace.end();
         }
     }
     
     @Override
     public @Nonnull Iterable<VLAN> listVlans() throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
+        APITrace.begin(getProvider(), "VLAN.listVlans");
+        try {
+            ProviderContext ctx = cloudstack.getContext();
 
-        if( ctx == null ) {
-            throw new InternalException("No context was established");
-        }
-        CSMethod method = new CSMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())));
-        ArrayList<VLAN> networks = new ArrayList<VLAN>();
-        NodeList matches = doc.getElementsByTagName("network");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-                
-            if( node != null ) {
-                VLAN vlan = toNetwork(node, ctx);
-                    
-                if( vlan != null ) {
-                    networks.add(vlan);
+            if( ctx == null ) {
+                throw new InternalException("No context was established");
+            }
+            CSMethod method = new CSMethod(cloudstack);
+            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+            ArrayList<VLAN> networks = new ArrayList<VLAN>();
+            NodeList matches = doc.getElementsByTagName("network");
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+
+                if( node != null ) {
+                    VLAN vlan = toNetwork(node, ctx);
+
+                    if( vlan != null ) {
+                        networks.add(vlan);
+                    }
                 }
             }
+            return networks;
         }
-        return networks;
-    }
-
-    @Override
-    public void removeInternetGateway(@Nonnull String forVlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage internet gateways");
-    }
-
-    @Override
-    public void removeNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage network interfaces");
-    }
-
-    @Override
-    public void removeRoute(@Nonnull String inRoutingTableId, @Nonnull String destinationCidr) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage routing tables");
-    }
-
-    @Override
-    public void removeRoutingTable(@Nonnull String routingTableId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage routing tables");
+        finally {
+            APITrace.end();
+        }
     }
 
     public @Nonnull Iterable<VLAN> listDefaultNetworks(boolean shared, boolean forDeploy) throws CloudException, InternalException {
@@ -392,7 +330,7 @@ public class Network extends AbstractVLANSupport {
         if( !shared ) {
             params[idx] = new Param("account", ctx.getAccountNumber());
         }
-        Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, params));
+        Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, params), Network.LIST_NETWORKS);
         ArrayList<VLAN> networks = new ArrayList<VLAN>();
         NodeList matches = doc.getElementsByTagName("network");
         
@@ -412,55 +350,51 @@ public class Network extends AbstractVLANSupport {
     
     @Override
     public @Nonnull VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nullable String domainName, @Nullable String[] dnsServers, @Nullable String[] ntpServers) throws CloudException, InternalException {
-        if( !allowsNewVlanCreation() ) {
-            throw new OperationNotSupportedException();
-        }
-        ProviderContext ctx = cloudstack.getContext();
-        
-        if( ctx == null ) {
-            throw new InternalException("No context was set for this request");
-        }
-        String regionId = ctx.getRegionId();
+        APITrace.begin(getProvider(), "VLAN.createVlan");
+        try {
+            if( !allowsNewVlanCreation() ) {
+                throw new OperationNotSupportedException();
+            }
+            ProviderContext ctx = cloudstack.getContext();
 
-        if( regionId == null ) {
-            throw new CloudException("No region was set for this request");
-        }
-        String offering = getNetworkOffering(regionId);
-        
-        if( offering == null ) {
-            throw new CloudException("No offerings exist for " + ctx.getRegionId());
-        }
-        CSMethod method = new CSMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)));
-        NodeList matches = doc.getElementsByTagName("network");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-            
-            if( node != null ) {
-                VLAN network = toNetwork(node, ctx);
-                
-                if( network != null ) {
-                    return network;
+            if( ctx == null ) {
+                throw new InternalException("No context was set for this request");
+            }
+            String regionId = ctx.getRegionId();
+
+            if( regionId == null ) {
+                throw new CloudException("No region was set for this request");
+            }
+            String offering = getNetworkOffering(regionId);
+
+            if( offering == null ) {
+                throw new CloudException("No offerings exist for " + ctx.getRegionId());
+            }
+            CSMethod method = new CSMethod(cloudstack);
+            Document doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)), CREATE_NETWORK);
+            NodeList matches = doc.getElementsByTagName("network");
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+
+                if( node != null ) {
+                    VLAN network = toNetwork(node, ctx);
+
+                    if( network != null ) {
+                        return network;
+                    }
                 }
             }
+            throw new CloudException("Creation requested failed to create a network without an error");
         }
-        throw new CloudException("Creation requested failed to create a network without an error");
-    }
-
-    @Override
-    public void detachNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Cannot manage network interfaces");
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
         return 0;
-    }
-
-    @Override
-    public void removeVlan(String vlanId) throws CloudException, InternalException { 
-        throw new OperationNotSupportedException("VLAN removal is not allowed");
     }
 
     @Override
@@ -547,14 +481,9 @@ public class Network extends AbstractVLANSupport {
             if( netmask == null ) {
                 netmask = "255.255.255.0";
             }
-            network.setCidr(toCidr(gateway, netmask));
+            network.setCidr(netmask, gateway);
         }
         return network;
-    }
-
-    @Override
-    public @Nonnull Subnet createSubnet(@Nonnull SubnetCreateOptions options) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Unable to create subnets");
     }
 
     @Override
@@ -573,28 +502,8 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public @Nullable NetworkInterface getNetworkInterface(@Nonnull String nicId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
-    public @Nullable RoutingTable getRoutingTableForSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
     public @Nonnull Requirement getRoutingTableSupport() throws CloudException, InternalException {
         return Requirement.NONE;
-    }
-
-    @Override
-    public @Nullable RoutingTable getRoutingTableForVlan(@Nonnull String vlanId) throws CloudException, InternalException {
-        return null;
-    }
-
-    @Override
-    public @Nullable Subnet getSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        return null;
     }
 
     @Override
@@ -608,88 +517,54 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public @Nonnull Collection<String> listFirewallIdsForNIC(@Nonnull String nicId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<ResourceStatus> listNetworkInterfaceStatus() throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfaces() throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesForVM(@Nonnull String forVmId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInSubnet(@Nonnull String subnetId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public @Nonnull Iterable<NetworkInterface> listNetworkInterfacesInVLAN(@Nonnull String vlanId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
     public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
-        ArrayList<Networkable> resources = new ArrayList<Networkable>();
-        NetworkServices network = cloudstack.getNetworkServices();
+        APITrace.begin(getProvider(), "VLAN.listResources");
+        try {
+            ArrayList<Networkable> resources = new ArrayList<Networkable>();
+            NetworkServices network = cloudstack.getNetworkServices();
 
-        FirewallSupport fwSupport = network.getFirewallSupport();
+            FirewallSupport fwSupport = network.getFirewallSupport();
 
-        if( fwSupport != null ) {
-            for( Firewall fw : fwSupport.list() ) {
-                if( inVlanId.equals(fw.getProviderVlanId()) ) {
-                    resources.add(fw);
-                }
-            }
-        }
-
-        IpAddressSupport ipSupport = network.getIpAddressSupport();
-
-        if( ipSupport != null ) {
-            for( IPVersion version : ipSupport.listSupportedIPVersions() ) {
-                for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
-                    if( inVlanId.equals(addr.getProviderVlanId()) ) {
-                        resources.add(addr);
+            if( fwSupport != null ) {
+                for( Firewall fw : fwSupport.list() ) {
+                    if( inVlanId.equals(fw.getProviderVlanId()) ) {
+                        resources.add(fw);
                     }
                 }
-
             }
-        }
-        for( RoutingTable table : listRoutingTables(inVlanId) ) {
-            resources.add(table);
-        }
-        Iterable<VirtualMachine> vms = cloudstack.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
 
-        for( VirtualMachine vm : vms ) {
-            if( inVlanId.equals(vm.getProviderVlanId()) ) {
-                resources.add(vm);
+            IpAddressSupport ipSupport = network.getIpAddressSupport();
+
+            if( ipSupport != null ) {
+                for( IPVersion version : ipSupport.listSupportedIPVersions() ) {
+                    for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
+                        if( inVlanId.equals(addr.getProviderVlanId()) ) {
+                            resources.add(addr);
+                        }
+                    }
+
+                }
             }
-        }
-        return resources;
-    }
+            for( RoutingTable table : listRoutingTables(inVlanId) ) {
+                resources.add(table);
+            }
+            Iterable<VirtualMachine> vms = cloudstack.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
 
-    @Override
-    public @Nonnull Iterable<RoutingTable> listRoutingTables(@Nonnull String inVlanId) throws CloudException, InternalException {
-        return Collections.emptyList();
+            for( VirtualMachine vm : vms ) {
+                if( inVlanId.equals(vm.getProviderVlanId()) ) {
+                    resources.add(vm);
+                }
+            }
+            return resources;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
     public boolean isSubnetDataCenterConstrained() throws CloudException, InternalException {
         return true;
-    }
-    
-    @Override
-    public @Nonnull Iterable<Subnet> listSubnets(@Nonnull String inVlanId) throws CloudException, InternalException {
-        return Collections.emptyList();
     }
 
     @Override
@@ -699,40 +574,37 @@ public class Network extends AbstractVLANSupport {
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
+        APITrace.begin(getProvider(), "VLAN.listVlanStatus");
+        try {
+            ProviderContext ctx = cloudstack.getContext();
 
-        if( ctx == null ) {
-            throw new InternalException("No context was established");
-        }
-        CSMethod method = new CSMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())));
-        ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
-        NodeList matches = doc.getElementsByTagName("network");
+            if( ctx == null ) {
+                throw new InternalException("No context was established");
+            }
+            CSMethod method = new CSMethod(cloudstack);
+            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+            ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
+            NodeList matches = doc.getElementsByTagName("network");
 
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
 
-            if( node != null ) {
-                ResourceStatus vlan = toVLANStatus(node);
+                if( node != null ) {
+                    ResourceStatus vlan = toVLANStatus(node);
 
-                if( vlan != null ) {
-                    networks.add(vlan);
+                    if( vlan != null ) {
+                        networks.add(vlan);
+                    }
                 }
             }
+            return networks;
         }
-        return networks;
+        finally {
+            APITrace.end();
+        }
     }
 
-    @Override
-    public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
-        return new String[0];
-    }
-
-    @Override
-    public void removeSubnet(String providerSubnetId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("No subnet support");
-    }
-    
+    /*
     private @Nonnull String toCidr(@Nonnull String gateway, @Nonnull String netmask) {
         String[] dots = netmask.split("\\.");
         int cidr = 0;
@@ -777,6 +649,7 @@ public class Network extends AbstractVLANSupport {
         network.append(String.valueOf(cidr));
         return network.toString();
     }
+    */
 
     public @Nullable ResourceStatus toVLANStatus(@Nullable Node node) {
         if( node == null ) {

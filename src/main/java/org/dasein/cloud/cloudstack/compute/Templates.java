@@ -99,7 +99,7 @@ public class Templates extends AbstractImageSupport {
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "add") };
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params));
+            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params), UPDATE_TEMPLATE_PERMISSIONS);
 
             provider.waitForJob(doc, "Share Template");
         }
@@ -123,7 +123,7 @@ public class Templates extends AbstractImageSupport {
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "true") };
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params));
+            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params), UPDATE_TEMPLATE_PERMISSIONS);
 
             provider.waitForJob(doc, "Share Template");
         }
@@ -140,10 +140,7 @@ public class Templates extends AbstractImageSupport {
             String url = method.buildUrl(LIST_TEMPLATES, new Param("id", providerImageId), new Param("templateFilter", "executable"), new Param("zoneId", getContext().getRegionId()));
             Document doc;
             try {
-                doc = method.get(url);
-                if( doc == null ) {
-                    return null;
-                }
+                doc = method.get(url, LIST_TEMPLATES);
             }
             catch( CSException e ) {
                 if( e.getHttpCode() == 431 ) {
@@ -302,7 +299,7 @@ public class Templates extends AbstractImageSupport {
             params[5] = new Param("isFeatured", "false");
             params[6] = new Param("snapshotId", baseSnapshot.getProviderSnapshotId());
             params[7] = new Param("passwordEnabled", String.valueOf(isPasswordEnabled(server.getProviderMachineImageId())));
-            doc = method.get(method.buildUrl(CREATE_TEMPLATE, params));
+            doc = method.get(method.buildUrl(CREATE_TEMPLATE, params), CREATE_TEMPLATE);
 
             NodeList matches = doc.getElementsByTagName("templateid"); // v2.1
             String templateId = null;
@@ -340,7 +337,7 @@ public class Templates extends AbstractImageSupport {
         try {
             CSMethod method = new CSMethod(provider);
             String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"));
-            Document doc = method.get(url);
+            Document doc = method.get(url, LIST_TEMPLATES);
             NodeList matches = doc.getElementsByTagName("template");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -364,7 +361,7 @@ public class Templates extends AbstractImageSupport {
         try {
             CSMethod method = new CSMethod(provider);
             String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"));
-            Document doc = method.get(url);
+            Document doc = method.get(url, LIST_TEMPLATES);
             NodeList matches = doc.getElementsByTagName("template");
 
             if( matches.getLength() > 0 ) {
@@ -423,7 +420,7 @@ public class Templates extends AbstractImageSupport {
             CSMethod method = new CSMethod(provider);
 
             try {
-                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")));
+                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
                 return true;
             }
             catch( CSException e ) {
@@ -453,7 +450,7 @@ public class Templates extends AbstractImageSupport {
                 throw new CloudException("No context was set for this request");
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId())), LIST_TEMPLATES);
             ArrayList<ResourceStatus> templates = new ArrayList<ResourceStatus>();
             NodeList matches = doc.getElementsByTagName("template");
 
@@ -486,7 +483,7 @@ public class Templates extends AbstractImageSupport {
                 params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", accountNumber) };
             }
 
-            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params));
+            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
 
             ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
             NodeList matches = doc.getElementsByTagName("template");
@@ -510,7 +507,7 @@ public class Templates extends AbstractImageSupport {
         APITrace.begin(getProvider(), "Image.listShares");
         try {
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("id", templateId)));
+            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("id", templateId)), LIST_TEMPLATES);
             TreeSet<String> accounts = new TreeSet<String>();
             NodeList matches = doc.getElementsByTagName("account");
 
@@ -582,7 +579,7 @@ public class Templates extends AbstractImageSupport {
             params[7] = new Param("isFeatured", "false");
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(REGISTER_TEMPLATE, params));
+            Document doc = method.get(method.buildUrl(REGISTER_TEMPLATE, params), REGISTER_TEMPLATE);
             NodeList matches = doc.getElementsByTagName("templateid");
             String templateId = null;
 
@@ -634,7 +631,7 @@ public class Templates extends AbstractImageSupport {
                 throw new CloudException(accountNumber + " cannot remove images belonging to " + img.getProviderOwnerId());
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", providerImageId)));
+            Document doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", providerImageId)), DELETE_TEMPLATE);
 
             provider.waitForJob(doc, "Delete Template");
         }
@@ -672,7 +669,7 @@ public class Templates extends AbstractImageSupport {
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "remove") };
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params));
+            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params), UPDATE_TEMPLATE_PERMISSIONS);
 
             provider.waitForJob(doc, "Share Template");
         }
@@ -701,7 +698,7 @@ public class Templates extends AbstractImageSupport {
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "false") };
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params));
+            Document doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params), UPDATE_TEMPLATE_PERMISSIONS);
 
             provider.waitForJob(doc, "Share Template");
         }
@@ -728,7 +725,7 @@ public class Templates extends AbstractImageSupport {
                 try {
                     APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
                     try {
-                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params));
+                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
                         NodeList matches = doc.getElementsByTagName("template");
 
                         for( int i=0; i<matches.getLength(); i++ ) {
@@ -990,7 +987,7 @@ public class Templates extends AbstractImageSupport {
 
     private String toOs(Platform platform, Architecture architecture) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_OS_TYPES));
+        Document doc = method.get(method.buildUrl(LIST_OS_TYPES), LIST_OS_TYPES);
         NodeList matches = doc.getElementsByTagName("ostype");
         
         for( int i=0; i<matches.getLength(); i++ ) {

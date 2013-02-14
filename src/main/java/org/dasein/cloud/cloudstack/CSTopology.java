@@ -30,6 +30,7 @@ import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -47,14 +48,20 @@ public class CSTopology implements DataCenterServices {
     }
     
     public @Nullable DataCenter getDataCenter(@Nonnull String zoneId) throws InternalException, CloudException {
-        for( Region region : listRegions() ) {
-            for( DataCenter dc : listDataCenters(region.getProviderRegionId()) ) {
-                if( dc.getProviderDataCenterId().equals(zoneId) ) {
-                    return dc;
+        APITrace.begin(provider, "DC.getDataCenter");
+        try {
+            for( Region region : listRegions() ) {
+                for( DataCenter dc : listDataCenters(region.getProviderRegionId()) ) {
+                    if( dc.getProviderDataCenterId().equals(zoneId) ) {
+                        return dc;
+                    }
                 }
             }
+            return null;
         }
-        return null;
+        finally {
+            APITrace.end();
+        }
     }
 
     public @Nonnull String getProviderTermForDataCenter(@Nonnull Locale locale) {
@@ -66,117 +73,147 @@ public class CSTopology implements DataCenterServices {
     }
 
     public @Nullable Region getRegion(@Nonnull String regionId) throws InternalException, CloudException {
-        for( Region region : listRegions() ) {
-            if( region.getProviderRegionId().equals(regionId) ) {
-                return region;
+        APITrace.begin(provider, "DC.getRegion");
+        try {
+            for( Region region : listRegions() ) {
+                if( region.getProviderRegionId().equals(regionId) ) {
+                    return region;
+                }
             }
+            return null;
         }
-        return null;
+        finally {
+            APITrace.end();
+        }
     }
 
     public boolean requiresNetwork(@Nonnull String zoneId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-        Document doc = method.get(url);
+        APITrace.begin(provider, "DC.requiresNetwork");
+        try {
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
+            Document doc = method.get(url, LIST_ZONES);
 
-        NodeList matches = doc.getElementsByTagName("zone");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node zone = matches.item(i);
-            
-            if( zone.hasChildNodes() ) {
-                NodeList attrs = zone.getChildNodes();
-                String networkType = null;
-                String id = null;
-                
-                for( int j=0; j<attrs.getLength(); j++ ) {
-                    Node attr = attrs.item(j);
-                    
-                    if( attr.getNodeName().equalsIgnoreCase("id") ) {
-                        id = attr.getFirstChild().getNodeValue().trim();
+            NodeList matches = doc.getElementsByTagName("zone");
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node zone = matches.item(i);
+
+                if( zone.hasChildNodes() ) {
+                    NodeList attrs = zone.getChildNodes();
+                    String networkType = null;
+                    String id = null;
+
+                    for( int j=0; j<attrs.getLength(); j++ ) {
+                        Node attr = attrs.item(j);
+
+                        if( attr.getNodeName().equalsIgnoreCase("id") ) {
+                            id = attr.getFirstChild().getNodeValue().trim();
+                        }
+                        else if( attr.getNodeName().equalsIgnoreCase("networkType") ) {
+                            networkType = attr.getFirstChild().getNodeValue().trim();
+                        }
                     }
-                    else if( attr.getNodeName().equalsIgnoreCase("networkType") ) {
-                        networkType = attr.getFirstChild().getNodeValue().trim();
+                    if( zoneId.equals(id) ) {
+                        return !("basic".equalsIgnoreCase(networkType));
                     }
-                }
-                if( zoneId.equals(id) ) {
-                    return !("basic".equalsIgnoreCase(networkType));
                 }
             }
+            return true;
         }
-        return true;
+        finally {
+            APITrace.end();
+        }
     }
     
     public boolean supportsSecurityGroups(@Nonnull String zoneId, boolean basicOnly) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-        Document doc = method.get(url);
-        boolean sg = false;
-        boolean basic = false;
-        
-        NodeList matches = doc.getElementsByTagName("zone");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node zone = matches.item(i);
-            
-            if( zone.hasChildNodes() ) {
-                NodeList attrs = zone.getChildNodes();
-                boolean groups = false;
-                String networkType = null;
-                String id = null;
-                
-                for( int j=0; j<attrs.getLength(); j++ ) {
-                    Node attr = attrs.item(j);
-                    
-                    if( attr.getNodeName().equalsIgnoreCase("id") ) {
-                        id = attr.getFirstChild().getNodeValue().trim();
+        APITrace.begin(provider, "DC.supportsSecurityGroups");
+        try {
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
+            Document doc = method.get(url, LIST_ZONES);
+            boolean sg = false;
+            boolean basic = false;
+
+            NodeList matches = doc.getElementsByTagName("zone");
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node zone = matches.item(i);
+
+                if( zone.hasChildNodes() ) {
+                    NodeList attrs = zone.getChildNodes();
+                    boolean groups = false;
+                    String networkType = null;
+                    String id = null;
+
+                    for( int j=0; j<attrs.getLength(); j++ ) {
+                        Node attr = attrs.item(j);
+
+                        if( attr.getNodeName().equalsIgnoreCase("id") ) {
+                            id = attr.getFirstChild().getNodeValue().trim();
+                        }
+                        else if( attr.getNodeName().equalsIgnoreCase("networkType") ) {
+                            networkType = attr.getFirstChild().getNodeValue().trim();
+                        }
+                        else if( attr.getNodeName().equalsIgnoreCase("securitygroupsenabled") ) {
+                            groups = attr.getFirstChild().getNodeValue().trim().equalsIgnoreCase("true");
+                        }
                     }
-                    else if( attr.getNodeName().equalsIgnoreCase("networkType") ) {
-                        networkType = attr.getFirstChild().getNodeValue().trim();
+                    if( zoneId.equals(id) ) {
+                        basic = "basic".equalsIgnoreCase(networkType);
+                        sg = groups;
+                        break;
                     }
-                    else if( attr.getNodeName().equalsIgnoreCase("securitygroupsenabled") ) {
-                        groups = attr.getFirstChild().getNodeValue().trim().equalsIgnoreCase("true");
-                    }
-                }
-                if( zoneId.equals(id) ) {
-                    basic = "basic".equalsIgnoreCase(networkType);
-                    sg = groups;
-                    break;
                 }
             }
+            return ((!basicOnly || basic) && sg);
         }
-        return ((!basicOnly || basic) && sg);
+        finally {
+            APITrace.end();
+        }
     }
     
     public @Nonnull Collection<DataCenter> listDataCenters(@Nonnull String regionId) throws InternalException, CloudException {
-        Region region = getRegion(regionId);
-        
-        if( region == null ) {
-            throw new CloudException("No such region: " + regionId);
+        APITrace.begin(provider, "DC.listDataCenters");
+        try {
+            Region region = getRegion(regionId);
+
+            if( region == null ) {
+                throw new CloudException("No such region: " + regionId);
+            }
+            DataCenter zone = new DataCenter();
+
+            zone.setActive(true);
+            zone.setAvailable(true);
+            zone.setName(region.getName() + " (DC)");
+            zone.setProviderDataCenterId(regionId);
+            zone.setRegionId(regionId);
+            return Collections.singletonList(zone);
         }
-        DataCenter zone = new DataCenter();
-        
-        zone.setActive(true);
-        zone.setAvailable(true);
-        zone.setName(region.getName() + " (DC)");
-        zone.setProviderDataCenterId(regionId);
-        zone.setRegionId(regionId);
-        return Collections.singletonList(zone);
+        finally {
+            APITrace.end();
+        }
     }
 
     public @Nonnull Collection<Region> listRegions() throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-        Document doc = method.get(url);
+        APITrace.begin(provider, "DC.listRegions");
+        try {
+            CSMethod method = new CSMethod(provider);
+            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
+            Document doc = method.get(url, LIST_ZONES);
 
-        ArrayList<Region> regions = new ArrayList<Region>();
-        NodeList matches = doc.getElementsByTagName("zone");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Region r = toRegion(matches.item(i));
-            
-            if( r != null ) {
-                regions.add(r);
+            ArrayList<Region> regions = new ArrayList<Region>();
+            NodeList matches = doc.getElementsByTagName("zone");
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Region r = toRegion(matches.item(i));
+
+                if( r != null ) {
+                    regions.add(r);
+                }
             }
+            return regions;
         }
-        return regions;
+        finally {
+            APITrace.end();
+        }
     }
     
     private @Nullable Region toRegion(@Nullable Node node) {

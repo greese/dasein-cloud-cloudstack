@@ -104,7 +104,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             Document doc;
 
             try {
-                doc = method.get(url);
+                doc = method.get(url, CREATE_SNAPSHOT);
             }
             catch( CSException e ) {
                 int code = e.getHttpCode();
@@ -210,7 +210,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
             Document doc;
 
-            doc = method.get(url);
+            doc = method.get(url, DELETE_SNAPSHOT);
             provider.waitForJob(doc, "Delete Snapshot");
         }
         finally {
@@ -236,7 +236,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
             Document doc;
 
-            doc = method.get(url);
+            doc = method.get(url, LIST_SNAPSHOTS);
             ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
             NodeList matches = doc.getElementsByTagName("snapshot");
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -281,7 +281,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
             Document doc;
 
-            doc = method.get(url);
+            doc = method.get(url, LIST_SNAPSHOTS);
             ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
             NodeList matches = doc.getElementsByTagName("snapshot");
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -320,7 +320,7 @@ public class Snapshots extends AbstractSnapshotSupport {
         else {
             volumes = Collections.singletonList(volume);
         }
-        doc = method.get(url);
+        doc = method.get(url, LIST_SNAPSHOTS);
         Snapshot latest = null;
         
         NodeList matches = doc.getElementsByTagName("snapshot");

@@ -259,7 +259,7 @@ public class CSCloud extends AbstractCloud {
             while( true ) {
                 try { Thread.sleep(5000L); }
                 catch( InterruptedException e ) { /* ignore */ }
-                Document doc = method.get(url);
+                Document doc = method.get(url, "queryAsyncJobResult");
 
                 NodeList matches = doc.getElementsByTagName("jobstatus");
                 int status = 0;

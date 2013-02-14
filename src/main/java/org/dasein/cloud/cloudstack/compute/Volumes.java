@@ -125,7 +125,7 @@ public class Volumes extends AbstractVolumeSupport {
                 params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId), new Param("deviceId", deviceId) };
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params));
+            Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params), ATTACH_VOLUME);
 
             if( doc == null ) {
                 throw new CloudException("No such volume or server");
@@ -270,7 +270,7 @@ public class Volumes extends AbstractVolumeSupport {
             }
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CREATE_VOLUME, params));
+            Document doc = method.get(method.buildUrl(CREATE_VOLUME, params), CREATE_VOLUME);
             NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
             String volumeId = null;
 
@@ -299,7 +299,7 @@ public class Volumes extends AbstractVolumeSupport {
         APITrace.begin(getProvider(), "Volume.detach");
         try {
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)));
+            Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)), DETACH_VOLUME);
 
             provider.waitForJob(doc, "Detach Volume");
         }
@@ -325,7 +325,7 @@ public class Volumes extends AbstractVolumeSupport {
 
     @Nonnull Collection<DiskOffering> getDiskOfferings() throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_DISK_OFFERINGS));
+        Document doc = method.get(method.buildUrl(LIST_DISK_OFFERINGS), LIST_DISK_OFFERINGS);
         ArrayList<DiskOffering> offerings = new ArrayList<DiskOffering>();
         NodeList matches = doc.getElementsByTagName("diskoffering");
         
@@ -389,7 +389,7 @@ public class Volumes extends AbstractVolumeSupport {
 
     private @Nullable Volume getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("virtualMachineId", serverId)));
+        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("virtualMachineId", serverId)), LIST_VOLUMES);
         NodeList matches = doc.getElementsByTagName("volume");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -412,7 +412,7 @@ public class Volumes extends AbstractVolumeSupport {
         try {
             try {
                 CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId())));
+                Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId())), LIST_VOLUMES);
                 NodeList matches = doc.getElementsByTagName("volume");
 
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -533,7 +533,7 @@ public class Volumes extends AbstractVolumeSupport {
                 throw new CloudException("No context was specified for this request");
             }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())));
+            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
             ArrayList<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
             NodeList matches = doc.getElementsByTagName("volume");
 
@@ -573,7 +573,7 @@ public class Volumes extends AbstractVolumeSupport {
             throw new CloudException("No context was specified for this request");
         }
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())));
+        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
         ArrayList<Volume> volumes = new ArrayList<Volume>();
         NodeList matches = doc.getElementsByTagName("volume");
         
@@ -596,7 +596,7 @@ public class Volumes extends AbstractVolumeSupport {
         APITrace.begin(getProvider(), "Volume.remove");
         try {
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)));
+            Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)), DELETE_VOLUME);
 
             provider.waitForJob(doc, "Delete Volume");
         }

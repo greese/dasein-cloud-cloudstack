@@ -54,6 +54,7 @@ import org.dasein.cloud.CloudErrorType;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -151,6 +152,7 @@ public class CSMethod {
         HttpParams params = new BasicHttpParams();
 
         HttpProtocolParams.setVersion(params, HttpVersion.HTTP_1_1);
+        //noinspection deprecation
         HttpProtocolParams.setContentCharset(params, HTTP.UTF_8);
         HttpProtocolParams.setUserAgent(params, "Dasein Cloud");
 
@@ -172,7 +174,7 @@ public class CSMethod {
         return new DefaultHttpClient(params);
     }
 
-    public Document get(String url) throws CloudException, InternalException {
+    public @Nonnull Document get(@Nonnull String url, @Nonnull String command) throws CloudException, InternalException {
         Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
@@ -198,6 +200,7 @@ public class CSMethod {
                 wire.debug("");
             }
             try {
+                APITrace.trace(provider, command);
                 response = client.execute(get);
                 if( wire.isDebugEnabled() ) {
                     wire.debug(response.getStatusLine().toString());
@@ -376,7 +379,7 @@ public class CSMethod {
         }
     }
     
-    private Document parseResponse(int code, String xml) throws CloudException, InternalException {
+    private @Nonnull Document parseResponse(int code, String xml) throws CloudException, InternalException {
         Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         

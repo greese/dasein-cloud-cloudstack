@@ -50,6 +50,7 @@ import org.dasein.cloud.network.LoadBalancerAddressType;
 import org.dasein.cloud.network.LoadBalancerServer;
 import org.dasein.cloud.network.LoadBalancerState;
 import org.dasein.cloud.network.LoadBalancerSupport;
+import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -75,71 +76,69 @@ public class LoadBalancers implements LoadBalancerSupport {
 
     @Override
     public void addServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
+        APITrace.begin(provider, "LB.addServers");
         try {
-            LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
-    
-            if( lb == null ) {
-                throw new CloudException("No such load balancer: " + toLoadBalancerId);
-            }
-            if( serverIds == null || serverIds.length < 1 ) {
-                return;
-            }
-            for( LbListener listener : lb.getListeners() ) {
-                String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
-                StringBuilder str = new StringBuilder();
-                
-                for( int i=0; i<serverIds.length; i++ ) {
-                    str.append(serverIds[i]);
-                    if( i < serverIds.length-1 ) {
-                        str.append(",");
-                    }
+            try {
+                LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
+
+                if( lb == null ) {
+                    throw new CloudException("No such load balancer: " + toLoadBalancerId);
                 }
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(ASSIGN_TO_LOAD_BALANCER_RULE, new Param("id", ruleId), new Param("virtualMachineIds", str.toString())));
-                
-                provider.waitForJob(doc, "Add Server");
+                if( serverIds == null || serverIds.length < 1 ) {
+                    return;
+                }
+                for( LbListener listener : lb.getListeners() ) {
+                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
+                    StringBuilder str = new StringBuilder();
+
+                    for( int i=0; i<serverIds.length; i++ ) {
+                        str.append(serverIds[i]);
+                        if( i < serverIds.length-1 ) {
+                            str.append(",");
+                        }
+                    }
+                    CSMethod method = new CSMethod(provider);
+                    Document doc = method.get(method.buildUrl(ASSIGN_TO_LOAD_BALANCER_RULE, new Param("id", ruleId), new Param("virtualMachineIds", str.toString())), ASSIGN_TO_LOAD_BALANCER_RULE);
+
+                    provider.waitForJob(doc, "Add Server");
+                }
+            }
+            catch( RuntimeException e ) {
+                throw new InternalException(e);
+            }
+            catch( Error e ) {
+                throw new InternalException(e);
             }
         }
-        catch( RuntimeException e ) {
-            throw new InternalException(e);
-        }
-        catch( Error e ) {
-            throw new InternalException(e);
+        finally {
+            APITrace.end();
         }
     }
 
     @Override
     public String create(String name, String description, String addressId, String[] dcIds, LbListener[] listeners, String[] servers) throws CloudException, InternalException {
+        APITrace.begin(provider, "LB.create");
         try {
-        org.dasein.cloud.network.IpAddress publicAddress = provider.getNetworkServices().getIpAddressSupport().getIpAddress(addressId);
-        
-        if( publicAddress == null ) {
-            throw new CloudException("You must specify the IP address for your load balancer.");
-        }
-        for( LbListener listener : listeners ) {
-            if( !isId(addressId) ) {
-                createVmOpsRule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+            @SuppressWarnings("ConstantConditions") org.dasein.cloud.network.IpAddress publicAddress = provider.getNetworkServices().getIpAddressSupport().getIpAddress(addressId);
+
+            if( publicAddress == null ) {
+                throw new CloudException("You must specify the IP address for your load balancer.");
             }
-            else {
-                createCloudstack22Rule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+            for( LbListener listener : listeners ) {
+                if( !isId(addressId) ) {
+                    createVmOpsRule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+                }
+                else {
+                    createCloudstack22Rule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+                }
             }
+            if( servers != null ) {
+                this.addServers(publicAddress.getRawAddress().getIpAddress(), servers);
+            }
+            return publicAddress.getRawAddress().getIpAddress();
         }
-        if( servers != null ) {
-            this.addServers(publicAddress.getAddress(), servers);
-        }
-        return publicAddress.getAddress();
-        }
-        catch( CloudException e ) {
-            e.printStackTrace();
-            throw e;
-        }
-        catch( InternalException e ) {
-            e.printStackTrace();
-            throw e;
-        }
-        catch( RuntimeException e ) {
-            e.printStackTrace();
-            throw e;
+        finally {
+            APITrace.end();
         }
     }
 
@@ -166,7 +165,7 @@ public class LoadBalancers implements LoadBalancerSupport {
         params[5] = new Param("description", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
         
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params));
+        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -219,7 +218,7 @@ public class LoadBalancers implements LoadBalancerSupport {
         params[5] = new Param("description", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
 
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params));
+        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -268,27 +267,33 @@ public class LoadBalancers implements LoadBalancerSupport {
     
     @Override
     public LoadBalancer getLoadBalancer(String loadBalancerId) throws CloudException, InternalException {
+        APITrace.begin(provider, "LB.getLoadBalancer");
         try {
-            HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
-            boolean isId = isId(loadBalancerId);
-            String key = (isId ? "publicIpId" : "publicIp");
+            try {
+                HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+                boolean isId = isId(loadBalancerId);
+                String key = (isId ? "publicIpId" : "publicIp");
 
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[] { new Param(key, loadBalancerId) }));
-            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+                CSMethod method = new CSMethod(provider);
+                Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, loadBalancerId)), LIST_LOAD_BALANCER_RULES);
+                NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
-            for( int i=0; i<rules.getLength(); i++ ) {
-                Node node = rules.item(i);
+                for( int i=0; i<rules.getLength(); i++ ) {
+                    Node node = rules.item(i);
 
-                toRule(node, matches);
+                    toRule(node, matches);
+                }
+                return matches.get(loadBalancerId);
             }
-            return matches.get(loadBalancerId);
+            catch( CSException e ) {
+                if( e.getHttpCode() == 431 ) {
+                    return null;
+                }
+                throw e;
+            }
         }
-        catch( CSException e ) {
-            if( e.getHttpCode() == 431 ) {
-                return null;
-            }
-            throw e;
+        finally {
+            APITrace.end();
         }
     }
 
@@ -314,33 +319,39 @@ public class LoadBalancers implements LoadBalancerSupport {
 
     @Override
     public Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
-        HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
-        CSMethod method = new CSMethod(provider);
-
+        APITrace.begin(provider, "LB.listLoadBalancerStatus");
         try {
-            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES));
-            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+            HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+            CSMethod method = new CSMethod(provider);
 
-            for( int i=0; i<rules.getLength(); i++ ) {
-                Node node = rules.item(i);
+            try {
+                Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
+                NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
-                toRule(node, matches);
-            }
-            ArrayList<ResourceStatus> results = new ArrayList<ResourceStatus>();
+                for( int i=0; i<rules.getLength(); i++ ) {
+                    Node node = rules.item(i);
 
-            for( LoadBalancer lb : matches.values() ) {
-                if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
-                    results.add(new ResourceStatus(lb.getProviderLoadBalancerId(), lb.getCurrentState()));
+                    toRule(node, matches);
                 }
+                ArrayList<ResourceStatus> results = new ArrayList<ResourceStatus>();
+
+                for( LoadBalancer lb : matches.values() ) {
+                    if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
+                        results.add(new ResourceStatus(lb.getProviderLoadBalancerId(), lb.getCurrentState()));
+                    }
+                }
+                return results;
             }
-            return results;
+            catch( CloudException e ) {
+                if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
+                    return Collections.emptyList();
+                }
+                e.printStackTrace();
+                throw e;
+            }
         }
-        catch( CloudException e ) {
-            if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
-                return Collections.emptyList();
-            }
-            e.printStackTrace();
-            throw e;
+        finally {
+            APITrace.end();
         }
     }
 
@@ -369,10 +380,9 @@ public class LoadBalancers implements LoadBalancerSupport {
     
     @Override
     public Iterable<LbProtocol> listSupportedProtocols() {
-        List<LbProtocol> list = protocols;
-        
         if( protocols == null ) {
-            list = new ArrayList<LbProtocol>();
+            List<LbProtocol> list = new ArrayList<LbProtocol>();
+
             list.add(LbProtocol.RAW_TCP);
             protocols = Collections.unmodifiableList(list);
         }
@@ -382,7 +392,7 @@ public class LoadBalancers implements LoadBalancerSupport {
     private Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
         ArrayList<String> ids = new ArrayList<String>();
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param[] { new Param("id", ruleId) }));
+        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId)), LIST_LOAD_BALANCER_RULE_INSTANCES);
         NodeList instances = doc.getElementsByTagName("loadbalancerruleinstance");     
         
         for( int i=0; i<instances.getLength(); i++ ) {
@@ -413,7 +423,7 @@ public class LoadBalancers implements LoadBalancerSupport {
         boolean isId = isId(publicIp);
         String key = (isId ? "publicIpId" : "publicIp");
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[] { new Param(key, publicIp) }));
+        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, publicIp)), LIST_LOAD_BALANCER_RULES);
         NodeList rules = doc.getElementsByTagName("loadbalancerrule");
         
         for( int i=0; i<rules.getLength(); i++ ) {
@@ -434,7 +444,7 @@ public class LoadBalancers implements LoadBalancerSupport {
                     value = null;
                 }
                 if( name.equals("publicip") ) {
-                    if( !value.equals(publicIp) ) {
+                    if( value != null && !value.equals(publicIp) ) {
                         isIt = false;
                         break;
                     }
@@ -496,19 +506,25 @@ public class LoadBalancers implements LoadBalancerSupport {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
-        
+        APITrace.begin(provider, "LB.isSubscribed");
         try {
-            method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param[] { new Param("available", "true") }));
-            return true;
-        }
-        catch( CSException e ) {
-            int code = e.getHttpCode();
+            CSMethod method = new CSMethod(provider);
 
-            if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
-                return false;
+            try {
+                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param[] { new Param("available", "true") }), CSTopology.LIST_ZONES);
+                return true;
             }
-            throw e;
+            catch( CSException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
+                    return false;
+                }
+                throw e;
+            }
+        }
+        finally {
+            APITrace.end();
         }
     }
 
@@ -519,39 +535,45 @@ public class LoadBalancers implements LoadBalancerSupport {
     
     @Override
     public Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
-        HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
-        CSMethod method = new CSMethod(provider);
-        
+        APITrace.begin(provider, "LB.listLoadBalancers");
         try {
-            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[0] ));
-            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
-            
-            for( int i=0; i<rules.getLength(); i++ ) {
-                Node node = rules.item(i);
-                
-                toRule(node, matches);
-            }
-            ArrayList<LoadBalancer> results = new ArrayList<LoadBalancer>();
-            
-            for( LoadBalancer lb : matches.values() ) {
-                if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
-                    results.add(lb);
+            HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+            CSMethod method = new CSMethod(provider);
+
+            try {
+                Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[0] ), LIST_LOAD_BALANCER_RULES);
+                NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+                for( int i=0; i<rules.getLength(); i++ ) {
+                    Node node = rules.item(i);
+
+                    toRule(node, matches);
                 }
+                ArrayList<LoadBalancer> results = new ArrayList<LoadBalancer>();
+
+                for( LoadBalancer lb : matches.values() ) {
+                    if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
+                        results.add(lb);
+                    }
+                }
+                return results;
             }
-            return results;
+            catch( CloudException e ) {
+                if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
+                    return Collections.emptyList();
+                }
+                e.printStackTrace();
+                throw e;
+            }
         }
-        catch( CloudException e ) {
-            if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
-                return Collections.emptyList();
-            }
-            e.printStackTrace();
-            throw e;
+        finally {
+            APITrace.end();
         }
     }
 
     boolean matchesRegion(String addressId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl("listPublicIpAddresses", new Param[] { new Param(isId(addressId) ? "ipAddressId" : "ipAddress", addressId) }));
+        Document doc = method.get(method.buildUrl("listPublicIpAddresses", new Param[] { new Param(isId(addressId) ? "ipAddressId" : "ipAddress", addressId) }), "listPublicIpAddresses");
         HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
         LoadBalancer lb = provider.getNetworkServices().getLoadBalancerSupport().getLoadBalancer(addressId);
         
@@ -582,17 +604,23 @@ public class LoadBalancers implements LoadBalancerSupport {
     
     @Override
     public void remove(String loadBalancerId) throws CloudException, InternalException {
-        LoadBalancer lb = getLoadBalancer(loadBalancerId);
-        
-        if( lb.getListeners() == null ) {
-            return;
-        }
-        for( LbListener listener : lb.getListeners() ) {
-            String ruleId = getVmOpsRuleId(listener.getAlgorithm(), lb.getAddress(), listener.getPublicPort(), listener.getPrivatePort());
-            
-            if( ruleId != null ) {
-                removeVmOpsRule(ruleId);
+        APITrace.begin(provider, "LB.remove");
+        try {
+            LoadBalancer lb = getLoadBalancer(loadBalancerId);
+
+            if( lb.getListeners() == null ) {
+                return;
             }
+            for( LbListener listener : lb.getListeners() ) {
+                String ruleId = getVmOpsRuleId(listener.getAlgorithm(), lb.getAddress(), listener.getPublicPort(), listener.getPrivatePort());
+
+                if( ruleId != null ) {
+                    removeVmOpsRule(ruleId);
+                }
+            }
+        }
+        finally {
+            APITrace.end();
         }
     }
 
@@ -603,39 +631,45 @@ public class LoadBalancers implements LoadBalancerSupport {
 
     @Override
     public void removeServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
+        APITrace.begin(provider, "LB.removeServers");
         try {
-            LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
-    
-            if( lb == null ) {
-                throw new CloudException("No such load balancer: " + toLoadBalancerId);
-            }
-            StringBuilder ids = new StringBuilder();
-            
-            for( int i=0; i<serverIds.length; i++ ) {
-                ids.append(serverIds[i]);
-                if( i < serverIds.length-1 ) {
-                    ids.append(",");
+            try {
+                LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
+
+                if( lb == null ) {
+                    throw new CloudException("No such load balancer: " + toLoadBalancerId);
+                }
+                StringBuilder ids = new StringBuilder();
+
+                for( int i=0; i<serverIds.length; i++ ) {
+                    ids.append(serverIds[i]);
+                    if( i < serverIds.length-1 ) {
+                        ids.append(",");
+                    }
+                }
+                for( LbListener listener : lb.getListeners() ) {
+                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
+                    CSMethod method = new CSMethod(provider);
+                    Document doc = method.get(method.buildUrl(REMOVE_FROM_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId), new Param("virtualMachineIds", ids.toString()) }), REMOVE_FROM_LOAD_BALANCER_RULE);
+
+                    provider.waitForJob(doc, "Remove Server");
                 }
             }
-            for( LbListener listener : lb.getListeners() ) {
-                String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(REMOVE_FROM_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId), new Param("virtualMachineIds", ids.toString()) }));
-
-                provider.waitForJob(doc, "Remove Server");
+            catch( RuntimeException e ) {
+                throw new InternalException(e);
+            }
+            catch( Error e ) {
+                throw new InternalException(e);
             }
         }
-        catch( RuntimeException e ) {
-            throw new InternalException(e);
-        }
-        catch( Error e ) {
-            throw new InternalException(e);
+        finally {
+            APITrace.end();
         }
     }
 
     private void removeVmOpsRule(String ruleId) throws CloudException, InternalException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(DELETE_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId) }));
+        Document doc = method.get(method.buildUrl(DELETE_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId) }), DELETE_LOAD_BALANCER_RULE);
 
         provider.waitForJob(doc, "Remove Load Balancer Rule");
     }
@@ -775,16 +809,22 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     public String getLoadBalancerForAddress(String address) throws InternalException, CloudException {
-        boolean isId = isId(address);
-        String key = (isId ? "publicIpId" : "publicIp");
-        CSMethod method = new CSMethod(provider);
+        APITrace.begin(provider, "LB.getLoadBalancerForAddress");
+        try {
+            boolean isId = isId(address);
+            String key = (isId ? "publicIpId" : "publicIp");
+            CSMethod method = new CSMethod(provider);
 
-        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[] { new Param(key, address) }));
-        NodeList rules = doc.getElementsByTagName("loadbalancerrule");
-        
-        if( rules.getLength() > 0 ) {
-            return address;
-        }        
-        return null;
+            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[] { new Param(key, address) }), LIST_LOAD_BALANCER_RULES);
+            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+            if( rules.getLength() > 0 ) {
+                return address;
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 }
