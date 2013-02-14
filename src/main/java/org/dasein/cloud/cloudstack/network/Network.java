@@ -41,6 +41,10 @@ import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.network.*;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Hour;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -116,6 +120,17 @@ public class Network extends AbstractVLANSupport {
     }
     
     public @Nonnull Collection<NetworkOffering> getNetworkOfferings(@Nonnull String regionId) throws InternalException, CloudException {
+        Cache<NetworkOffering> cache = null;
+
+        if( regionId.equals(getContext().getRegionId()) ) {
+            cache = Cache.getInstance(getProvider(), "networkOfferings", NetworkOffering.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(1, TimePeriod.HOUR));
+
+            Collection<NetworkOffering> offerings = (Collection<NetworkOffering>)cache.get(getContext());
+
+            if( offerings != null ) {
+                return offerings;
+            }
+        }
         CSMethod method = new CSMethod(cloudstack);
         Document doc = method.get(method.buildUrl(LIST_NETWORK_OFFERINGS, new Param("zoneId", regionId)), LIST_NETWORK_OFFERINGS);
         NodeList matches = doc.getElementsByTagName("networkoffering");
@@ -147,7 +162,10 @@ public class Network extends AbstractVLANSupport {
                 }
             }
             offerings.add(offering);
-        }    
+        }
+        if( cache != null ) {
+            cache.put(getContext(), offerings);
+        }
         return offerings;
     }
     
