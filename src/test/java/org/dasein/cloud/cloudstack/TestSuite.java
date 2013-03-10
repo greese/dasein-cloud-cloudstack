@@ -18,13 +18,8 @@
 
 package org.dasein.cloud.cloudstack;
 
-import junit.framework.Test;
+import org.dasein.cloud.test.GlobalTestSuite;
 
-import org.dasein.cloud.test.ComprehensiveTestSuite;
-import org.dasein.cloud.test.TestConfigurationException;
+public class TestSuite extends GlobalTestSuite {
 
-public class CloudstackTestSuite  {
-    static public Test suite() throws TestConfigurationException {
-        return new ComprehensiveTestSuite(CSCloud.class);
-    }
 }

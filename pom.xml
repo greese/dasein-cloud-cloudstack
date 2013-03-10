@@ -189,7 +189,11 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>2.6</version>
         <configuration>
-            <systemProperties>  
+            <systemProperties>
+                <property>
+                    <name>providerClass</name>
+                    <value>${providerClass}</value>
+                </property>
                 <property>
                     <name>endpoint</name>
                     <value>${endpoint}</value>
@@ -199,11 +203,11 @@
                     <value>${accountNumber}</value>
                 </property>
                 <property>
-                    <name>apiSharedKey</name>
+                    <name>accessPublic</name>
                     <value>${apiSharedKey}</value>
                 </property>
                 <property>
-                    <name>apiSecretKey</name>
+                    <name>accessPrivate</name>
                     <value>${apiSecretKey}</value>
                 </property>
                 <property>
@@ -219,32 +223,12 @@
                     <value>${regionId}</value>
                 </property>
                 <property>
-                    <name>test.region</name>
-                    <value>${test.region}</value>
-                </property>
-                <property>
-                    <name>test.dataCenter</name>
-                    <value>${test.dataCenter}</value>
-                </property>
-                <property>
-                    <name>test.machineImage</name>
-                    <value>${test.machineImage}</value>
-                </property>
-                <property>
-                    <name>test.product</name>
-                    <value>${test.product}</value>
-                </property>
-                <property>
-                    <name>test.firewall</name>
-                    <value>${test.firewall}</value>
-                </property>
-                <property>
                     <name>apiVersion</name>
                     <value>${cloudstack.version}</value>
                 </property>                
             </systemProperties> 
           <includes>
-            <include>**/CloudstackTestSuite.java</include>
+            <include>**/TestSuite.java</include>
           </includes>
         </configuration>
       </plugin>   

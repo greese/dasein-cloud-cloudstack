@@ -28,34 +28,41 @@ import java.util.Map;
 import java.util.TreeSet;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
+import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.AbstractLoadBalancerSupport;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.LbAlgorithm;
+import org.dasein.cloud.network.LbEndpointState;
+import org.dasein.cloud.network.LbEndpointType;
 import org.dasein.cloud.network.LbListener;
+import org.dasein.cloud.network.LbPersistence;
 import org.dasein.cloud.network.LbProtocol;
 import org.dasein.cloud.network.LoadBalancer;
 import org.dasein.cloud.network.LoadBalancerAddressType;
-import org.dasein.cloud.network.LoadBalancerServer;
+import org.dasein.cloud.network.LoadBalancerCreateOptions;
+import org.dasein.cloud.network.LoadBalancerEndpoint;
 import org.dasein.cloud.network.LoadBalancerState;
-import org.dasein.cloud.network.LoadBalancerSupport;
 import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class LoadBalancers implements LoadBalancerSupport { 
+public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     static public final String ASSIGN_TO_LOAD_BALANCER_RULE       = "assignToLoadBalancerRule";
     static public final String CREATE_LOAD_BALANCER_RULE          = "createLoadBalancerRule";
     static public final String DELETE_LOAD_BALANCER_RULE          = "deleteLoadBalancerRule";
@@ -66,16 +73,12 @@ public class LoadBalancers implements LoadBalancerSupport {
     private CSCloud provider;
     
     LoadBalancers(CSCloud provider) {
+        super(provider);
         this.provider = provider;
-    }
-    
-    @Override
-    public void addDataCenters(String toLoadBalancerId, String ... dataCenterIds) throws CloudException, InternalException {
-        // NO-OP
     }
 
     @Override
-    public void addServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
+    public void addServers(@Nonnull String toLoadBalancerId, @Nonnull String ... serverIds) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.addServers");
         try {
             try {
@@ -116,30 +119,53 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     @Override
-    public String create(String name, String description, String addressId, String[] dcIds, LbListener[] listeners, String[] servers) throws CloudException, InternalException {
+    public @Nonnull String createLoadBalancer(@Nonnull LoadBalancerCreateOptions options) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.create");
         try {
-            @SuppressWarnings("ConstantConditions") org.dasein.cloud.network.IpAddress publicAddress = provider.getNetworkServices().getIpAddressSupport().getIpAddress(addressId);
+            @SuppressWarnings("ConstantConditions") org.dasein.cloud.network.IpAddress publicAddress = provider.getNetworkServices().getIpAddressSupport().getIpAddress(options.getProviderIpAddressId());
 
             if( publicAddress == null ) {
                 throw new CloudException("You must specify the IP address for your load balancer.");
             }
-            for( LbListener listener : listeners ) {
-                if( !isId(addressId) ) {
-                    createVmOpsRule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+            for( LbListener listener : options.getListeners() ) {
+                if( !isId(options.getProviderIpAddressId()) ) {
+                    createVmOpsRule(listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
                 }
                 else {
-                    createCloudstack22Rule(listener.getAlgorithm(), addressId, listener.getPublicPort(), listener.getPrivatePort());
+                    createCloudstack22Rule(listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
                 }
             }
-            if( servers != null ) {
-                this.addServers(publicAddress.getRawAddress().getIpAddress(), servers);
+            for( LoadBalancerEndpoint endpoint : options.getEndpoints() ) {
+                if( endpoint.getEndpointType().equals(LbEndpointType.VM) ) {
+                    addServers(publicAddress.getRawAddress().getIpAddress(), endpoint.getEndpointValue());
+                }
             }
             return publicAddress.getRawAddress().getIpAddress();
         }
         finally {
             APITrace.end();
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
+    @Deprecated
+    public @Nonnull String create(@Nonnull String name, @Nonnull String description, @Nullable String addressId, @Nullable String[] zoneIds, @Nullable LbListener[] listeners, @Nullable String[] serverIds) throws CloudException, InternalException {
+        if( addressId == null ) {
+            throw new CloudException("You must specify an IP address for load balancer creation");
+        }
+        LoadBalancerCreateOptions options = LoadBalancerCreateOptions.getInstance(name, description, addressId);
+
+        if( zoneIds != null && zoneIds.length > 0 ) {
+            options.limitedTo(zoneIds);
+        }
+        if( listeners != null && listeners.length > 0 ) {
+            options.havingListeners(listeners);
+        }
+        if( serverIds != null && serverIds.length > 0 ) {
+            options.withVirtualMachines(serverIds);
+        }
+        return createLoadBalancer(options);
     }
 
     private void createVmOpsRule(LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
@@ -255,7 +281,7 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
     
     @Override
-    public LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
+    public @Nonnull LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
         return LoadBalancerAddressType.IP;
     }
     
@@ -266,7 +292,7 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
     
     @Override
-    public LoadBalancer getLoadBalancer(String loadBalancerId) throws CloudException, InternalException {
+    public @Nullable LoadBalancer getLoadBalancer(@Nonnull String loadBalancerId) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.getLoadBalancer");
         try {
             try {
@@ -298,27 +324,27 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     @Override
-    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public Iterable<LoadBalancerServer> getLoadBalancerServerHealth(String loadBalancerId, String... serverIdsToCheck) throws CloudException, InternalException {
-        return Collections.emptyList();
-    }
-
-    @Override
     public int getMaxPublicPorts() throws CloudException, InternalException {
         return 0;
     }
 
     @Override
-    public String getProviderTermForLoadBalancer(Locale locale) {
+    public @Nonnull String getProviderTermForLoadBalancer(@Nonnull Locale locale) {
         return "load balancer";
     }
 
     @Override
-    public Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
+    public @Nonnull Requirement identifyEndpointsOnCreateRequirement() throws CloudException, InternalException {
+        return Requirement.NONE;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyListenersOnCreateRequirement() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
+    public @Nonnull Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
         APITrace.begin(provider, "LB.listLoadBalancerStatus");
         try {
             HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
@@ -358,7 +384,7 @@ public class LoadBalancers implements LoadBalancerSupport {
     static private volatile List<LbAlgorithm> algorithms = null;
     
     @Override
-    public Iterable<LbAlgorithm> listSupportedAlgorithms() {
+    public @Nonnull Iterable<LbAlgorithm> listSupportedAlgorithms() {
         List<LbAlgorithm> list = algorithms;
         
         if( list == null ) {
@@ -372,14 +398,24 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     @Override
+    public @Nonnull Iterable<LbEndpointType> listSupportedEndpointTypes() throws CloudException, InternalException {
+        return Collections.singletonList(LbEndpointType.VM);
+    }
+
+    @Override
     public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
         return Collections.singletonList(IPVersion.IPV4);
+    }
+
+    @Override
+    public @Nonnull Iterable<LbPersistence> listSupportedPersistenceOptions() throws CloudException, InternalException {
+        return Collections.singletonList(LbPersistence.NONE);
     }
 
     static private volatile List<LbProtocol> protocols = null;
     
     @Override
-    public Iterable<LbProtocol> listSupportedProtocols() {
+    public @Nonnull Iterable<LbProtocol> listSupportedProtocols() {
         if( protocols == null ) {
             List<LbProtocol> list = new ArrayList<LbProtocol>();
 
@@ -389,7 +425,7 @@ public class LoadBalancers implements LoadBalancerSupport {
         return protocols;
     }
     
-    private Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
+    private @Nonnull Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
         ArrayList<String> ids = new ArrayList<String>();
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId)), LIST_LOAD_BALANCER_RULE_INSTANCES);
@@ -410,7 +446,7 @@ public class LoadBalancers implements LoadBalancerSupport {
         return ids;
     }
     
-    private String getVmOpsRuleId(LbAlgorithm lbAlgorithm, String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
+    private @Nullable String getVmOpsRuleId(@Nonnull LbAlgorithm lbAlgorithm, @Nonnull String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
         String ruleId = null;
         String algorithm;
 
@@ -494,15 +530,6 @@ public class LoadBalancers implements LoadBalancerSupport {
         return new String[0];
     }
 
-    @Override
-    public boolean requiresListenerOnCreate() throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
-    public boolean requiresServerOnCreate() throws CloudException, InternalException {
-        return false;
-    }
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -511,7 +538,7 @@ public class LoadBalancers implements LoadBalancerSupport {
             CSMethod method = new CSMethod(provider);
 
             try {
-                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param[] { new Param("available", "true") }), CSTopology.LIST_ZONES);
+                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
                 return true;
             }
             catch( CSException e ) {
@@ -529,19 +556,48 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     @Override
+    public @Nonnull Iterable<LoadBalancerEndpoint> listEndpoints(@Nonnull String loadBalancerId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "LB.listEndpoints");
+        try {
+            LoadBalancer lb = getLoadBalancer(loadBalancerId);
+
+            if( lb == null ) {
+                return Collections.emptyList();
+            }
+            ArrayList<LoadBalancerEndpoint> endpoints = new ArrayList<LoadBalancerEndpoint>();
+
+            //noinspection deprecation
+            for( String serverId : lb.getProviderServerIds() ) {
+                VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+
+                endpoints.add(LoadBalancerEndpoint.getInstance(LbEndpointType.VM, serverId, vm != null && vm.getCurrentState().equals(VmState.RUNNING) ? LbEndpointState.ACTIVE : LbEndpointState.INACTIVE));
+            }
+            return endpoints;
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
     public boolean supportsMonitoring() {
         return false;
     }
-    
+
     @Override
-    public Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
+    public boolean supportsMultipleTrafficTypes() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
+    public @Nonnull Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
         APITrace.begin(provider, "LB.listLoadBalancers");
         try {
             HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
             CSMethod method = new CSMethod(provider);
 
             try {
-                Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[0] ), LIST_LOAD_BALANCER_RULES);
+                Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
                 NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
                 for( int i=0; i<rules.getLength(); i++ ) {
@@ -571,13 +627,10 @@ public class LoadBalancers implements LoadBalancerSupport {
         }
     }
 
-    boolean matchesRegion(String addressId) throws InternalException, CloudException {
+    boolean matchesRegion(@Nonnull String addressId) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl("listPublicIpAddresses", new Param[] { new Param(isId(addressId) ? "ipAddressId" : "ipAddress", addressId) }), "listPublicIpAddresses");
-        HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
-        LoadBalancer lb = provider.getNetworkServices().getLoadBalancerSupport().getLoadBalancer(addressId);
-        
-        loadBalancers.put(addressId, lb);
+        Document doc = method.get(method.buildUrl("listPublicIpAddresses", new Param(isId(addressId) ? "ipAddressId" : "ipAddress", addressId)), "listPublicIpAddresses");
+
         NodeList matches = doc.getElementsByTagName("publicipaddress");
         for( int i=0; i<matches.getLength(); i++ ) {
             Node n = matches.item(i);
@@ -595,20 +648,27 @@ public class LoadBalancers implements LoadBalancerSupport {
                     value = null;
                 }
                 if( name.equalsIgnoreCase("zoneid") ) {
-                    return (value != null && value.equalsIgnoreCase(provider.getContext().getRegionId()));
+                    return (value != null && value.equalsIgnoreCase(getContext().getRegionId()));
                 }
             }
         }
         return false;
     }
     
+    @SuppressWarnings("deprecation")
     @Override
-    public void remove(String loadBalancerId) throws CloudException, InternalException {
+    @Deprecated
+    public void remove(@Nonnull String loadBalancerId) throws CloudException, InternalException {
+        removeLoadBalancer(loadBalancerId);
+    }
+
+    @Override
+    public void removeLoadBalancer(@Nonnull String loadBalancerId) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.remove");
         try {
             LoadBalancer lb = getLoadBalancer(loadBalancerId);
 
-            if( lb.getListeners() == null ) {
+            if( lb == null || lb.getListeners().length < 1 ) {
                 return;
             }
             for( LbListener listener : lb.getListeners() ) {
@@ -625,12 +685,7 @@ public class LoadBalancers implements LoadBalancerSupport {
     }
 
     @Override
-    public void removeDataCenters(String fromLoadBalancerId, String ... dataCenterIds) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("These load balancers are not data center based.");
-    }
-
-    @Override
-    public void removeServers(String toLoadBalancerId, String ... serverIds) throws CloudException, InternalException {
+    public void removeServers(@Nonnull String toLoadBalancerId, @Nonnull String ... serverIds) throws CloudException, InternalException {
         APITrace.begin(provider, "LB.removeServers");
         try {
             try {
@@ -650,7 +705,7 @@ public class LoadBalancers implements LoadBalancerSupport {
                 for( LbListener listener : lb.getListeners() ) {
                     String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
                     CSMethod method = new CSMethod(provider);
-                    Document doc = method.get(method.buildUrl(REMOVE_FROM_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId), new Param("virtualMachineIds", ids.toString()) }), REMOVE_FROM_LOAD_BALANCER_RULE);
+                    Document doc = method.get(method.buildUrl(REMOVE_FROM_LOAD_BALANCER_RULE, new Param("id", ruleId), new Param("virtualMachineIds", ids.toString())), REMOVE_FROM_LOAD_BALANCER_RULE);
 
                     provider.waitForJob(doc, "Remove Server");
                 }
@@ -667,14 +722,19 @@ public class LoadBalancers implements LoadBalancerSupport {
         }
     }
 
-    private void removeVmOpsRule(String ruleId) throws CloudException, InternalException {
+    @Override
+    public boolean supportsAddingEndpoints() throws CloudException, InternalException {
+        return true;
+    }
+
+    private void removeVmOpsRule(@Nonnull String ruleId) throws CloudException, InternalException {
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(DELETE_LOAD_BALANCER_RULE, new Param[] { new Param("id", ruleId) }), DELETE_LOAD_BALANCER_RULE);
+        Document doc = method.get(method.buildUrl(DELETE_LOAD_BALANCER_RULE, new Param("id", ruleId)), DELETE_LOAD_BALANCER_RULE);
 
         provider.waitForJob(doc, "Remove Load Balancer Rule");
     }
     
-    private void toRule(Node node, Map<String,LoadBalancer> current) throws InternalException, CloudException {
+    private void toRule(@Nullable Node node, @Nonnull Map<String,LoadBalancer> current) throws InternalException, CloudException {
         NodeList attributes = node.getChildNodes();
         int publicPort = -1, privatePort = -1;
         LbAlgorithm algorithm = null;
@@ -705,13 +765,13 @@ public class LoadBalancers implements LoadBalancerSupport {
                 privatePort = Integer.parseInt(value);
             }
             else if( name.equals("algorithm") ) {
-                if( algorithm == null || algorithm.equals("roundrobin") ) {
+                if( value == null || value.equals("roundrobin") ) {
                     algorithm = LbAlgorithm.ROUND_ROBIN;
                 }
-                else if( algorithm.equals("leastconn") ) {
+                else if( value.equals("leastconn") ) {
                     algorithm = LbAlgorithm.LEAST_CONN;
                 }
-                else if( algorithm.equals("") ) {
+                else if( value.equals("") ) {
                     algorithm = LbAlgorithm.SOURCE;
                 }
                 else {
@@ -719,21 +779,16 @@ public class LoadBalancers implements LoadBalancerSupport {
                 }
             }
         }
-        LbListener listener = new LbListener();
-        
-        listener.setAlgorithm(algorithm);
-        listener.setNetworkProtocol(LbProtocol.RAW_TCP);
-        listener.setPrivatePort(privatePort);
-        listener.setPublicPort(publicPort);
+        LbListener listener = LbListener.getInstance(algorithm, LbPersistence.NONE, LbProtocol.RAW_TCP, publicPort, privatePort);
         Collection<String> serverIds = getServersAt(ruleId);
 
         if( current.containsKey(publicIp) ) {
             LoadBalancer lb = current.get(publicIp);
-            
+
+            @SuppressWarnings("deprecation") String[] currentIds = lb.getProviderServerIds();
             LbListener[] listeners = lb.getListeners();
-            String[] currentIds = lb.getProviderServerIds();
             TreeSet<Integer> ports = new TreeSet<Integer>();
-            
+
             for( int port : lb.getPublicPorts() ) {
                 ports.add(port);
             }
@@ -743,13 +798,12 @@ public class LoadBalancers implements LoadBalancerSupport {
             int i = 0;
             
             for( Integer p : ports ) {
-                portList[i++] = p.intValue();
+                portList[i++] = p;
             }
+            //noinspection deprecation
             lb.setPublicPorts(portList);
-            i = 0;
+
             boolean there = false;
-            
-            LbListener[] newList = new LbListener[listeners.length];
             
             for( LbListener l : listeners ) {
                 if( l.getAlgorithm().equals(listener.getAlgorithm()) ) {
@@ -762,36 +816,21 @@ public class LoadBalancers implements LoadBalancerSupport {
                         }
                     }
                 }
-                newList[i++] = l;
             }
             if( !there ) {
-                LbListener[] tmp = new LbListener[newList.length + 1];
-                
-                tmp[i++] = listener;
-                lb.setListeners(tmp);
+                lb.withListeners(listener);
             }
             
             TreeSet<String> newIds = new TreeSet<String>();
-            
-            for( String id : currentIds ) {
-                newIds.add(id);                
-            }
+
+            Collections.addAll(newIds, currentIds);
             for( String id : serverIds ) {
-                newIds.add(id);                
+                newIds.add(id);
             }
+            //noinspection deprecation
             lb.setProviderServerIds(newIds.toArray(new String[newIds.size()]));
         }
         else {
-            LoadBalancer lb = new LoadBalancer();
-            
-            lb.setCurrentState(LoadBalancerState.ACTIVE);
-            lb.setAddress(publicIp);
-            lb.setAddressType(LoadBalancerAddressType.IP);
-            lb.setDescription(publicIp +":" + publicPort + " -> RAW_TCP:" + privatePort);
-            lb.setName(publicIp);
-            lb.setProviderOwnerId(provider.getContext().getAccountNumber());
-            lb.setCreationTimestamp(0L);
-            lb.setPublicPorts(new int[] { publicPort });
             Collection<DataCenter> dcs = provider.getDataCenterServices().listDataCenters(provider.getContext().getRegionId());
             String[] ids = new String[dcs.size()];
             int i =0;
@@ -799,16 +838,17 @@ public class LoadBalancers implements LoadBalancerSupport {
             for( DataCenter dc : dcs ) {
                 ids[i++] = dc.getProviderDataCenterId();
             }
-            lb.setProviderDataCenterIds(ids);
-            lb.setProviderLoadBalancerId(publicIp);
-            lb.setProviderRegionId(provider.getContext().getRegionId());
+
+            LoadBalancer lb = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), publicIp, LoadBalancerState.ACTIVE, publicIp, publicIp + ":" + publicPort + " -> RAW_TCP:" + privatePort, LoadBalancerAddressType.IP, publicIp, publicPort).withListeners(listener).operatingIn(ids);
+
+            //noinspection deprecation
             lb.setProviderServerIds(serverIds.toArray(new String[serverIds.size()]));
-            lb.setListeners(new LbListener[] { listener });
             current.put(publicIp, lb);
         }
     }
 
-    public String getLoadBalancerForAddress(String address) throws InternalException, CloudException {
+    /*
+    public @Nullable String getLoadBalancerForAddress(@Nonnull String address) throws InternalException, CloudException {
         APITrace.begin(provider, "LB.getLoadBalancerForAddress");
         try {
             boolean isId = isId(address);
@@ -827,4 +867,5 @@ public class LoadBalancers implements LoadBalancerSupport {
             APITrace.end();
         }
     }
+    */
 }
