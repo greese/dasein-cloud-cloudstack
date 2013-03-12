@@ -60,6 +60,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     static public final String CREATE_SECURITY_GROUP            = "createSecurityGroup";
     static public final String DELETE_SECURITY_GROUP            = "deleteSecurityGroup";
     static public final String LIST_SECURITY_GROUPS             = "listSecurityGroups";
+    static public final String REVOKE_SECURITY_GROUP_EGRESS     = "revokeSecurityGroupEgress";
     static public final String REVOKE_SECURITY_GROUP_INGRESS    = "revokeSecurityGroupIngress";
 
     private CSCloud cloudstack;
@@ -74,7 +75,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
         APITrace.begin(getProvider(), "Firewall.authorize");
         try {
             if( !permission.equals(Permission.ALLOW) ) {
-                throw new OperationNotSupportedException("Only ALLOW arules are supported");
+                throw new OperationNotSupportedException("Only ALLOW rules are supported");
             }
             String sourceCidr = null;
             boolean group;
@@ -99,7 +100,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             CSMethod method = new CSMethod(cloudstack);
 
             if( group ) {
-                throw new CloudException("Security group sources are not supported");
+                throw new OperationNotSupportedException("Security group sources are not supported");
             }
             else {
                 params = new Param[] { new Param("securitygroupid", firewallId), new Param("cidrlist", sourceCidr), new Param("startport", String.valueOf(beginPort)), new Param("endport", String.valueOf(endPort)), new Param("protocol", protocol.name()) };
@@ -123,6 +124,14 @@ public class SecurityGroup extends AbstractFirewallSupport {
     }
 
     private @Nullable String getRuleId(@Nonnull String firewallId, @Nonnull Direction direction, @Nonnull Permission permission, @Nonnull Protocol protocol, @Nonnull RuleTarget sourceEndpoint, @Nonnull RuleTarget destinationEndpoint, int beginPort, int endPort) throws CloudException, InternalException {
+
+        //<egressrule>
+        // <ruleid>720e3652-49f9-4d45-a426-fbf55d3c10e0</ruleid>
+        // <protocol>tcp</protocol>
+        // <startport>83</startport>
+        // <endport>83</endport>
+        // <cidr>209.98.98.98/32</cidr>
+        // </egressrule>
         for( FirewallRule rule : getRules(firewallId) ) {
             if( rule.getDirection().equals(direction) ) {
                 if( rule.getPermission().equals(permission) ) {
@@ -167,6 +176,9 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
     @Override
     public @Nonnull String create(@Nonnull FirewallCreateOptions options) throws InternalException, CloudException {
+        if( options.getProviderVlanId() != null ) {
+            throw new OperationNotSupportedException("No VLAN security groups are supported");
+        }
         APITrace.begin(getProvider(), "Firewall.create");
         try {
             Param[] params = new Param[] { new Param("name", options.getName()), new Param("description", options.getDescription()) };
@@ -268,7 +280,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
                 Node node = matches.item(i);
 
                 if( node != null ) {
-                    FirewallRule rule = toRule(firewallId, node);
+                    FirewallRule rule = toRule(firewallId, node, Direction.INGRESS);
 
                     if( rule != null ) {
                         rules.add(rule);
@@ -280,7 +292,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
                 Node node = matches.item(i);
 
                 if( node != null ) {
-                    FirewallRule rule = toRule(firewallId, node);
+                    FirewallRule rule = toRule(firewallId, node, Direction.EGRESS);
 
                     if( rule != null ) {
                         rules.add(rule);
@@ -385,7 +397,12 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
     @Override
     public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        return Collections.singletonList(RuleTargetType.GLOBAL);
+        if( inVlan ) {
+            return Collections.emptyList();
+        }
+        else {
+            return Collections.singletonList(RuleTargetType.GLOBAL);
+        }
     }
 
     @Override
@@ -420,10 +437,32 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public void revoke(@Nonnull String providerFirewallRuleId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.revoke");
         try {
+            FirewallRule target = null;
+
+            for( Firewall fw : list() ) {
+                //noinspection ConstantConditions
+                for( FirewallRule rule : getRules(fw.getProviderFirewallId()) ) {
+                    if( rule.getProviderRuleId().equals(providerFirewallRuleId) ) {
+                        target = rule;
+                        break;
+                    }
+                }
+                if( target != null ) {
+                    break;
+                }
+            }
+            if( target == null ) {
+                return;
+            }
             Param[] params = new Param[] { new Param("id", providerFirewallRuleId) };
             CSMethod method = new CSMethod(cloudstack);
 
-            method.get(method.buildUrl(REVOKE_SECURITY_GROUP_INGRESS, params), REVOKE_SECURITY_GROUP_INGRESS);
+            if( Direction.EGRESS.equals(target.getDirection()) ) {
+                method.get(method.buildUrl(REVOKE_SECURITY_GROUP_EGRESS, params), REVOKE_SECURITY_GROUP_EGRESS);
+            }
+            else {
+                method.get(method.buildUrl(REVOKE_SECURITY_GROUP_INGRESS, params), REVOKE_SECURITY_GROUP_INGRESS);
+            }
         }
         finally {
             APITrace.end();
@@ -567,7 +606,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
         return firewall;
     }
     
-    private FirewallRule toRule(String firewallId, Node node) {
+    private FirewallRule toRule(String firewallId, Node node, Direction direction) {
         if( node == null) {
             return null;
         }
@@ -575,7 +614,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
         NodeList attributes = node.getChildNodes();
         int startPort = -1, endPort = -1;
         Protocol protocol = Protocol.TCP;
-        Direction direction = Direction.INGRESS;
         String source = "0.0.0.0/0";
         String ruleId = null;
 

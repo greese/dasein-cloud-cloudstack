@@ -438,6 +438,7 @@ public class Network extends AbstractVLANSupport {
         network.setProviderOwnerId(ctx.getAccountNumber());
         network.setProviderRegionId(ctx.getRegionId());
         network.setCurrentState(VLANState.AVAILABLE);
+        network.setSupportedTraffic(new IPVersion[] { IPVersion.IPV4 });
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
@@ -459,6 +460,9 @@ public class Network extends AbstractVLANSupport {
             }
             else if( name.equalsIgnoreCase("displaytext") ) {
                 network.setName(value);
+            }
+            else if( name.equalsIgnoreCase("networkdomain") ) {
+                network.setDomainName(value);
             }
             else if( name.equalsIgnoreCase("zoneid") && value != null ) {
                 network.setProviderRegionId(value);
@@ -621,53 +625,6 @@ public class Network extends AbstractVLANSupport {
             APITrace.end();
         }
     }
-
-    /*
-    private @Nonnull String toCidr(@Nonnull String gateway, @Nonnull String netmask) {
-        String[] dots = netmask.split("\\.");
-        int cidr = 0;
-        
-        for( String item : dots ) {
-            int x = Integer.parseInt(item);
-            
-            for( ; x > 0 ; x = (x<<1)%256 ) {
-                cidr++;
-            }
-        }
-        StringBuilder network = new StringBuilder();
-        
-        dots = gateway.split("\\.");
-        int start = 0;
-        
-        for( String item : dots ) {
-            if( ((start+8) < cidr) || cidr == 0 ) {
-                network.append(item);
-            }
-            else {
-                int addresses = (int)Math.pow(2, (start+8)-cidr);
-                int subnets = 256/addresses;
-                int gw = Integer.parseInt(item);
-                
-                for( int i=0; i<subnets; i++ ) {
-                    int base = i*addresses;
-                    int top = ((i+1)*addresses);
-                    
-                    if( gw >= base && gw < top ) {
-                        network.append(String.valueOf(base));
-                        break;
-                    }
-                }
-            }
-            start += 8;
-            if( start < 32 ) {
-                network.append(".");
-            }
-        }
-        network.append("/");
-        network.append(String.valueOf(cidr));
-        return network.toString();
-    }
-    */
 
     public @Nullable ResourceStatus toVLANStatus(@Nullable Node node) {
         if( node == null ) {

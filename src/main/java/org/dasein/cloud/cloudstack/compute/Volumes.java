@@ -33,6 +33,7 @@ import javax.annotation.Nullable;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
+import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
@@ -145,6 +146,9 @@ public class Volumes extends AbstractVolumeSupport {
 
             if( ctx == null ) {
                 throw new CloudException("No context was provided for this request");
+            }
+            if( options.getFormat().equals(VolumeFormat.NFS) ) {
+                throw new OperationNotSupportedException("NFS volumes are not currently supported in " + getProvider().getCloudName());
             }
             String snapshotId = options.getSnapshotId();
             String productId = options.getVolumeProductId();
@@ -438,7 +442,7 @@ public class Volumes extends AbstractVolumeSupport {
 
     @Override
     public @Nonnull Requirement getVolumeProductRequirement() throws InternalException, CloudException {
-        return Requirement.REQUIRED;
+        return Requirement.OPTIONAL;
     }
 
     @Override
@@ -796,6 +800,9 @@ public class Volumes extends AbstractVolumeSupport {
         }
         volume.setRootVolume(root);
         volume.setType(VolumeType.HDD);
+        if( root ) {
+            volume.setGuestOperatingSystem(Platform.guess(volume.getName() + " " + volume.getDescription()));
+        }
         return volume;
     }
 }

@@ -68,6 +68,7 @@ public class Templates extends AbstractImageSupport {
     static private final String CREATE_TEMPLATE             = "createTemplate";
     static private final String DELETE_TEMPLATE             = "deleteTemplate";
     static private final String LIST_OS_TYPES               = "listOsTypes";
+    static private final String LIST_TEMPLATE_PERMISSIONS   = "listTemplatePermissions";
     static private final String LIST_TEMPLATES              = "listTemplates";
     static private final String REGISTER_TEMPLATE           = "registerTemplate";
     static private final String UPDATE_TEMPLATE_PERMISSIONS = "updateTemplatePermissions";
@@ -336,7 +337,7 @@ public class Templates extends AbstractImageSupport {
         APITrace.begin(getProvider(), "Image.isImageSharedWithPublic");
         try {
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"));
+            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"));
             Document doc = method.get(url, LIST_TEMPLATES);
             NodeList matches = doc.getElementsByTagName("template");
 
@@ -507,7 +508,7 @@ public class Templates extends AbstractImageSupport {
         APITrace.begin(getProvider(), "Image.listShares");
         try {
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("id", templateId)), LIST_TEMPLATES);
+            Document doc = method.get(method.buildUrl(LIST_TEMPLATE_PERMISSIONS, new Param("id", templateId)), LIST_TEMPLATES);
             TreeSet<String> accounts = new TreeSet<String>();
             NodeList matches = doc.getElementsByTagName("account");
 
@@ -571,7 +572,7 @@ public class Templates extends AbstractImageSupport {
                 params[3] = new Param("format", "QCOW2");
             }
             else {
-                throw new CloudException("Unsupported bundle format: " + options.getBundleFormat());
+                throw new OperationNotSupportedException("Unsupported bundle format: " + options.getBundleFormat());
             }
             params[4] = new Param("osTypeId", toOs(platform, architecture));
             params[5] = new Param("zoneId", ctx.getRegionId());
@@ -604,7 +605,12 @@ public class Templates extends AbstractImageSupport {
 
     @Override
     public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
-        return Collections.singletonList(MachineImageFormat.VHD);
+        ArrayList<MachineImageFormat> formats = new ArrayList<MachineImageFormat>();
+
+        formats.add(MachineImageFormat.QCOW2);
+        formats.add(MachineImageFormat.VHD);
+        formats.add(MachineImageFormat.RAW);
+        return formats;
     }
 
     @Override
