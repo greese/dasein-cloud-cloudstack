@@ -735,7 +735,7 @@ public class Templates extends AbstractImageSupport {
                         NodeList matches = doc.getElementsByTagName("template");
 
                         for( int i=0; i<matches.getLength(); i++ ) {
-                            MachineImage img = toImage(matches.item(i), false);
+                            MachineImage img = toImage(matches.item(i), true);
 
                             if( img != null && options.matches(img) ) {
                                 iterator.push(img);

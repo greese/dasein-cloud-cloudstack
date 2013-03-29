@@ -65,8 +65,6 @@ import org.dasein.cloud.compute.VMLaunchOptions;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineProduct;
 import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.dc.DataCenter;
-import org.dasein.cloud.dc.Region;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
@@ -143,18 +141,27 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
 
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", getContext().getRegionId())), LIST_VIRTUAL_MACHINES);
-            NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-            if( matches.getLength() < 1 ) {
-                return null;
-            }
-            for( int i=0; i<matches.getLength(); i++ ) {
-                VirtualMachine s = toVirtualMachine(matches.item(i));
+            try {
+                Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("id", serverId)), LIST_VIRTUAL_MACHINES);
+                NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-                if( s != null && s.getProviderVirtualMachineId().equals(serverId) ) {
-                    return s;
+                if( matches.getLength() < 1 ) {
+                    return null;
                 }
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    VirtualMachine s = toVirtualMachine(matches.item(i));
+
+                    if( s != null && s.getProviderVirtualMachineId().equals(serverId) ) {
+                        return s;
+                    }
+                }
+            }
+            catch( CloudException e ) {
+                if( e.getMessage().contains("does not exist") ) {
+                    return null;
+                }
+                throw e;
             }
             return null;
         }
@@ -318,7 +325,7 @@ public class VirtualMachines extends AbstractVMSupport {
     private VirtualMachine launch21(String imageId, VirtualMachineProduct product, String inZoneId, String name) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
         
-        return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", translateZone(inZoneId)), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) ), DEPLOY_VIRTUAL_MACHINE));
+        return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", getContext().getRegionId()), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) ), DEPLOY_VIRTUAL_MACHINE));
     }
     
     private void load() {
@@ -415,7 +422,6 @@ public class VirtualMachines extends AbstractVMSupport {
         if( regionId == null ) {
             throw new InternalException("No region is established for this request");
         }
-        inZoneId = translateZone(inZoneId);
         String prdId = product.getProviderProductId();
 
         if( customNetworkMappings == null ) {
@@ -542,7 +548,7 @@ public class VirtualMachines extends AbstractVMSupport {
             */            
         }
         params = new Param[count];
-        params[0] = new Param("zoneId", inZoneId);
+        params[0] = new Param("zoneId", getContext().getRegionId());
         params[1] = new Param("serviceOfferingId", prdId);
         params[2] = new Param("templateId", imageId);
         params[3] = new Param("displayName", name);
@@ -904,33 +910,6 @@ public class VirtualMachines extends AbstractVMSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    private @Nullable String translateZone(@Nullable String zoneId) throws InternalException, CloudException {
-        if( zoneId == null ) {
-            Iterable<Region> regions = provider.getDataCenterServices().listRegions();
-
-            if( regions.iterator().hasNext() ) {
-                zoneId = regions.iterator().next().getProviderRegionId();
-            }
-        }
-        else {
-            boolean found = false;
-            
-            for( Region r : provider.getDataCenterServices().listRegions() ) {
-                for( DataCenter dc : provider.getDataCenterServices().listDataCenters(r.getProviderRegionId()) ) {
-                    if( zoneId.equals(dc.getProviderDataCenterId()) ) {
-                        zoneId = r.getProviderRegionId();
-                        found = true;
-                        break;
-                    }
-                }
-                if( found ) {
-                    break;
-                }
-            }
-        }      
-        return zoneId;
     }
 
     private @Nullable ResourceStatus toStatus(@Nullable Node node) throws CloudException, InternalException {

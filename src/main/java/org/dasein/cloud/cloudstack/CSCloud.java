@@ -87,20 +87,17 @@ public class CSCloud extends AbstractCloud {
     }
     
     @Override
-    public @Nonnull
-    CSComputeServices getComputeServices() {
+    public @Nonnull CSComputeServices getComputeServices() {
         return new CSComputeServices(this);
     }
     
     @Override
-    public @Nonnull
-    CSTopology getDataCenterServices() {
+    public @Nonnull CSTopology getDataCenterServices() {
         return new CSTopology(this);
     }
     
     @Override
-    public @Nullable
-    CSIdentityServices getIdentityServices() {
+    public @Nullable CSIdentityServices getIdentityServices() {
         if( getVersion().greaterThan(CSVersion.CS21) ) {
             return new CSIdentityServices(this);
         }
@@ -108,8 +105,7 @@ public class CSCloud extends AbstractCloud {
     }
 
     @Override
-    public @Nonnull
-    CSNetworkServices getNetworkServices() {
+    public @Nonnull CSNetworkServices getNetworkServices() {
         return new CSNetworkServices(this);
     }
     
