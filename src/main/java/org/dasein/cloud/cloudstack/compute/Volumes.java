@@ -24,7 +24,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Locale;
 
 import javax.annotation.Nonnull;
@@ -40,6 +39,7 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.CSServiceProvider;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
@@ -53,6 +53,8 @@ import org.dasein.cloud.compute.VolumeProduct;
 import org.dasein.cloud.compute.VolumeState;
 import org.dasein.cloud.compute.VolumeType;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Storage;
@@ -76,6 +78,7 @@ public class Volumes extends AbstractVolumeSupport {
         public long diskSize;
         public String name;
         public String description;
+        public String type;
 
         public String toString() {return "DiskOffering ["+id+"] of size "+diskSize;}
     }
@@ -361,6 +364,9 @@ public class Volumes extends AbstractVolumeSupport {
                 else if( n.getNodeName().equalsIgnoreCase("displayText") ) {
                     offering.description = value;
                 }
+                else if( n.getNodeName().equalsIgnoreCase("storagetype") ) {
+                    offering.type = value;
+                }
             }
             if( offering.id != null ) {
                 if( offering.name == null ) {
@@ -461,29 +467,30 @@ public class Volumes extends AbstractVolumeSupport {
         }
     }
 
-    private List<String> unixDeviceIdList    = null;
-    private List<String> windowsDeviceIdList = null;
-    
     @Override
     public @Nonnull Iterable<String> listPossibleDeviceIds(@Nonnull Platform platform) throws InternalException, CloudException {
+        Cache<String> cache;
+
         if( platform.isWindows() ) {
-            if( windowsDeviceIdList == null ) {
-                ArrayList<String> list = new ArrayList<String>();
-                
+            cache = Cache.getInstance(getProvider(), "windowsDeviceIds", String.class, CacheLevel.CLOUD);
+        }
+        else {
+            cache = Cache.getInstance(getProvider(), "unixDeviceIds", String.class, CacheLevel.CLOUD);
+        }
+        Iterable<String> ids = cache.get(getContext());
+
+        if( ids == null ) {
+            ArrayList<String> list = new ArrayList<String>();
+
+            if( platform.isWindows() ) {
                 list.add("hde");
                 list.add("hdf");
                 list.add("hdg");
                 list.add("hdh");
                 list.add("hdi");
                 list.add("hdj");
-                windowsDeviceIdList = Collections.unmodifiableList(list);
             }
-            return windowsDeviceIdList;            
-        }
-        else {
-            if( unixDeviceIdList == null ) {
-                ArrayList<String> list = new ArrayList<String>();
-                
+            else {
                 list.add("/dev/xvdc");
                 list.add("/dev/xvde");
                 list.add("/dev/xvdf");
@@ -491,10 +498,11 @@ public class Volumes extends AbstractVolumeSupport {
                 list.add("/dev/xvdh");
                 list.add("/dev/xvdi");
                 list.add("/dev/xvdj");
-                unixDeviceIdList = Collections.unmodifiableList(list);
             }
-            return unixDeviceIdList;
+            ids = Collections.unmodifiableList(list);
+            cache.put(getContext(), ids);
         }
+        return ids;
     }
 
     @Override
@@ -502,23 +510,25 @@ public class Volumes extends AbstractVolumeSupport {
         return Collections.singletonList(VolumeFormat.BLOCK);
     }
 
-    private transient Collection<VolumeProduct> products;
-
     @Override
     public @Nonnull Iterable<VolumeProduct> listVolumeProducts() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.listVolumeProducts");
         try {
+            Cache<VolumeProduct> cache = Cache.getInstance(getProvider(), "volumeProducts", VolumeProduct.class, CacheLevel.REGION_ACCOUNT);
+            Iterable<VolumeProduct> products = cache.get(getContext());
+
             if( products == null ) {
                 ArrayList<VolumeProduct> list = new ArrayList<VolumeProduct>();
 
                 for( DiskOffering offering : getDiskOfferings() ) {
                     VolumeProduct p = toProduct(offering);
 
-                    if( p != null ) {
+                    if( p != null && (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) || "local".equals(offering.type)) ) {
                         list.add(p);
                     }
                 }
                 products = Collections.unmodifiableList(list);
+                cache.put(getContext(), products);
             }
             return products;
         }

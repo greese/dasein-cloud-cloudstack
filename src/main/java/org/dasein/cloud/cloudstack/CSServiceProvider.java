@@ -26,5 +26,5 @@ package org.dasein.cloud.cloudstack;
  * @since unknown
  */
 public enum CSServiceProvider {
-    DATAPIPE, KT, TATA, INTERNAL
+    DATAPIPE, DEMOCLOUD, KT, TATA, INTERNAL
 }

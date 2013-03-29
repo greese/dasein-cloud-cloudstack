@@ -39,6 +39,7 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.CSServiceProvider;
 import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractImageSupport;
@@ -477,7 +478,7 @@ public class Templates extends AbstractImageSupport {
             String accountNumber = (options == null ? null : options.getAccountNumber());
             Param[] params;
 
-            if( accountNumber == null ) {
+            if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
                 params = new Param[] { new Param("templateFilter", "self"),  new Param("zoneId", getContext().getRegionId()) };
             }
             else {

@@ -202,9 +202,6 @@ public class CSMethod {
             try {
                 APITrace.trace(provider, command);
                 response = client.execute(get);
-                if( wire.isDebugEnabled() ) {
-                    wire.debug(response.getStatusLine().toString());
-                }
             }
             catch( IOException e ) {
                 logger.error("I/O error from server communications: " + e.getMessage());

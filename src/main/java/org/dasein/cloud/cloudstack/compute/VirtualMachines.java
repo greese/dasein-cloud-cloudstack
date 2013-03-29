@@ -491,7 +491,7 @@ public class VirtualMachines extends AbstractVMSupport {
             count++;
         }
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
-            if( !provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
+            if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) && !provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
                 securityGroupIds = null;
             }
             else {
@@ -656,7 +656,28 @@ public class VirtualMachines extends AbstractVMSupport {
             APITrace.end();
         }
     }
-    
+
+    private void setFirewalls(@Nonnull VirtualMachine vm) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "VM.setFirewalls");
+        try {
+            SecurityGroup support = provider.getNetworkServices().getFirewallSupport();
+
+            if( support == null ) {
+                return;
+            }
+            ArrayList<String> ids = new ArrayList<String>();
+
+            for( String id : support.listFirewallsForVM(vm.getProviderVirtualMachineId()) ) {
+                ids.add(id);
+            }
+            vm.setProviderFirewallIds(ids.toArray(new String[ids.size()]));
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+
     @Override
     public @Nonnull Iterable<VirtualMachineProduct> listProducts(@Nonnull Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
@@ -1191,6 +1212,7 @@ public class VirtualMachines extends AbstractVMSupport {
         if( productId != null ) {
             server.setProductId(productId);
         }
+        setFirewalls(server);
         return server;
     }
 }

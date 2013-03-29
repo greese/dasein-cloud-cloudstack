@@ -138,6 +138,8 @@ public class CSCloud extends AbstractCloud {
             }
             else if( "tata".equalsIgnoreCase(pn) ) {
                 serviceProvider = CSServiceProvider.TATA;
+            } else if( "democloud".equalsIgnoreCase(pn) ) {
+                serviceProvider = CSServiceProvider.DEMOCLOUD;
             }
             else {
                 serviceProvider = CSServiceProvider.INTERNAL;
