@@ -921,7 +921,7 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     @Override
-    public void terminate(@Nonnull String serverId) throws InternalException, CloudException {
+    public void terminate(@Nonnull String serverId, @Nullable String explanation) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.terminate");
         try {
             CSMethod method = new CSMethod(provider);
