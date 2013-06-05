@@ -650,19 +650,35 @@ public class VirtualMachines implements VirtualMachineSupport {
             throw new CloudException("Could not launch server");
         }
         // TODO: very odd logic below; figure out what it thinks it is doing
-        long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE*20);
+        
         VirtualMachine vm = null;
         
-        while( System.currentTimeMillis() < timeout ) {
-            try { vm = getVirtualMachine(serverId); }
-            catch( Throwable ignore ) {  }
-            if( vm != null ) {
-                return vm;
-            }
-            try { Thread.sleep(5000L); }
-            catch( InterruptedException ignore ) { }
+        Document responseDoc = provider.waitForJob(doc, "Launch Server");
+        
+        //parse vm from job completion response to capture vm passwords on initial launch.
+        if (responseDoc != null){
+        	NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
+        	if (nodeList.getLength() > 0) { 
+        		Node virtualMachine = nodeList.item(0);
+            	vm = toVirtualMachine(virtualMachine);
+            	if( vm != null ) {
+ 	                return vm;
+ 	            }
+        	}
         }
-        provider.waitForJob(doc, "Launch Server");
+        
+        if (vm == null){
+        	long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE*20);
+	        while( System.currentTimeMillis() < timeout ) {
+	            try { vm = getVirtualMachine(serverId); }
+	            catch( Throwable ignore ) {  }
+	            if( vm != null ) {
+	                return vm;
+	            }
+	            try { Thread.sleep(5000L); }
+	            catch( InterruptedException ignore ) { }
+	        }
+        }
         vm = getVirtualMachine(serverId);
         if( vm == null ) {
             throw new CloudException("No virtual machine provided: " + serverId);
