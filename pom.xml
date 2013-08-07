@@ -61,7 +61,7 @@
     <dependency>
         <groupId>org.dasein</groupId>
         <artifactId>dasein-cloud-core</artifactId>
-        <version>2013.07.0</version>
+        <version>2013.11-SNAPSHOT</version>
         <scope>compile</scope>
         <optional>false</optional>
     </dependency>
@@ -97,7 +97,7 @@
       <dependency>
           <groupId>org.dasein</groupId>
           <artifactId>dasein-cloud-test</artifactId>
-          <version>2013.07.1</version>
+          <version>2013.11-SNAPSHOT</version>
           <scope>test</scope>
           <optional>false</optional>
       </dependency>
@@ -227,9 +227,9 @@
                     <value>${cloudstack.version}</value>
                 </property>                
             </systemProperties> 
-          <excludes>
-            <exclude>**/TestSuite.java</exclude>
-          </excludes>
+          <includes>
+            <include>**/TestSuite.java</include>
+          </includes>
         </configuration>
       </plugin>   
       <plugin>
