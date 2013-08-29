@@ -714,49 +714,6 @@ public class Templates extends AbstractImageSupport {
         }
     }
 
-    private @Nonnull Iterable<MachineImage> searchPublicImages(final @Nullable String keyword, final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
-        final Param[] params;
-
-        if( keyword == null ) {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()) };
-        }
-        else {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("keyword", keyword) };
-        }
-        final CSMethod method = new CSMethod(provider);
-
-        provider.hold();
-        PopulatorThread<MachineImage> populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
-            @Override
-            public void populate(@Nonnull Jiterator<MachineImage> iterator) throws Exception {
-                try {
-                    APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
-                    try {
-                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
-                        NodeList matches = doc.getElementsByTagName("template");
-
-                        for( int i=0; i<matches.getLength(); i++ ) {
-                            MachineImage img = toImage(matches.item(i), true);
-
-                            if( img != null && options.matches(img) ) {
-                                iterator.push(img);
-                            }
-                        }
-                    }
-                    finally {
-                        APITrace.end();
-                    }
-                }
-                finally {
-                    provider.release();
-                }
-            }
-        });
-
-        populator.populate();
-        return populator.getResult();
-    }
-
     @Override
     public @Nonnull Iterable<MachineImage> searchPublicImages(final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
         final Param[] params;
