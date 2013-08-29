@@ -758,45 +758,43 @@ public class Templates extends AbstractImageSupport {
     }
 
     @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options) throws CloudException, InternalException {
-        return searchPublicImages(null, options);
-    }
+    public @Nonnull Iterable<MachineImage> searchPublicImages(final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+        final Param[] params;
 
-    @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass ... imageClasses) throws CloudException, InternalException {
-        // no trace
-        if( imageClasses == null || imageClasses.length < 2 ) {
-            ImageFilterOptions options = ImageFilterOptions.getInstance();
+        params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()) };
 
-            if( platform != null ) {
-                options.onPlatform(platform);
-            }
-            if( architecture != null ) {
-                options.withArchitecture(architecture);
-            }
-            if( imageClasses != null && imageClasses.length == 1 ) {
-                options.withImageClass(imageClasses[0]);
-            }
-            return searchPublicImages(keyword, options);
-        }
-        else {
-            ArrayList<MachineImage> matches = new ArrayList<MachineImage>();
+        final CSMethod method = new CSMethod(provider);
 
-            for( ImageClass cls : imageClasses ) {
-                ImageFilterOptions options = ImageFilterOptions.getInstance(cls);
+        provider.hold();
+        PopulatorThread<MachineImage> populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
+            @Override
+            public void populate(@Nonnull Jiterator<MachineImage> iterator) throws Exception {
+                try {
+                    APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
+                    try {
+                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
+                        NodeList matches = doc.getElementsByTagName("template");
 
-                if( platform != null ) {
-                    options.onPlatform(platform);
+                        for( int i=0; i<matches.getLength(); i++ ) {
+                            MachineImage img = toImage(matches.item(i), true);
+
+                            if( img != null && options.matches(img) ) {
+                                iterator.push(img);
+                            }
+                        }
+                    }
+                    finally {
+                        APITrace.end();
+                    }
                 }
-                if( architecture != null ) {
-                    options.withArchitecture(architecture);
-                }
-                for( MachineImage img : searchPublicImages(keyword, options) ) {
-                    matches.add(img);
+                finally {
+                    provider.release();
                 }
             }
-            return matches;
-        }
+        });
+
+        populator.populate();
+        return populator.getResult();
     }
 
     @Override
