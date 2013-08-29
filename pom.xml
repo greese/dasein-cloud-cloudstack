@@ -21,7 +21,7 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-cloudstack</artifactId>
-  <version>2013.07</version>
+  <version>2013.07.1-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-cloudstack</name>
@@ -227,9 +227,9 @@
                     <value>${cloudstack.version}</value>
                 </property>                
             </systemProperties> 
-          <includes>
-            <include>**/TestSuite.java</include>
-          </includes>
+          <excludes>
+            <exclude>**/TestSuite.java</exclude>
+          </excludes>
         </configuration>
       </plugin>   
       <plugin>
