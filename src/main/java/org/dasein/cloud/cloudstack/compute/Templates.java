@@ -714,15 +714,12 @@ public class Templates extends AbstractImageSupport {
         }
     }
 
-    private @Nonnull Iterable<MachineImage> searchPublicImages(final @Nullable String keyword, final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
+    @Override
+    public @Nonnull Iterable<MachineImage> searchPublicImages(final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
         final Param[] params;
 
-        if( keyword == null ) {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()) };
-        }
-        else {
-            params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("keyword", keyword) };
-        }
+        params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()) };
+
         final CSMethod method = new CSMethod(provider);
 
         provider.hold();
@@ -755,48 +752,6 @@ public class Templates extends AbstractImageSupport {
 
         populator.populate();
         return populator.getResult();
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nonnull ImageFilterOptions options) throws CloudException, InternalException {
-        return searchPublicImages(null, options);
-    }
-
-    @Override
-    public @Nonnull Iterable<MachineImage> searchPublicImages(@Nullable String keyword, @Nullable Platform platform, @Nullable Architecture architecture, @Nullable ImageClass ... imageClasses) throws CloudException, InternalException {
-        // no trace
-        if( imageClasses == null || imageClasses.length < 2 ) {
-            ImageFilterOptions options = ImageFilterOptions.getInstance();
-
-            if( platform != null ) {
-                options.onPlatform(platform);
-            }
-            if( architecture != null ) {
-                options.withArchitecture(architecture);
-            }
-            if( imageClasses != null && imageClasses.length == 1 ) {
-                options.withImageClass(imageClasses[0]);
-            }
-            return searchPublicImages(keyword, options);
-        }
-        else {
-            ArrayList<MachineImage> matches = new ArrayList<MachineImage>();
-
-            for( ImageClass cls : imageClasses ) {
-                ImageFilterOptions options = ImageFilterOptions.getInstance(cls);
-
-                if( platform != null ) {
-                    options.onPlatform(platform);
-                }
-                if( architecture != null ) {
-                    options.withArchitecture(architecture);
-                }
-                for( MachineImage img : searchPublicImages(keyword, options) ) {
-                    matches.add(img);
-                }
-            }
-            return matches;
-        }
     }
 
     @Override
