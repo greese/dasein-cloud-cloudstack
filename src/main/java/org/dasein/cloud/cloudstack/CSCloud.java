@@ -316,4 +316,60 @@ public class CSCloud extends AbstractCloud {
             APITrace.end();
         }
     }
+
+    private transient String parentAccount;
+
+    public String getParentAccount(@Nullable String account) throws CloudException, InternalException {
+        APITrace.begin(this, "listAccounts");
+        if( parentAccount == null ) {
+            if (account == null) {
+                account = getContext().getAccountNumber();
+            }
+
+            try {
+                CSMethod method = new CSMethod(this);
+                String url = method.buildUrl("listAccounts");
+
+                Document doc = method.get(url, "listAccounts");
+                NodeList matches = doc.getElementsByTagName("user");
+
+                for (int i = 0; i<matches.getLength(); i++) {
+                    boolean foundUser = false;
+                    String accountForUser = null;
+                    NodeList attributes = matches.item(i).getChildNodes();
+
+                    for( int j=0; j<attributes.getLength(); j++ ) {
+                        Node attribute = attributes.item(j);
+                        String name = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.hasChildNodes() && attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+
+                        if (name.equalsIgnoreCase("username")) {
+                            if (account.equalsIgnoreCase(value)) {
+                                foundUser = true;
+                            }
+                        }
+                        else if (name.equalsIgnoreCase("account")) {
+                            accountForUser = value;
+                        }
+                    }
+                    if (foundUser) {
+                        parentAccount = accountForUser;
+                        break;
+                    }
+                }
+            }
+            finally {
+                APITrace.end();
+            }
+
+        }
+        return parentAccount;
+    }
 }
