@@ -95,7 +95,8 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId()) ) {
+            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId())
+                    && !provider.getParentAccount(ctx.getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "add") };
@@ -119,7 +120,8 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId()) ) {
+            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId())
+                    && !provider.getParentAccount(getContext().getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "true") };
@@ -316,9 +318,38 @@ public class Templates extends AbstractImageSupport {
                 }
             }
             if( templateId == null ) {
+                matches = doc.getElementsByTagName("jobid"); // v4.1
+                if( matches.getLength() > 0 ) {
+                    templateId = matches.item(0).getFirstChild().getNodeValue();
+                }
+            }
+            if( templateId == null ) {
                 throw new CloudException("Failed to provide a template ID.");
             }
-            provider.waitForJob(doc, "Create Template");
+            Document responseDoc = provider.waitForJob(doc, "Create Template");
+            if (responseDoc != null){
+                NodeList nodeList = responseDoc.getElementsByTagName("template");
+                if (nodeList.getLength() > 0) {
+                    Node template = nodeList.item(0);
+                    NodeList attributes = template.getChildNodes();
+                    for (int i = 0; i<attributes.getLength(); i++) {
+                        Node attribute = attributes.item(i);
+                        String tmpname = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if (tmpname.equalsIgnoreCase("id")) {
+                            templateId = value;
+                            break;
+                        }
+                    }
+                }
+            }
             img = getImage(templateId);
             if( img == null ) {
                 throw new CloudException("Machine image job completed successfully, but no image " + templateId + " exists.");
@@ -482,7 +513,9 @@ public class Templates extends AbstractImageSupport {
                 params = new Param[] { new Param("templateFilter", "self"),  new Param("zoneId", getContext().getRegionId()) };
             }
             else {
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", accountNumber) };
+                String domainId = provider.getDomainId(accountNumber);
+                String parentAccount = provider.getParentAccount(accountNumber);
+                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId) };
             }
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
@@ -634,7 +667,8 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 throw new CloudException("No such machine image: " + providerImageId);
             }
-            if( !accountNumber.equals(img.getProviderOwnerId()) ) {
+            if( !accountNumber.equals(img.getProviderOwnerId())
+                      && !provider.getParentAccount(accountNumber).equalsIgnoreCase(img.getProviderOwnerId())) {
                 throw new CloudException(accountNumber + " cannot remove images belonging to " + img.getProviderOwnerId());
             }
             CSMethod method = new CSMethod(provider);
@@ -670,7 +704,8 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId()) ) {
+            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId())
+                    && !provider.getParentAccount(getContext().getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "remove") };
@@ -699,7 +734,8 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId()) ) {
+            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId())
+                    && !provider.getParentAccount(ctx.getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "false") };

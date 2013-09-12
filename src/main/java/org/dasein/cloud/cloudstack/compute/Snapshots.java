@@ -151,6 +151,9 @@ public class Snapshots extends AbstractSnapshotSupport {
 
             if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
+                if (matches.getLength() < 1) {
+                    matches = doc.getElementsByTagName("jobid");
+                }
             }
             else {
                 matches = doc.getElementsByTagName("snapshotid");
@@ -166,8 +169,33 @@ public class Snapshots extends AbstractSnapshotSupport {
             if( snapshotId == null ) {
                 throw new CloudException("Failed to create a snapshot");
             }
+
+            Document responseDoc = null;
             try {
-                provider.waitForJob(doc, "Create Snapshot");
+                responseDoc = provider.waitForJob(doc, "Create Snapshot");
+                if (responseDoc != null){
+                    NodeList nodeList = responseDoc.getElementsByTagName("snapshot");
+                    if (nodeList.getLength() > 0) {
+                        Node snapshot = nodeList.item(0);
+                        NodeList attributes = snapshot.getChildNodes();
+                        for (int i = 0; i<attributes.getLength(); i++) {
+                            Node attribute = attributes.item(i);
+                            String name = attribute.getNodeName().toLowerCase();
+                            String value;
+
+                            if( attribute.getChildNodes().getLength() > 0 ) {
+                                value = attribute.getFirstChild().getNodeValue();
+                            }
+                            else {
+                                value = null;
+                            }
+                            if (name.equalsIgnoreCase("id")) {
+                                snapshotId = value;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             catch( CSException e ) {
                 if( e.getHttpCode() == 431 ) {
@@ -193,6 +221,9 @@ public class Snapshots extends AbstractSnapshotSupport {
                     return s.getProviderSnapshotId();
                 }
                 throw e;
+            }
+            if( snapshotId == null ) {
+                throw new CloudException("Failed to create a snapshot");
             }
             return snapshotId;
         }
