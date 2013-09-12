@@ -515,7 +515,9 @@ public class Templates extends AbstractImageSupport {
                 params = new Param[] { new Param("templateFilter", "self"),  new Param("zoneId", getContext().getRegionId()) };
             }
             else {
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", accountNumber) };
+                String domainId = provider.getDomainId(accountNumber);
+                String parentAccount = provider.getParentAccount(accountNumber);
+                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId) };
             }
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
