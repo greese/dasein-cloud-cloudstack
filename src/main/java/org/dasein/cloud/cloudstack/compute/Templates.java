@@ -623,6 +623,12 @@ public class Templates extends AbstractImageSupport {
             if( matches.getLength() > 0 ) {
                 templateId = matches.item(0).getFirstChild().getNodeValue();
             }
+            else {
+                matches = doc.getElementsByTagName("id");
+                if (matches.getLength() > 0) {
+                    templateId = matches.item(0).getFirstChild().getNodeValue();
+                }
+            }
             if( templateId == null ) {
                 throw new CloudException("No error was encountered during registration, but no templateId was returned");
             }
