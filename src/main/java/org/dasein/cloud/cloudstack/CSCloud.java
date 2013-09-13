@@ -316,4 +316,75 @@ public class CSCloud extends AbstractCloud {
             APITrace.end();
         }
     }
+
+    private transient String parentAccount;
+    private transient String domainId;
+
+    public String getParentAccount(@Nullable String account) throws CloudException, InternalException {
+        if( parentAccount == null ) {
+            refreshUserAccountData(account);
+        }
+        return parentAccount;
+    }
+    public String getDomainId(@Nullable String account) throws CloudException, InternalException {
+        if (domainId == null) {
+           refreshUserAccountData(account);
+        }
+        return domainId;
+    }
+
+    public void refreshUserAccountData(@Nullable String account) throws CloudException, InternalException {
+        APITrace.begin(this, "refreshAccountData");
+        if (account == null) {
+            account = getContext().getAccountNumber();
+        }
+
+        try {
+            CSMethod method = new CSMethod(this);
+            String url = method.buildUrl("listAccounts");
+
+            Document doc = method.get(url, "listAccounts");
+            NodeList matches = doc.getElementsByTagName("user");
+
+            for (int i = 0; i<matches.getLength(); i++) {
+                boolean foundUser = false;
+                String accountForUser = null;
+                String domainIdForUser = null;
+                NodeList attributes = matches.item(i).getChildNodes();
+
+                for( int j=0; j<attributes.getLength(); j++ ) {
+                    Node attribute = attributes.item(j);
+                    String name = attribute.getNodeName().toLowerCase();
+                    String value;
+
+                    if( attribute.hasChildNodes() && attribute.getChildNodes().getLength() > 0 ) {
+                        value = attribute.getFirstChild().getNodeValue();
+                    }
+                    else {
+                        value = null;
+                    }
+
+                    if (name.equalsIgnoreCase("username")) {
+                        if (account.equalsIgnoreCase(value)) {
+                            foundUser = true;
+                        }
+                    }
+                    else if (name.equalsIgnoreCase("account")) {
+                        accountForUser = value;
+                    }
+                    else if (name.equalsIgnoreCase("domainid")) {
+                        domainIdForUser = value;
+                    }
+                }
+                if (foundUser) {
+                    parentAccount = accountForUser;
+                    domainId = domainIdForUser;
+                    break;
+                }
+            }
+        }
+        finally {
+            APITrace.end();
+        }
+    }
 }

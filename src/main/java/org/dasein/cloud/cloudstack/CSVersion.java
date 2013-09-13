@@ -25,7 +25,7 @@ import javax.annotation.Nonnull;
  * are not represented.
  */
 public enum CSVersion {
-    CS21, CS22, CS3;
+    CS21, CS22, CS3, CS41;
 
     public boolean greaterThan(@Nonnull CSVersion control) {
         return (ordinal() > control.ordinal());
