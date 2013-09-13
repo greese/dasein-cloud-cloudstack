@@ -291,9 +291,38 @@ public class Volumes extends AbstractVolumeSupport {
                 }
             }
             if( volumeId == null ) {
+                matches = doc.getElementsByTagName("jobid"); // v4.1
+                if( matches.getLength() > 0 ) {
+                    volumeId = matches.item(0).getFirstChild().getNodeValue();
+                }
+            }
+            if( volumeId == null ) {
                 throw new CloudException("Failed to create volume");
             }
-            provider.waitForJob(doc, "Create Volume");
+            Document responseDoc = provider.waitForJob(doc, "Create Volume");
+            if (responseDoc != null){
+                NodeList nodeList = responseDoc.getElementsByTagName("volume");
+                if (nodeList.getLength() > 0) {
+                    Node volume = nodeList.item(0);
+                    NodeList attributes = volume.getChildNodes();
+                    for (int i = 0; i<attributes.getLength(); i++) {
+                        Node attribute = attributes.item(i);
+                        String name = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if (name.equalsIgnoreCase("id")) {
+                            volumeId = value;
+                            break;
+                        }
+                    }
+                }
+            }
             return volumeId;
         }
         finally {

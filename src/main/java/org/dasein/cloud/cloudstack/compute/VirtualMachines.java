@@ -601,6 +601,7 @@ public class VirtualMachines extends AbstractVMSupport {
     private @Nonnull VirtualMachine launch(@Nonnull Document doc) throws InternalException, CloudException {
         NodeList matches = doc.getElementsByTagName("deployvirtualmachineresponse");
         String serverId = null;
+        String jobId = null;
         
         for( int i=0; i<matches.getLength(); i++ ) {
             NodeList attrs = matches.item(i).getChildNodes();
@@ -611,13 +612,16 @@ public class VirtualMachines extends AbstractVMSupport {
                 if( node != null && (node.getNodeName().equalsIgnoreCase("virtualmachineid") || node.getNodeName().equalsIgnoreCase("id")) ) {
                     serverId = node.getFirstChild().getNodeValue();
                     break;
-                }               
+                }
+                else if (node != null && node.getNodeName().equalsIgnoreCase("jobid") ) {
+                    jobId = node.getFirstChild().getNodeValue();
+                }
             }
             if( serverId != null ) {
                 break;
             }
         }
-        if( serverId == null ) {
+        if( serverId == null && jobId == null ) {
             throw new CloudException("Could not launch server");
         }
         // TODO: very odd logic below; figure out what it thinks it is doing
