@@ -461,6 +461,9 @@ public class IpAddress implements IpAddressSupport {
 
             if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
+                if (matches.getLength() == 0) {
+                    matches = doc.getElementsByTagName("jobid"); //4.1
+                }
             }
             else {
                 matches = doc.getElementsByTagName("ipaddress");
@@ -472,7 +475,30 @@ public class IpAddress implements IpAddressSupport {
             if( id == null ) {
                 throw new CloudException("Failed to request an IP address without error");
             }
-            provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            Document responseDoc = provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            if (responseDoc != null) {
+                NodeList nodeList = responseDoc.getElementsByTagName("ipaddress");
+                if (nodeList.getLength() > 0) {
+                    Node ipAddress = nodeList.item(0);
+                    NodeList attributes = ipAddress.getChildNodes();
+                    for (int i = 0; i<attributes.getLength(); i++) {
+                        Node attribute = attributes.item(i);
+                        String tmpname = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if (tmpname.equalsIgnoreCase("id")) {
+                            id = value;
+                            break;
+                        }
+                    }
+                }
+            }
             return id;
         }
         finally {
@@ -503,6 +529,9 @@ public class IpAddress implements IpAddressSupport {
 
             if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
+                if (matches.getLength() == 0) {
+                    matches = doc.getElementsByTagName("jobid"); //4.1
+                }
             }
             else {
                 matches = doc.getElementsByTagName("ipaddress");
@@ -514,7 +543,30 @@ public class IpAddress implements IpAddressSupport {
             if( id == null ) {
                 throw new CloudException("Failed to request an IP address without error");
             }
-            provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            Document responseDoc = provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            if (responseDoc != null) {
+                NodeList nodeList = responseDoc.getElementsByTagName("ipaddress");
+                if (nodeList.getLength() > 0) {
+                    Node ipAddress = nodeList.item(0);
+                    NodeList attributes = ipAddress.getChildNodes();
+                    for (int i = 0; i<attributes.getLength(); i++) {
+                        Node attribute = attributes.item(i);
+                        String tmpname = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if (tmpname.equalsIgnoreCase("id")) {
+                            id = value;
+                            break;
+                        }
+                    }
+                }
+            }
             return id;
         }
         finally {
