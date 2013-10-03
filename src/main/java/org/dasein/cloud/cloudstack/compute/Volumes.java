@@ -40,6 +40,7 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSServiceProvider;
+import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
@@ -552,8 +553,13 @@ public class Volumes extends AbstractVolumeSupport {
                 for( DiskOffering offering : getDiskOfferings() ) {
                     VolumeProduct p = toProduct(offering);
 
-                    if( p != null && (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) || "local".equals(offering.type)) ) {
-                        list.add(p);
+                    if( p != null ) {
+                        if (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) && !provider.getVersion().greaterThan(CSVersion.CS3)) {
+                            list.add(p);
+                        }
+                        else if ( "local".equals(offering.type) ) {
+                            list.add(p);
+                        }
                     }
                 }
                 products = Collections.unmodifiableList(list);
