@@ -157,6 +157,33 @@ public class CSCloud extends AbstractCloud {
             Properties properties = (ctx == null ? null : ctx.getCustomProperties());
             String versionString;
 
+            if (properties == null || properties.getProperty("apiVersion") == null || properties.getProperty("apiVersion").equals("")) {
+               //run list zone query to check whether this might be v4
+                try {
+                    CSMethod method = new CSMethod(this);
+                    String url = method.buildUrl("listZones", new Param("available", "true"));
+                    Document doc = method.get(url, "listZones");
+                    NodeList meta = doc.getElementsByTagName("listzonesresponse");
+                    for (int item = 0; item<meta.getLength(); item++) {
+                        Node node = meta.item(item);
+                        String v = node.getAttributes().getNamedItem("cloud-stack-version").getNodeValue();
+                        if (v.startsWith("4")) {
+                            if (properties == null) {
+                                properties = new Properties();
+                            }
+                            properties.setProperty("apiVersion", "CS4");
+                            logger.info("Version property not found so setting based on result of query: "+v);
+                            version = CSVersion.CS4;
+                            return version;
+                        }
+                    }
+                }
+                catch (Throwable ignore) {}
+                finally {
+                    APITrace.end();
+                }
+            }
+
             versionString = (properties == null ? "CS3" : properties.getProperty("apiVersion", "CS3"));
             try {
                 version = CSVersion.valueOf(versionString);
