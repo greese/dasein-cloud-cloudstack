@@ -129,10 +129,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             }
             for( LbListener listener : options.getListeners() ) {
                 if( !isId(options.getProviderIpAddressId()) ) {
-                    createVmOpsRule(listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
+                    createVmOpsRule(options.getName(), listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
                 }
                 else {
-                    createCloudstack22Rule(listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
+                    createCloudstack22Rule(options.getName(), listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
                 }
             }
             for( LoadBalancerEndpoint endpoint : options.getEndpoints() ) {
@@ -168,7 +168,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return createLoadBalancer(options);
     }
 
-    private void createVmOpsRule(LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
+    private void createVmOpsRule(String lbName, LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
         String id = getVmOpsRuleId(algorithm, publicIp, publicPort, privatePort);
         
         if( id != null ) {
@@ -187,7 +187,12 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         params[1] = new Param("publicPort", String.valueOf(publicPort));
         params[2] = new Param("privatePort", String.valueOf(privatePort));
         params[3] = new Param("algorithm", algor);
-        params[4] = new Param("name", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
+        if (lbName != null && !lbName.equals("")) {
+            params[4] = new Param("name", lbName);
+        }
+        else {
+            params[4] = new Param("name", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
+        }
         params[5] = new Param("description", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
         
         CSMethod method = new CSMethod(provider);
@@ -220,7 +225,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         throw new CloudException("Failed to add load balancer rule (2).");
     }
     
-    private void createCloudstack22Rule(LbAlgorithm algorithm, String publicIpId, int publicPort, int privatePort) throws CloudException, InternalException {
+    private void createCloudstack22Rule(String lbName, LbAlgorithm algorithm, String publicIpId, int publicPort, int privatePort) throws CloudException, InternalException {
         String id = getVmOpsRuleId(algorithm, publicIpId, publicPort, privatePort);
         
         if( id != null ) {
@@ -240,7 +245,12 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         params[1] = new Param("publicPort", String.valueOf(publicPort));
         params[2] = new Param("privatePort", String.valueOf(privatePort));
         params[3] = new Param("algorithm", algor);
-        params[4] = new Param("name", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
+        if (lbName != null && !lbName.equals("")) {
+            params[4] = new Param("name", lbName);
+        }
+        else {
+            params[4] = new Param("name", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
+        }
         params[5] = new Param("description", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
 
         CSMethod method = new CSMethod(provider);
