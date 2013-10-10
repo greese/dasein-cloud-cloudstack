@@ -269,29 +269,6 @@ public class Templates extends AbstractImageSupport {
                 throw new CloudException("No root volume is attached to the target server.");
             }
 
-            String baseSnapshotId = provider.getComputeServices().getSnapshotSupport().createSnapshot(SnapshotCreateOptions.getInstanceForCreate(rootVolumeId, "Template Builder " + (new Date()), "Template Builder from " + server.getProviderVirtualMachineId()));
-            Snapshot baseSnapshot;
-
-            if( baseSnapshotId == null ) {
-                throw new CloudException("Unable to make a new snapshot for machine image");
-            }
-            baseSnapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(baseSnapshotId);
-            if( baseSnapshot == null ) {
-                throw new CloudException("Snapshot " + baseSnapshot + " went away.");
-            }
-            long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 30L);
-
-            while( !SnapshotState.AVAILABLE.equals(baseSnapshot.getCurrentState()) ) {
-                if( System.currentTimeMillis() > timeout ) {
-                    throw new CloudException("Timeout in snapshotting root volume.");
-                }
-                try { Thread.sleep(15000L); }
-                catch( InterruptedException ignore ) { }
-                baseSnapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(baseSnapshot.getProviderSnapshotId());
-                if( baseSnapshot == null ) {
-                    throw new CloudException("Snapshot disappeared while waiting for it to become available");
-                }
-            }
             MachineImage img = getImage(server.getProviderMachineImageId());
             String osId = (img == null ? null : (String)img.getTag("cloud.com.os.typeId"));
             String name = validateName(options.getName());
@@ -303,7 +280,7 @@ public class Templates extends AbstractImageSupport {
             params[3] = new Param("zoneId", getContext().getRegionId());
             params[4] = new Param("isPublic", "false");
             params[5] = new Param("isFeatured", "false");
-            params[6] = new Param("snapshotId", baseSnapshot.getProviderSnapshotId());
+            params[6] = new Param("volumeid",rootVolumeId);
             params[7] = new Param("passwordEnabled", String.valueOf(isPasswordEnabled(server.getProviderMachineImageId())));
             doc = method.get(method.buildUrl(CREATE_TEMPLATE, params), CREATE_TEMPLATE);
 
