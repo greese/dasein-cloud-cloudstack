@@ -841,7 +841,29 @@ public class Volumes extends AbstractVolumeSupport {
         volume.setProviderDataCenterId(provider.getContext().getRegionId());
         if( volume.getProviderVirtualMachineId() != null ) {
             if( root ) {
-                volume.setDeviceId("/dev/xvda2");
+                VirtualMachine vm = null;
+                try {
+                    vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(volume.getProviderVirtualMachineId());
+                    if( vm == null ) {
+                        logger.warn("Could not find Virtual machine " + volume.getProviderVirtualMachineId() + " for root volume " + volume.getProviderVolumeId() + " .");
+                    }
+                    else{
+                        if (vm.getPlatform().isWindows()){
+                            volume.setDeviceId("hda2");
+                        }
+                        else{
+                            volume.setDeviceId("/dev/xvda2");
+                        }
+                    }
+                }
+                catch( Exception e ) {
+                    if(logger.isDebugEnabled()){
+                        logger.warn("Error trying to determine device id for a root volume : " + e.getMessage(),e);
+                    }
+                    else{
+                        logger.warn("Error trying to determine device id for a root volume : " + e.getMessage());
+                    }
+                }
             }
         }
         volume.setRootVolume(root);
