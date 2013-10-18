@@ -57,14 +57,7 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
-import org.dasein.cloud.compute.AbstractVMSupport;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.ImageClass;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VMLaunchOptions;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.compute.VirtualMachineProduct;
-import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
@@ -628,18 +621,21 @@ public class VirtualMachines extends AbstractVMSupport {
         
         VirtualMachine vm = null;
         
-        Document responseDoc = provider.waitForJob(doc, "Launch Server");
+        if (serverId == null) {
+            //only wait for job if we don't already have the resource id
+            Document responseDoc = provider.waitForJob(doc, "Launch Server");
         
-        //parse vm from job completion response to capture vm passwords on initial launch.
-        if (responseDoc != null){
-        	NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
-        	if (nodeList.getLength() > 0) { 
-        		Node virtualMachine = nodeList.item(0);
-            	vm = toVirtualMachine(virtualMachine);
-            	if( vm != null ) {
- 	                return vm;
- 	            }
-        	}
+            //parse vm from job completion response to capture vm passwords on initial launch.
+            if (responseDoc != null){
+                NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
+                if (nodeList.getLength() > 0) {
+                    Node virtualMachine = nodeList.item(0);
+                    vm = toVirtualMachine(virtualMachine);
+                    if( vm != null ) {
+                        return vm;
+                    }
+                }
+            }
         }
         
         if (vm == null){
@@ -1232,6 +1228,16 @@ public class VirtualMachines extends AbstractVMSupport {
         if( productId != null ) {
             server.setProductId(productId);
         }
+        if (server.getPlatform().equals(Platform.UNKNOWN)){
+            Templates support = provider.getComputeServices().getImageSupport();
+            if (support != null){
+                MachineImage image =support.getImage(server.getProviderMachineImageId());
+                if (image != null){
+                    server.setPlatform(image.getPlatform());
+                }
+            }
+        }
+
         setFirewalls(server);
         return server;
     }
