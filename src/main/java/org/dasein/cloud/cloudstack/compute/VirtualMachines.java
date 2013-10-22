@@ -720,7 +720,6 @@ public class VirtualMachines extends AbstractVMSupport {
                     }
                 }
             }
-           // }
             else {
                 cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
                 productCache.put(endpoint+"_"+accountId+"_"+regionId, cached, System.currentTimeMillis() + CalendarWrapper.HOUR * 4);
