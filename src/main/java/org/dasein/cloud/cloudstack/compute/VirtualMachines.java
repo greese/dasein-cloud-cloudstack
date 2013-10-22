@@ -710,6 +710,7 @@ public class VirtualMachines extends AbstractVMSupport {
             String accountId = provider.getContext().getAccountNumber();
             String regionId = provider.getContext().getRegionId();
 
+            productCache.purge();
             cached = (HashMap<Architecture, Collection<VirtualMachineProduct>>) productCache.get(endpoint+"_"+accountId+"_"+regionId);
             if (cached != null && !cached.isEmpty()) {
                 if( cached.containsKey(architecture) ) {
@@ -722,7 +723,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
             else {
                 cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
-                productCache.put(endpoint+"_"+accountId+"_"+regionId, cached, System.currentTimeMillis() + CalendarWrapper.HOUR * 4);
+                productCache.put(endpoint+"_"+accountId+"_"+regionId, cached, CalendarWrapper.HOUR * 4);
             }
             List<VirtualMachineProduct> products;
             Set<String> mapping = null;
