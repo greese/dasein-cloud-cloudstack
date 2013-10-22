@@ -710,6 +710,7 @@ public class VirtualMachines extends AbstractVMSupport {
             String accountId = provider.getContext().getAccountNumber();
             String regionId = provider.getContext().getRegionId();
 
+            productCache.purge();
             cached = (HashMap<Architecture, Collection<VirtualMachineProduct>>) productCache.get(endpoint+"_"+accountId+"_"+regionId);
             if (cached != null && !cached.isEmpty()) {
                 if( cached.containsKey(architecture) ) {
