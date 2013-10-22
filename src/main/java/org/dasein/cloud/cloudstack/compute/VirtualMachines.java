@@ -68,6 +68,8 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import org.logicblaze.lingo.util.DefaultTimeoutMap;
+
 public class VirtualMachines extends AbstractVMSupport {
     static public final Logger logger = Logger.getLogger(VirtualMachines.class);
     
@@ -83,7 +85,7 @@ public class VirtualMachines extends AbstractVMSupport {
     static private Map<String,Map<String,String>>          customNetworkMappings;
     static private Map<String,Map<String,Set<String>>>     customServiceMappings; 
     
-    static private Map<String,Map<Architecture,Collection<VirtualMachineProduct>>> productCache = new HashMap<String, Map<Architecture, Collection<VirtualMachineProduct>>>();
+    static private DefaultTimeoutMap productCache = new DefaultTimeoutMap();
     
     private CSCloud provider;
     
@@ -704,14 +706,12 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("No context was configured for this request");
             }
             Map<Architecture,Collection<VirtualMachineProduct>> cached;
-            //String endpoint = provider.getContext().getEndpoint();
-
-            // No longer caching by endpoint- different accounts may return different products...
-            //   so we'll cache by account instead.
+            String endpoint = provider.getContext().getEndpoint();
             String accountId = provider.getContext().getAccountNumber();
+            String regionId = provider.getContext().getRegionId();
 
-            if( productCache.containsKey(accountId) ) {
-                cached = productCache.get(accountId);
+            cached = (HashMap<Architecture, Collection<VirtualMachineProduct>>) productCache.get(endpoint+"_"+accountId+"_"+regionId);
+            if (cached != null && !cached.isEmpty()) {
                 if( cached.containsKey(architecture) ) {
                     Collection<VirtualMachineProduct> products = cached.get(architecture);
 
@@ -720,9 +720,10 @@ public class VirtualMachines extends AbstractVMSupport {
                     }
                 }
             }
+           // }
             else {
                 cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
-                productCache.put(accountId, cached);
+                productCache.put(endpoint+"_"+accountId+"_"+regionId, cached, System.currentTimeMillis() + CalendarWrapper.HOUR * 4);
             }
             List<VirtualMachineProduct> products;
             Set<String> mapping = null;
