@@ -680,6 +680,37 @@ public class Volumes extends AbstractVolumeSupport {
         else { return "9"; }
     }
 
+    private @Nonnull String toDeviceID(@Nonnull String deviceNumber, boolean isWindows) {
+        if (deviceNumber == null){
+            return null;
+        }
+        if (!isWindows){
+            if( deviceNumber.equals("0") ) { return "/dev/xvda"; }
+            else if( deviceNumber.equals("1") ) { return "/dev/xvdb"; }
+            else if( deviceNumber.equals("2") ) { return "/dev/xvdc"; }
+            else if( deviceNumber.equals("4") ) { return "/dev/xvde"; }
+            else if( deviceNumber.equals("5") ) { return "/dev/xvdf"; }
+            else if( deviceNumber.equals("6") ) { return "/dev/xvdg"; }
+            else if( deviceNumber.equals("7") ) { return "/dev/xvdh"; }
+            else if( deviceNumber.equals("8") ) { return "/dev/xvdi"; }
+            else if( deviceNumber.equals("9") ) { return "/dev/xvdj"; }
+            else { return "/dev/xvdj"; }
+        }
+        else{
+            if( deviceNumber.equals("0") ) { return "hda"; }
+            else if( deviceNumber.equals("1") ) { return "hdb"; }
+            else if( deviceNumber.equals("2") ) { return "hdc"; }
+            else if( deviceNumber.equals("3") ) { return "hdd"; }
+            else if( deviceNumber.equals("4") ) { return "hde"; }
+            else if( deviceNumber.equals("5") ) { return "hdf"; }
+            else if( deviceNumber.equals("6") ) { return "hdg"; }
+            else if( deviceNumber.equals("7") ) { return "hdh"; }
+            else if( deviceNumber.equals("8") ) { return "hdi"; }
+            else if( deviceNumber.equals("9") ) { return "hdj"; }
+            else { return "hdj"; }
+        }
+    }
+
     private @Nullable VolumeProduct toProduct(@Nullable DiskOffering offering) throws InternalException, CloudException {
         if( offering == null ) {
             return null;
@@ -747,6 +778,7 @@ public class Volumes extends AbstractVolumeSupport {
         NodeList attributes = node.getChildNodes();
         String volumeName = null, description = null;
         boolean root = false;
+        String deviceNumber = null;
 
         volume.setFormat(VolumeFormat.BLOCK);
         for( int i=0; i<attributes.getLength(); i++ ) {
@@ -776,6 +808,9 @@ public class Volumes extends AbstractVolumeSupport {
                 }
                 else if( name.equals("name") && attribute.hasChildNodes() ) {
                     volumeName = attribute.getFirstChild().getNodeValue().trim();
+                }
+                else if ( name.equals("deviceid") && attribute.hasChildNodes()){
+                    deviceNumber = attribute.getFirstChild().getNodeValue().trim();
                 }
                 else if( name.equalsIgnoreCase("virtualmachineid") && attribute.hasChildNodes() ) {
                     volume.setProviderVirtualMachineId(attribute.getFirstChild().getNodeValue());
@@ -839,30 +874,24 @@ public class Volumes extends AbstractVolumeSupport {
         }
         volume.setProviderRegionId(provider.getContext().getRegionId());
         volume.setProviderDataCenterId(provider.getContext().getRegionId());
+
         if( volume.getProviderVirtualMachineId() != null ) {
-            if( root ) {
-                VirtualMachine vm = null;
-                try {
-                    vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(volume.getProviderVirtualMachineId());
-                    if( vm == null ) {
-                        logger.warn("Could not find Virtual machine " + volume.getProviderVirtualMachineId() + " for root volume " + volume.getProviderVolumeId() + " .");
-                    }
-                    else{
-                        if (vm.getPlatform().isWindows()){
-                            volume.setDeviceId("hda2");
-                        }
-                        else{
-                            volume.setDeviceId("/dev/xvda2");
-                        }
-                    }
+            VirtualMachine vm = null;
+            try {
+                vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(volume.getProviderVirtualMachineId());
+                if( vm == null ) {
+                    logger.warn("Could not find Virtual machine " + volume.getProviderVirtualMachineId() + " for root volume " + volume.getProviderVolumeId() + " .");
                 }
-                catch( Exception e ) {
-                    if(logger.isDebugEnabled()){
-                        logger.warn("Error trying to determine device id for a root volume : " + e.getMessage(),e);
-                    }
-                    else{
-                        logger.warn("Error trying to determine device id for a root volume : " + e.getMessage());
-                    }
+                else{
+                    volume.setDeviceId(toDeviceID(deviceNumber, vm.getPlatform().isWindows()));
+                }
+            }
+            catch( Exception e ) {
+                if(logger.isDebugEnabled()){
+                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage(),e);
+                }
+                else{
+                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage());
                 }
             }
         }
