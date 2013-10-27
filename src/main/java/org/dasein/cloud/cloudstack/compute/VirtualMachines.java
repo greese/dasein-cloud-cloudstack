@@ -901,10 +901,14 @@ public class VirtualMachines extends AbstractVMSupport {
                 Node node = matches.item(i);
 
                 if( node != null ) {
-                    VirtualMachine vm = toVirtualMachine(node);
+                    try {
+                        VirtualMachine vm = toVirtualMachine(node);
 
-                    if( vm != null ) {
-                        servers.add(vm);
+                        if( vm != null ) {
+                            servers.add(vm);
+                        }
+                    } catch (Throwable t) {
+                        logger.error("Problem discovering a virtual machine: " + t.getMessage());
                     }
                 }
             }
@@ -1134,7 +1138,8 @@ public class VirtualMachines extends AbstractVMSupport {
                 value = null;
             }
             if( name.equals("virtualmachineid") || name.equals("id") ) {
-                server.setProviderVirtualMachineId(value);                
+                server.setProviderVirtualMachineId(value);
+                logger.info("Processing VM id '" + value + "'");
             }
             else if( name.equals("name") ) {
                 server.setDescription(value);
