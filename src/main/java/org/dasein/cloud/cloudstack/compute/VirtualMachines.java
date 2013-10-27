@@ -709,7 +709,15 @@ public class VirtualMachines extends AbstractVMSupport {
             }
             ArrayList<String> ids = new ArrayList<String>();
 
-            for( String id : support.listFirewallsForVM(vm.getProviderVirtualMachineId()) ) {
+            Iterable<String> firewalls;
+            try {
+                firewalls = support.listFirewallsForVM(vm.getProviderVirtualMachineId());
+            } catch (Throwable t) {
+                logger.error("Problem listing firewalls (listSecurityGroups) for '" + vm.getProviderVirtualMachineId() + "': " + t.getMessage());
+                return;
+            }
+
+            for( String id : firewalls ) {
                 ids.add(id);
             }
             vm.setProviderFirewallIds(ids.toArray(new String[ids.size()]));
