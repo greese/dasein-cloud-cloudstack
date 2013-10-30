@@ -243,11 +243,12 @@ public class Volumes extends AbstractVolumeSupport {
             Param[] params;
 
             if( product == null && snapshotId == null ) {
-                params = new Param[] {
+                /*params = new Param[] {
                         new Param("name", options.getName()),
                         new Param("zoneId", ctx.getRegionId()),
                         new Param("size", String.valueOf(size.longValue()))
-                };
+                }; */
+                throw new CloudException("A suitable snapshot or disk offering could not be found to pass to CloudStack createVolume request");
             }
             else if( snapshotId != null ) {
                 params = new Param[] {
@@ -553,13 +554,8 @@ public class Volumes extends AbstractVolumeSupport {
                 for( DiskOffering offering : getDiskOfferings() ) {
                     VolumeProduct p = toProduct(offering);
 
-                    if( p != null ) {
-                        if (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) && !provider.getVersion().greaterThan(CSVersion.CS3)) {
-                            list.add(p);
-                        }
-                        else if ( "local".equals(offering.type) ) {
-                            list.add(p);
-                        }
+                    if( p != null && (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) || "local".equals(offering.type)) ) {
+                        list.add(p);
                     }
                 }
                 products = Collections.unmodifiableList(list);
