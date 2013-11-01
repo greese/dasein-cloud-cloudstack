@@ -1335,6 +1335,9 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     private Platform guessForWindows(String name){
+        if (name == null){
+            return Platform.UNKNOWN;
+        }
         String platform = name.toLowerCase();
         if (platform.contains("windows") || platform.contains("win") ){
             return Platform.WINDOWS;
