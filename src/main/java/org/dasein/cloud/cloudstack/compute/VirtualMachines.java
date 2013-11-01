@@ -78,6 +78,7 @@ public class VirtualMachines extends AbstractVMSupport {
     static private final String LIST_VIRTUAL_MACHINES   = "listVirtualMachines";
     static private final String LIST_SERVICE_OFFERINGS  = "listServiceOfferings";
     static private final String REBOOT_VIRTUAL_MACHINE  = "rebootVirtualMachine";
+    static private final String RESET_VIRTUAL_MACHINE_PASSWORD = "resetPasswordForVirtualMachine";
     static private final String START_VIRTUAL_MACHINE   = "startVirtualMachine";
     static private final String STOP_VIRTUAL_MACHINE    = "stopVirtualMachine";
     
@@ -646,7 +647,19 @@ public class VirtualMachines extends AbstractVMSupport {
 	            try { vm = getVirtualMachine(serverId); }
 	            catch( Throwable ignore ) {  }
 	            if( vm != null ) {
-	                return vm;
+                    // check we have a password and if not reset as long as the server is stopped
+                    if (vm.getCurrentState().equals(VmState.STOPPED)) {
+                        if (vm.getRootPassword() == null || vm.getRootPassword().equals("")) {
+                            String password = resetPassword(vm.getProviderVirtualMachineId());
+                            if (password != null) {
+                                vm.setRootPassword(password);
+                            }
+                        }
+                        return vm;
+                    }
+                    else if (vm.getCurrentState().equals(VmState.RUNNING)) {
+                        stop(vm.getProviderVirtualMachineId());
+                    }
 	            }
 	            try { Thread.sleep(5000L); }
 	            catch( InterruptedException ignore ) { }
@@ -655,6 +668,17 @@ public class VirtualMachines extends AbstractVMSupport {
         vm = getVirtualMachine(serverId);
         if( vm == null ) {
             throw new CloudException("No virtual machine provided: " + serverId);
+        }
+        else {
+            // check we have a password and if not reset as long as the server is stopped
+            if (vm.getCurrentState().equals(VmState.STOPPED)) {
+                if (vm.getRootPassword() == null || vm.getRootPassword().equals("")) {
+                    String password = resetPassword(vm.getProviderVirtualMachineId());
+                    if (password != null) {
+                        vm.setRootPassword(password);
+                    }
+                }
+            }
         }
         return vm;
     }
@@ -877,6 +901,56 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
             }
             return servers;
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    private String resetPassword(@Nonnull String serverId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VM.resetPassword");
+        try {
+            ProviderContext ctx = provider.getContext();
+
+            if( ctx == null ) {
+                throw new CloudException("No context was specified for this request");
+            }
+
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(RESET_VIRTUAL_MACHINE_PASSWORD, new Param("id", serverId)), RESET_VIRTUAL_MACHINE_PASSWORD);
+
+            Document responseDoc = provider.waitForJob(doc, "reset vm password");
+
+            if (responseDoc != null){
+                NodeList matches = responseDoc.getElementsByTagName("virtualmachine");
+
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        NodeList attributes = node.getChildNodes();
+                        for( int j=0; j<attributes.getLength(); j++ ) {
+                            Node attribute = attributes.item(j);
+                            String name = attribute.getNodeName().toLowerCase();
+                            String value;
+
+                            if( attribute.getChildNodes().getLength() > 0 ) {
+                                value = attribute.getFirstChild().getNodeValue();
+                            }
+                            else {
+                                value = null;
+                            }
+                            if( name.equals("password") ) {
+                                return value;
+                            }
+                        }
+                    }
+                }
+            }
+
+
+            logger.warn("Unable to find password for vm with id "+serverId);
+            return null;
         }
         finally {
             APITrace.end();
