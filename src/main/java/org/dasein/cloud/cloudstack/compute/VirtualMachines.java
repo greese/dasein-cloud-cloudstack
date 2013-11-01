@@ -1291,7 +1291,11 @@ public class VirtualMachines extends AbstractVMSupport {
                 server.setProviderMachineImageId(value);
             }
             else if( name.equals("templatename") ) {
-                server.setPlatform(Platform.guess(value));
+                Platform platform = Platform.guess(value);
+                if (platform.equals(Platform.UNKNOWN)){
+                    platform = guessForWindows(value);
+                }
+                server.setPlatform(platform);
             }
             else if( name.equals("serviceofferingid") ) {
                 productId = value;
@@ -1328,5 +1332,13 @@ public class VirtualMachines extends AbstractVMSupport {
 
         setFirewalls(server);
         return server;
+    }
+
+    private Platform guessForWindows(String name){
+        String platform = name.toLowerCase();
+        if (platform.contains("windows") || platform.contains("win") ){
+            return Platform.WINDOWS;
+        }
+        return Platform.UNKNOWN;
     }
 }
