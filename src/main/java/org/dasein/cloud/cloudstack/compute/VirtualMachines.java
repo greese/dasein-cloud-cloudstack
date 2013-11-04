@@ -709,7 +709,15 @@ public class VirtualMachines extends AbstractVMSupport {
             }
             ArrayList<String> ids = new ArrayList<String>();
 
-            for( String id : support.listFirewallsForVM(vm.getProviderVirtualMachineId()) ) {
+            Iterable<String> firewalls;
+            try {
+                firewalls = support.listFirewallsForVM(vm.getProviderVirtualMachineId());
+            } catch (Throwable t) {
+                logger.error("Problem listing firewalls (listSecurityGroups) for '" + vm.getProviderVirtualMachineId() + "': " + t.getMessage());
+                return;
+            }
+
+            for( String id : firewalls ) {
                 ids.add(id);
             }
             vm.setProviderFirewallIds(ids.toArray(new String[ids.size()]));
@@ -893,10 +901,14 @@ public class VirtualMachines extends AbstractVMSupport {
                 Node node = matches.item(i);
 
                 if( node != null ) {
-                    VirtualMachine vm = toVirtualMachine(node);
+                    try {
+                        VirtualMachine vm = toVirtualMachine(node);
 
-                    if( vm != null ) {
-                        servers.add(vm);
+                        if( vm != null ) {
+                            servers.add(vm);
+                        }
+                    } catch (Throwable t) {
+                        logger.error("Problem discovering a virtual machine: " + t.getMessage());
                     }
                 }
             }
@@ -1126,7 +1138,8 @@ public class VirtualMachines extends AbstractVMSupport {
                 value = null;
             }
             if( name.equals("virtualmachineid") || name.equals("id") ) {
-                server.setProviderVirtualMachineId(value);                
+                server.setProviderVirtualMachineId(value);
+                logger.info("Processing VM id '" + value + "'");
             }
             else if( name.equals("name") ) {
                 server.setDescription(value);
@@ -1278,7 +1291,11 @@ public class VirtualMachines extends AbstractVMSupport {
                 server.setProviderMachineImageId(value);
             }
             else if( name.equals("templatename") ) {
-                server.setPlatform(Platform.guess(value));
+                Platform platform = Platform.guess(value);
+                if (platform.equals(Platform.UNKNOWN)){
+                    platform = guessForWindows(value);
+                }
+                server.setPlatform(platform);
             }
             else if( name.equals("serviceofferingid") ) {
                 productId = value;
@@ -1315,5 +1332,16 @@ public class VirtualMachines extends AbstractVMSupport {
 
         setFirewalls(server);
         return server;
+    }
+
+    private Platform guessForWindows(String name){
+        if (name == null){
+            return Platform.UNKNOWN;
+        }
+        String platform = name.toLowerCase();
+        if (platform.contains("windows") || platform.contains("win") ){
+            return Platform.WINDOWS;
+        }
+        return Platform.UNKNOWN;
     }
 }
