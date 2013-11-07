@@ -176,13 +176,16 @@ public class Volumes extends AbstractVolumeSupport {
                     }
                     Iterable<VolumeProduct> products = listVolumeProducts();
                     VolumeProduct best = null;
+                    VolumeProduct custom = null;
 
                     for( VolumeProduct p : products ) {
                         Storage<Gigabyte> s = p.getVolumeSize();
 
                         if( s  == null || s.intValue() == 0 ) {
-                            product = p;
-                            break;
+                            if (custom == null) {
+                                custom = p;
+                            }
+                            continue;
                         }
                         long currentSize = s.getQuantity().longValue();
 
@@ -212,7 +215,12 @@ public class Volumes extends AbstractVolumeSupport {
                         }
                     }
                     if( product == null ) {
-                        product = best;
+                        if (custom != null) {
+                            product = custom;
+                        }
+                        else {
+                            product = best;
+                        }
                     }
                 }
                 else {
