@@ -202,7 +202,7 @@ public class Volumes extends AbstractVolumeSupport {
                         }
                         else if( bestSize > 0L || currentSize > 0L ) {
                             if( size.longValue() > 0L ) {
-                                if( bestSize < size.longValue() && bestSize >0L && currentSize > size.longValue() ) {
+                                if( bestSize < size.longValue() && bestSize >0L && (currentSize > size.longValue() || currentSize > bestSize) ) {
                                     best = p;
                                 }
                                 else if( bestSize > size.longValue() && currentSize > size.longValue() && currentSize < bestSize ) {
