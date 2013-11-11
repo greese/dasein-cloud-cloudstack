@@ -358,7 +358,11 @@ public class Network extends AbstractVLANSupport {
                 VLAN vlan = toNetwork(node, ctx);
                     
                 if( vlan != null ) {
-                    networks.add(vlan);
+                    if (vlan.getTag("displaynetwork").equals("true")) {
+                        if (vlan.getTag("isdefault") == null || vlan.getTag("isdefault").equals("true")) {
+                            networks.add(vlan);
+                        }
+                    }
                 }
             }
         }
@@ -459,6 +463,12 @@ public class Network extends AbstractVLANSupport {
             }
             else if( name.equalsIgnoreCase("displaytext") ) {
                 network.setName(value);
+            }
+            else if( name.equalsIgnoreCase("displaynetwork") ) {
+                network.setTag("displaynetwork", value);
+            }
+            else if( name.equalsIgnoreCase("isdefault") ) {
+                network.setTag("isdefault", value);
             }
             else if( name.equalsIgnoreCase("networkdomain") ) {
                 network.setDomainName(value);
