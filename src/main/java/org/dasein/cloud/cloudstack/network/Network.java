@@ -331,17 +331,16 @@ public class Network extends AbstractVLANSupport {
         Param[] params;
 
         if( !shared && forDeploy ) {
-            params = new Param[4];
-        }
-        else if( !shared || forDeploy ) {
             params = new Param[3];
         }
-        else {
+        else if( !shared || forDeploy ) {
             params = new Param[2];
         }
+        else {
+            params = new Param[1];
+        }
         params[0] = new Param("zoneId", ctx.getRegionId());
-        params[1] = new Param("isdefault", "true");
-        int idx = 2;
+        int idx = 1;
         if( forDeploy ) {
             params[idx++]  = new Param("canUseForDeploy", "true");
         }
