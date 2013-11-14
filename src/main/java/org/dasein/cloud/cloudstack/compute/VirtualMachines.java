@@ -134,7 +134,7 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
-        APITrace.begin(getProvider(), "VM.resetPassword");
+        APITrace.begin(getProvider(), "VM.getPassword");
         try {
             ProviderContext ctx = provider.getContext();
 
