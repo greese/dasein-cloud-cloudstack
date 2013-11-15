@@ -319,13 +319,8 @@ public class CSCloud extends AbstractCloud {
                         }
                     }
                     if (found) {
-                        logger.debug("Found user for api key "+ctxKey+", account is "+account);
-                        logger.debug("Context account number is "+getContext().getAccountNumber());
-                        logger.debug("Match: "+ (account.equals(getContext().getAccountNumber()) ? "TRUE" : "FALSE"));
-                        if (account.equals(getContext().getAccountNumber()))  {
-                            return true;
-                        }
-                        return false;
+                        getContext().setAccountNumber(account);
+                        return true;
                     }
                 }
                 logger.debug("No match to api key found");
