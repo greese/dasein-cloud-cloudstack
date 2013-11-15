@@ -877,10 +877,6 @@ public class Templates extends AbstractImageSupport {
                 }
             }
             else if( name.equalsIgnoreCase("account") ) {
-                if( value != null && value.startsWith("Customer [") ) {
-                    value = value.substring("Customer [".length());
-                    value = value.substring(0, value.length()-1);
-                }
                 image.setProviderOwnerId(value);
             }
             else if( name.equals("name") ) {

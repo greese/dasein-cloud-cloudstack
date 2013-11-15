@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -75,6 +76,7 @@ public class VirtualMachines extends AbstractVMSupport {
     
     static private final String DEPLOY_VIRTUAL_MACHINE  = "deployVirtualMachine";
     static private final String DESTROY_VIRTUAL_MACHINE = "destroyVirtualMachine";
+    static private final String GET_VIRTUAL_MACHINE_PASSWORD = "getVMPassword";
     static private final String LIST_VIRTUAL_MACHINES   = "listVirtualMachines";
     static private final String LIST_SERVICE_OFFERINGS  = "listServiceOfferings";
     static private final String REBOOT_VIRTUAL_MACHINE  = "rebootVirtualMachine";
@@ -129,6 +131,72 @@ public class VirtualMachines extends AbstractVMSupport {
     @Override
     public @Nonnull String getProviderTermForServer(@Nonnull Locale locale) {
         return "virtual machine";
+    }
+
+    private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VM.getPassword");
+        try {
+            ProviderContext ctx = provider.getContext();
+
+            if( ctx == null ) {
+                throw new CloudException("No context was specified for this request");
+            }
+
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(GET_VIRTUAL_MACHINE_PASSWORD, new Param("id", serverId)), GET_VIRTUAL_MACHINE_PASSWORD);
+
+            if (doc != null){
+                NodeList matches = doc.getElementsByTagName("getvmpasswordresponse");
+
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        NodeList attributes = node.getChildNodes();
+                        for( int j=0; j<attributes.getLength(); j++ ) {
+                            Node attribute = attributes.item(j);
+                            String name = attribute.getNodeName().toLowerCase();
+                            String value;
+
+                            if( attribute.getChildNodes().getLength() > 0 ) {
+                                value = attribute.getFirstChild().getNodeValue();
+                            }
+                            else {
+                                value = null;
+                            }
+                            if( name.equals("password") ) {
+                                NodeList nodes = attribute.getChildNodes();
+                                for( int k=0; k<nodes.getLength(); k++ ) {
+                                    Node password = nodes.item(k);
+                                    name = password.getNodeName().toLowerCase();
+
+                                    if( password.getChildNodes().getLength() > 0 ) {
+                                        value = password.getFirstChild().getNodeValue();
+                                    }
+                                    else {
+                                        value = null;
+                                    }
+                                    if( name.equals("encryptedpassword") ) {
+                                        return value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            logger.warn("Unable to find password for vm with id "+serverId);
+            return null;
+        }
+        catch (CSException e) {
+            if (e.getHttpCode() == 431) {
+                logger.warn("No password found for vm "+serverId);
+            }
+            return null;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
@@ -642,43 +710,10 @@ public class VirtualMachines extends AbstractVMSupport {
         }
         
         if (vm == null){
-        	long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE*20);
-	        while( System.currentTimeMillis() < timeout ) {
-	            try { vm = getVirtualMachine(serverId); }
-	            catch( Throwable ignore ) {  }
-	            if( vm != null ) {
-                    // check we have a password and if not reset as long as the server is stopped
-                    if (vm.getCurrentState().equals(VmState.STOPPED)) {
-                        if (vm.getRootPassword() == null || vm.getRootPassword().equals("")) {
-                            String password = resetPassword(vm.getProviderVirtualMachineId());
-                            if (password != null) {
-                                vm.setRootPassword(password);
-                            }
-                        }
-                        return vm;
-                    }
-                    else if (vm.getCurrentState().equals(VmState.RUNNING)) {
-                        stop(vm.getProviderVirtualMachineId());
-                    }
-	            }
-	            try { Thread.sleep(5000L); }
-	            catch( InterruptedException ignore ) { }
-	        }
+            vm = getVirtualMachine(serverId);
         }
-        vm = getVirtualMachine(serverId);
         if( vm == null ) {
             throw new CloudException("No virtual machine provided: " + serverId);
-        }
-        else {
-            // check we have a password and if not reset as long as the server is stopped
-            if (vm.getCurrentState().equals(VmState.STOPPED)) {
-                if (vm.getRootPassword() == null || vm.getRootPassword().equals("")) {
-                    String password = resetPassword(vm.getProviderVirtualMachineId());
-                    if (password != null) {
-                        vm.setRootPassword(password);
-                    }
-                }
-            }
         }
         return vm;
     }
@@ -1331,6 +1366,14 @@ public class VirtualMachines extends AbstractVMSupport {
         }
 
         setFirewalls(server);
+        final String finalServerId = server.getProviderVirtualMachineId();
+        server.setPasswordCallback(new Callable<String>() {
+            @Override
+            public String call() throws Exception {
+                return getRootPassword(finalServerId);
+            }
+        }
+        );
         return server;
     }
 
