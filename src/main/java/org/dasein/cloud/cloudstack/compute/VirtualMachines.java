@@ -710,18 +710,8 @@ public class VirtualMachines extends AbstractVMSupport {
         }
         
         if (vm == null){
-        	long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE*20);
-	        while( System.currentTimeMillis() < timeout ) {
-	            try { vm = getVirtualMachine(serverId); }
-	            catch( Throwable ignore ) {  }
-	            if( vm != null ) {
-                    return vm;
-	            }
-	            try { Thread.sleep(5000L); }
-	            catch( InterruptedException ignore ) { }
-	        }
+        	vm = getVirtualMachine(serverId);
         }
-        vm = getVirtualMachine(serverId);
         if( vm == null ) {
             throw new CloudException("No virtual machine provided: " + serverId);
         }
