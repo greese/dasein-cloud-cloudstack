@@ -358,7 +358,7 @@ public class Network extends AbstractVLANSupport {
                 VLAN vlan = toNetwork(node, ctx);
                     
                 if( vlan != null ) {
-                    if (vlan.getTag("displaynetwork").equals("true")) {
+                    if (vlan.getTag("displaynetwork") == null || vlan.getTag("displaynetwork").equals("true")) {
                         if (vlan.getTag("isdefault") == null || vlan.getTag("isdefault").equals("true")) {
                             networks.add(vlan);
                         }
