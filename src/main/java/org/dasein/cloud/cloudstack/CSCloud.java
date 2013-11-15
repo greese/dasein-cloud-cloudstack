@@ -18,6 +18,7 @@
 
 package org.dasein.cloud.cloudstack;
 
+import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -41,9 +42,11 @@ import org.w3c.dom.NodeList;
 import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import javax.servlet.http.HttpServletResponse;
 
 public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
+    static public final String LIST_ACCOUNTS = "listAccounts";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
@@ -194,7 +197,85 @@ public class CSCloud extends AbstractCloud {
         }
         return version;
     }
-    
+
+    private boolean isSubscribed() throws CloudException, InternalException {
+        APITrace.begin(this, "CSCloud.isSubscribed");
+        try {
+            CSMethod method = new CSMethod(this);
+
+            try {
+                Document doc = method.get(method.buildUrl(LIST_ACCOUNTS), LIST_ACCOUNTS);
+                NodeList matches = doc.getElementsByTagName("user");
+
+                if( matches.getLength() < 1 ) {
+                    return false;
+                }
+                String ctxKey = null;
+                try {
+                    ctxKey = new String(getContext().getAccessPublic(), "utf-8");
+                }
+                catch( UnsupportedEncodingException e ) {
+                    e.printStackTrace();
+                    throw new RuntimeException("This cannot happen: " + e.getMessage());
+                }
+
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    boolean found = false;
+                    String account = null;
+                    Node node = matches.item(i);
+                    NodeList attributes = node.getChildNodes();
+
+                    for (int j = 0; j<attributes.getLength(); j++) {
+                        Node attribute = attributes.item(j);
+                        String name = attribute.getNodeName().toLowerCase();
+                        String value;
+
+                        if( attribute.getChildNodes().getLength() > 0 ) {
+                            value = attribute.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if (name.equals("apikey")) {
+                            if (value.equals(ctxKey)) {
+                                found = true;
+                                continue;
+                            }
+                        }
+                        else  if (name.equals("account")) {
+                            account = value;
+                        }
+                    }
+                    if (found) {
+                        getContext().setAccountNumber(account);
+                        return true;
+                    }
+                }
+                logger.debug("No match to api key found");
+                return false;
+            }
+            catch( CSException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
+                    return false;
+                }
+                throw e;
+            }
+            catch( CloudException e ) {
+                int code = e.getHttpCode();
+
+                if( code == HttpServletResponse.SC_FORBIDDEN || code == HttpServletResponse.SC_UNAUTHORIZED ) {
+                    return false;
+                }
+                throw e;
+            }
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
     public @Nonnegative long parseTime(@Nonnull String timestamp) {
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"); //2009-02-03T05:26:32.612278
         
@@ -226,7 +307,7 @@ public class CSCloud extends AbstractCloud {
                 if( logger.isDebugEnabled() ) {
                     logger.debug("testContext(): Checking CSCloud compute credentials");
                 }
-                if( !getComputeServices().getVirtualMachineSupport().isSubscribed() ) {
+                if( !isSubscribed() ) {
                     logger.warn("testContext(): CSCloud compute credentials are not subscribed for VM services");
                     return null;
                 }
