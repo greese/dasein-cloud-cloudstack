@@ -346,7 +346,7 @@ public class Templates extends AbstractImageSupport {
         APITrace.begin(getProvider(), "Image.isImageSharedWithPublic");
         try {
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"));
+            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"), new Param("id", templateId));
             Document doc = method.get(url, LIST_TEMPLATES);
             NodeList matches = doc.getElementsByTagName("template");
 
@@ -370,7 +370,7 @@ public class Templates extends AbstractImageSupport {
         APITrace.begin(getProvider(), "Image.isPasswordEnabled");
         try {
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"));
+            String url = method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "executable"), new Param("id", templateId));
             Document doc = method.get(url, LIST_TEMPLATES);
             NodeList matches = doc.getElementsByTagName("template");
 
@@ -487,7 +487,7 @@ public class Templates extends AbstractImageSupport {
             Param[] params;
 
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                params = new Param[] { new Param("templateFilter", "self"),  new Param("zoneId", getContext().getRegionId()) };
+                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()) };
             }
             else {
                 String domainId = provider.getDomainId(accountNumber);
@@ -774,36 +774,38 @@ public class Templates extends AbstractImageSupport {
         populator.populate();
         allImages.addAll(populator.getResult());
 
-        provider.hold();
-        populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
-            @Override
-            public void populate(@Nonnull Jiterator<MachineImage> iterator) throws Exception {
-                try {
-                    APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
+        if (!provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+            provider.hold();
+            populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
+                @Override
+                public void populate(@Nonnull Jiterator<MachineImage> iterator) throws Exception {
                     try {
-                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params2), LIST_TEMPLATES);
-                        NodeList matches = doc.getElementsByTagName("template");
+                        APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
+                        try {
+                            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params2), LIST_TEMPLATES);
+                            NodeList matches = doc.getElementsByTagName("template");
 
-                        for( int i=0; i<matches.getLength(); i++ ) {
-                            MachineImage img = toImage(matches.item(i), true);
+                            for( int i=0; i<matches.getLength(); i++ ) {
+                                MachineImage img = toImage(matches.item(i), true);
 
-                            if( img != null && options.matches(img) ) {
-                                iterator.push(img);
+                                if( img != null && options.matches(img) ) {
+                                    iterator.push(img);
+                                }
                             }
+                        }
+                        finally {
+                            APITrace.end();
                         }
                     }
                     finally {
-                        APITrace.end();
+                        provider.release();
                     }
                 }
-                finally {
-                    provider.release();
-                }
-            }
-        });
+            });
 
-        populator.populate();
-        allImages.addAll(populator.getResult());
+            populator.populate();
+            allImages.addAll(populator.getResult());
+        }
         return allImages;
     }
 
