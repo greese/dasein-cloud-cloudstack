@@ -331,17 +331,16 @@ public class Network extends AbstractVLANSupport {
         Param[] params;
 
         if( !shared && forDeploy ) {
-            params = new Param[4];
-        }
-        else if( !shared || forDeploy ) {
             params = new Param[3];
         }
-        else {
+        else if( !shared || forDeploy ) {
             params = new Param[2];
         }
+        else {
+            params = new Param[1];
+        }
         params[0] = new Param("zoneId", ctx.getRegionId());
-        params[1] = new Param("isdefault", "true");
-        int idx = 2;
+        int idx = 1;
         if( forDeploy ) {
             params[idx++]  = new Param("canUseForDeploy", "true");
         }
@@ -359,7 +358,11 @@ public class Network extends AbstractVLANSupport {
                 VLAN vlan = toNetwork(node, ctx);
                     
                 if( vlan != null ) {
-                    networks.add(vlan);
+                    if (vlan.getTag("displaynetwork") == null || vlan.getTag("displaynetwork").equals("true")) {
+                        if (vlan.getTag("isdefault") == null || vlan.getTag("isdefault").equals("true")) {
+                            networks.add(vlan);
+                        }
+                    }
                 }
             }
         }
@@ -460,6 +463,12 @@ public class Network extends AbstractVLANSupport {
             }
             else if( name.equalsIgnoreCase("displaytext") ) {
                 network.setName(value);
+            }
+            else if( name.equalsIgnoreCase("displaynetwork") ) {
+                network.setTag("displaynetwork", value);
+            }
+            else if( name.equalsIgnoreCase("isdefault") ) {
+                network.setTag("isdefault", value);
             }
             else if( name.equalsIgnoreCase("networkdomain") ) {
                 network.setDomainName(value);
