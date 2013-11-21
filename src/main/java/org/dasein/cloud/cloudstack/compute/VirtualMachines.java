@@ -81,6 +81,7 @@ public class VirtualMachines extends AbstractVMSupport {
     static private final String LIST_SERVICE_OFFERINGS  = "listServiceOfferings";
     static private final String REBOOT_VIRTUAL_MACHINE  = "rebootVirtualMachine";
     static private final String RESET_VIRTUAL_MACHINE_PASSWORD = "resetPasswordForVirtualMachine";
+    static private final String RESIZE_VIRTUAL_MACHINE  = "scaleVirtualMachine";
     static private final String START_VIRTUAL_MACHINE   = "startVirtualMachine";
     static private final String STOP_VIRTUAL_MACHINE    = "stopVirtualMachine";
     
@@ -95,6 +96,96 @@ public class VirtualMachines extends AbstractVMSupport {
     public VirtualMachines(CSCloud provider) {
         super(provider);
         this.provider = provider;
+    }
+
+    @Override
+    public VirtualMachine alterVirtualMachine(@Nonnull String vmId, @Nonnull VMScalingOptions options) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "VM.alterVM");
+        try {
+            String productId = options.getProviderProductId();
+
+            if (vmId == null || options.getProviderProductId() == null) {
+                throw new CloudException("No vmid and/or product id set for this operation");
+            }
+
+            CSMethod method = new CSMethod(provider);
+
+            VirtualMachine vm = getVirtualMachine(vmId);
+            if (vm.getProductId().equals(productId)) {
+                return vm;
+            }
+
+            boolean restart = false;
+            if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                restart = true;
+                stop(vmId, true);
+            }
+
+            long timeout = System.currentTimeMillis()+(CalendarWrapper.MINUTE*20L);
+            while (System.currentTimeMillis() < timeout) {
+                if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                    try {
+                        Thread.sleep(15000L);
+                        vm = getVirtualMachine(vmId);
+                    }
+                    catch (InterruptedException ignore) {}
+                }
+                else {
+                    break;
+                }
+            }
+            vm = getVirtualMachine(vmId);
+            if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                throw new CloudException("Unable to stop vm for scaling");
+            }
+            Document doc = method.get(method.buildUrl(RESIZE_VIRTUAL_MACHINE, new Param("id", vmId), new Param("serviceOfferingId", productId)), RESIZE_VIRTUAL_MACHINE);
+
+            NodeList matches = doc.getElementsByTagName("scalevirtualmachineresponse");
+            String jobId = null;
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                NodeList attrs = matches.item(i).getChildNodes();
+
+                for( int j=0; j<attrs.getLength(); j++ ) {
+                    Node node = attrs.item(j);
+
+                    if (node != null && node.getNodeName().equalsIgnoreCase("jobid") ) {
+                        jobId = node.getFirstChild().getNodeValue();
+                    }
+                }
+            }
+            if( jobId == null ) {
+                throw new CloudException("Could not scale server");
+            }
+            Document responseDoc = provider.waitForJob(doc, "Scale Server");
+
+            if (responseDoc != null){
+                NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
+                if (nodeList.getLength() > 0) {
+                    Node virtualMachine = nodeList.item(0);
+                    vm = toVirtualMachine(virtualMachine);
+                    if( vm != null ) {
+                        if (restart) {
+                            start(vmId);
+                        }
+                        return vm;
+                    }
+                }
+            }
+            if (restart) {
+                start(vmId);
+            }
+            return getVirtualMachine(vmId);
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    @Nullable
+    @Override
+    public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
+        return VMScalingCapabilities.getInstance(false,true,Requirement.NONE,Requirement.NONE);
     }
 
     @Override
