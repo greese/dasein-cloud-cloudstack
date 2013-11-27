@@ -783,19 +783,17 @@ public class VirtualMachines extends AbstractVMSupport {
         
         VirtualMachine vm = null;
 
-        if (serverId == null) {
-            //only wait for job if we don't already have the resource id
-            Document responseDoc = provider.waitForJob(doc, "Launch Server");
-        
-            //parse vm from job completion response to capture vm passwords on initial launch.
-            if (responseDoc != null){
-                NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
-                if (nodeList.getLength() > 0) {
-                    Node virtualMachine = nodeList.item(0);
-                    vm = toVirtualMachine(virtualMachine);
-                    if( vm != null ) {
-                        return vm;
-                    }
+        // have to wait on jobs as sometimes they fail and we need to bubble error message up
+        Document responseDoc = provider.waitForJob(doc, "Launch Server");
+
+        //parse vm from job completion response to capture vm passwords on initial launch.
+        if (responseDoc != null){
+            NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
+            if (nodeList.getLength() > 0) {
+                Node virtualMachine = nodeList.item(0);
+                vm = toVirtualMachine(virtualMachine);
+                if( vm != null ) {
+                    return vm;
                 }
             }
         }
