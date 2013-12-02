@@ -1438,14 +1438,15 @@ public class VirtualMachines extends AbstractVMSupport {
             }
         }
         setFirewalls(server);
-        final String finalServerId = server.getProviderVirtualMachineId();
-        server.setPasswordCallback(new Callable<String>() {
+        /*final String finalServerId = server.getProviderVirtualMachineId();
+        // commenting out for now until we can find a way to return plain text rather than encrypted
+            server.setPasswordCallback(new Callable<String>() {
             @Override
             public String call() throws Exception {
                 return getRootPassword(finalServerId);
             }
         }
-        );
+        );  */
         return server;
     }
 }
