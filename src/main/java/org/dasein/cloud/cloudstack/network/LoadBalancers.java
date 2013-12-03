@@ -548,7 +548,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             CSMethod method = new CSMethod(provider);
 
             try {
-                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
+                method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
                 return true;
             }
             catch( CSException e ) {

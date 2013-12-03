@@ -37,25 +37,16 @@ public class CSNetworkServices extends AbstractNetworkServices {
     
     @Override
     public @Nullable IpAddress getIpAddressSupport() {
-        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-            return null;
-        }
         return new IpAddress(cloud);
     }
     
     @Override
     public @Nullable LoadBalancers getLoadBalancerSupport() {
-        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-            return null;
-        }
         return new LoadBalancers(cloud);
     }
     
     @Override
     public @Nullable Network getVlanSupport() {
-        if( cloud.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-            return null;
-        }
         return new Network(cloud);
     }
 }

@@ -18,6 +18,8 @@
 
 package org.dasein.cloud.cloudstack.network;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -28,6 +30,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
@@ -50,10 +53,15 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class Network extends AbstractVLANSupport {
+    static public final Logger logger = Logger.getLogger(Network.class);
+
     static public final String CREATE_NETWORK         = "createNetwork";
+    static public final String DELETE_NETWORK         = "deleteNetwork";
     static public final String LIST_NETWORK_OFFERINGS = "listNetworkOfferings";
     static public final String LIST_NETWORKS          = "listNetworks";
-    
+
+    static public final String CREATE_EGRESS_RULE     = "createEgressFirewallRule";
+
     private CSCloud cloudstack;
     
     Network(CSCloud cloudstack) {
@@ -63,7 +71,8 @@ public class Network extends AbstractVLANSupport {
 
     @Override
     public boolean allowsNewVlanCreation() throws CloudException, InternalException {
-        return false;
+        //dmayne 20131002: changed this from false to true as networks are supported in the CS console
+        return true;
         /*
         CSMethod method = new CSMethod(cloudstack);
         Document doc = method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("id", cloudstack.getContext().getRegionId())));
@@ -171,7 +180,7 @@ public class Network extends AbstractVLANSupport {
     
     private @Nullable String getNetworkOffering(@Nonnull String regionId) throws InternalException, CloudException {
         for( NetworkOffering offering : getNetworkOfferings(regionId) ) {
-            if( !offering.availability.equalsIgnoreCase("unavailable") && offering.networkType.equals("virtual") ) {
+            if( !offering.availability.equalsIgnoreCase("unavailable") && offering.networkType.equals("Isolated") ) {
                 return offering.offeringId;
             }
         }
@@ -391,8 +400,41 @@ public class Network extends AbstractVLANSupport {
             if( offering == null ) {
                 throw new CloudException("No offerings exist for " + ctx.getRegionId());
             }
+
+            String[] parts = cidr.split("/");
+            String gateway = "", netmask = "";
+            if (parts.length == 1) {
+                gateway = parts[0];
+                netmask = "255.255.255.255";
+            }
+
+            if (parts.length == 2) {
+                gateway = parts[0];
+                netmask = parts[1];
+                int prefix = Integer.parseInt(netmask);
+                int mask = 0xffffffff << (32 - prefix);
+
+                int value = mask;
+                byte[] bytes = new byte[]{
+                        (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
+
+                try {
+                    InetAddress netAddr = InetAddress.getByAddress(bytes);
+                    netmask = netAddr.getHostAddress();
+                }
+                catch (UnknownHostException e) {
+                    throw new InternalException("Unable to parse netmask from "+cidr);
+                }
+            }
+
             CSMethod method = new CSMethod(cloudstack);
-            Document doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)), CREATE_NETWORK);
+            Document doc;
+            if (parts.length > 0) {
+                doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name), new Param("gateway", gateway), new Param("netmask", netmask)), CREATE_NETWORK);
+            }
+            else {
+                doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)), CREATE_NETWORK);
+            }
             NodeList matches = doc.getElementsByTagName("network");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -402,6 +444,13 @@ public class Network extends AbstractVLANSupport {
                     VLAN network = toNetwork(node, ctx);
 
                     if( network != null ) {
+                        // create default egress rule
+                        try {
+                            method.get(method.buildUrl(CREATE_EGRESS_RULE, new Param("protocol", "All"), new Param("cidrlist", "0.0.0.0/0"), new Param("networkid", network.getProviderVlanId())), CREATE_EGRESS_RULE);
+                        }
+                        catch (Throwable ignore) {
+                            logger.warn("Unable to create default egress rule");
+                        }
                         return network;
                     }
                 }
@@ -629,6 +678,20 @@ public class Network extends AbstractVLANSupport {
                 }
             }
             return networks;
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
+    public void removeVlan(String vlanId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.removeVlan");
+        try {
+            CSMethod method = new CSMethod(cloudstack);
+            Document doc = method.get(method.buildUrl(DELETE_NETWORK, new Param("id", vlanId)), DELETE_NETWORK);
+
+            cloudstack.waitForJob(doc, "Delete VLAN");
         }
         finally {
             APITrace.end();
