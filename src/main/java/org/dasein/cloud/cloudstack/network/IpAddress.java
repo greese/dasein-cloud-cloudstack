@@ -219,9 +219,10 @@ public class IpAddress implements IpAddressSupport {
         APITrace.begin(provider, "IpAddress.isSubscribed");
         try {
             CSMethod method = new CSMethod(provider);
+            ProviderContext ctx = provider.getContext();
 
             try {
-                method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
+                method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
                 return true;
             }
             catch( CSException e ) {
