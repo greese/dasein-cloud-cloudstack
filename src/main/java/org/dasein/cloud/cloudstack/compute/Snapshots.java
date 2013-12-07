@@ -429,6 +429,15 @@ public class Snapshots extends AbstractSnapshotSupport {
             else if( name.equals("account") ) {
                 snapshot.setOwner(value);
             }
+            else if (name.equals("state")) {
+                String state = value;
+                if (state.equalsIgnoreCase("backedup")) {
+                    snapshot.setCurrentState(SnapshotState.AVAILABLE);
+                }
+                else {
+                    snapshot.setCurrentState(SnapshotState.PENDING);
+                }
+            }
         }
         if( snapshot.getProviderSnapshotId() == null ) {
             return null;
@@ -453,6 +462,7 @@ public class Snapshots extends AbstractSnapshotSupport {
         }
         NodeList attrs = node.getChildNodes();
         String snapId = null;
+        SnapshotState state = null;
 
         for( int i=0; i<attrs.getLength(); i++ ) {
             Node attr = attrs.item(i);
@@ -467,11 +477,19 @@ public class Snapshots extends AbstractSnapshotSupport {
                 snapId = value;
                 break;
             }
+            else if (name.equals("state")) {
+                if (value.equalsIgnoreCase("backedup")) {
+                    state = SnapshotState.AVAILABLE;
+                }
+                else {
+                    state = SnapshotState.PENDING;
+                }
+            }
         }
         if( snapId == null ) {
             return null;
         }
-        return new ResourceStatus(snapId, SnapshotState.AVAILABLE);
+        return new ResourceStatus(snapId, state);
     }
 
 
