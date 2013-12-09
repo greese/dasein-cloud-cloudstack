@@ -1232,7 +1232,6 @@ public class VirtualMachines extends AbstractVMSupport {
         String productId = null;
         
         server.setTags(properties);
-        server.setArchitecture(Architecture.I64); 
         server.setProviderOwnerId(provider.getContext().getAccountNumber());
         server.setClonable(false);
         server.setImagable(false);
@@ -1434,6 +1433,15 @@ public class VirtualMachines extends AbstractVMSupport {
                 MachineImage image =support.getImage(server.getProviderMachineImageId());
                 if (image != null){
                     server.setPlatform(image.getPlatform());
+                }
+            }
+        }
+        if (server.getArchitecture() == null) {
+            Templates support = provider.getComputeServices().getImageSupport();
+            if (support != null){
+                MachineImage image =support.getImage(server.getProviderMachineImageId());
+                if (image != null){
+                    server.setArchitecture(image.getArchitecture());
                 }
             }
         }
