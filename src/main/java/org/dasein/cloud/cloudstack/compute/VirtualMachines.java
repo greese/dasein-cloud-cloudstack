@@ -1427,24 +1427,21 @@ public class VirtualMachines extends AbstractVMSupport {
             server.setProductId(productId);
         }
 
-        if (server.getPlatform().equals(Platform.UNKNOWN)){
+        if (server.getPlatform().equals(Platform.UNKNOWN) || server.getArchitecture() == null){
             Templates support = provider.getComputeServices().getImageSupport();
             if (support != null){
                 MachineImage image =support.getImage(server.getProviderMachineImageId());
                 if (image != null){
-                    server.setPlatform(image.getPlatform());
+                    if (server.getPlatform().equals(Platform.UNKNOWN)) {
+                        server.setPlatform(image.getPlatform());
+                    }
+                    if (server.getArchitecture() == null) {
+                        server.setArchitecture(image.getArchitecture());
+                    }
                 }
             }
         }
-        if (server.getArchitecture() == null) {
-            Templates support = provider.getComputeServices().getImageSupport();
-            if (support != null){
-                MachineImage image =support.getImage(server.getProviderMachineImageId());
-                if (image != null){
-                    server.setArchitecture(image.getArchitecture());
-                }
-            }
-        }
+
         setFirewalls(server);
         /*final String finalServerId = server.getProviderVirtualMachineId();
         // commenting out for now until we can find a way to return plain text rather than encrypted
