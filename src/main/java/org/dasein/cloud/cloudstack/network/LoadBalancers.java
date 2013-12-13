@@ -750,6 +750,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         LbAlgorithm algorithm = null;
         String publicIp = null;
         String ruleId = null;
+        String lbName = null;
+        String lbDesc = null;
         
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node n = attributes.item(i);
@@ -787,6 +789,12 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                 else {
                     algorithm = LbAlgorithm.ROUND_ROBIN;            
                 }
+            }
+            else if (name.equals("name")) {
+                lbName = value;
+            }
+            else if (name.equals("description")) {
+                lbDesc = value;
             }
         }
         LbListener listener = LbListener.getInstance(algorithm, LbPersistence.NONE, LbProtocol.RAW_TCP, publicPort, privatePort);
@@ -839,6 +847,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             }
             //noinspection deprecation
             lb.setProviderServerIds(newIds.toArray(new String[newIds.size()]));
+            //noinspection deprecation
+            lb.setName(lbName);
+            //noinspection deprecation
+            lb.setDescription(lbDesc);
         }
         else {
             Collection<DataCenter> dcs = provider.getDataCenterServices().listDataCenters(provider.getContext().getRegionId());
@@ -849,7 +861,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                 ids[i++] = dc.getProviderDataCenterId();
             }
 
-            LoadBalancer lb = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), publicIp, LoadBalancerState.ACTIVE, publicIp, publicIp + ":" + publicPort + " -> RAW_TCP:" + privatePort, LoadBalancerAddressType.IP, publicIp, publicPort).withListeners(listener).operatingIn(ids);
+            LoadBalancer lb = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), publicIp, LoadBalancerState.ACTIVE, lbName, lbDesc, LoadBalancerAddressType.IP, publicIp, publicPort).withListeners(listener).operatingIn(ids);
 
             //noinspection deprecation
             lb.setProviderServerIds(serverIds.toArray(new String[serverIds.size()]));
