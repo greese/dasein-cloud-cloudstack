@@ -1236,6 +1236,7 @@ public class VirtualMachines extends AbstractVMSupport {
         server.setImagable(false);
         server.setPausable(true);
         server.setPersistent(true);
+        server.setArchitecture(Architecture.I64);
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
