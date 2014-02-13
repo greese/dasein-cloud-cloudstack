@@ -1242,13 +1242,13 @@ public class VirtualMachines extends AbstractVMSupport {
         VirtualMachine server = new VirtualMachine();
         NodeList attributes = node.getChildNodes();
         String productId = null;
-        
-        server.setTags(properties);
+
         server.setProviderOwnerId(provider.getContext().getAccountNumber());
         server.setClonable(false);
         server.setImagable(false);
         server.setPausable(true);
         server.setPersistent(true);
+        server.setArchitecture(Architecture.I64);
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
@@ -1468,6 +1468,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
         }
         ); */
+        server.setTags(properties);
         return server;
     }
 
