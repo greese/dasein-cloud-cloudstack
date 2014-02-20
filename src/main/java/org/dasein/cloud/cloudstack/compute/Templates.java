@@ -996,9 +996,10 @@ public class Templates extends AbstractImageSupport {
 
                          for( int i=0; i<matches.getLength(); i++ ) {
                              MachineImage img = toImage(matches.item(i), true);
-                             img.setTag("isISO", "true");
+
 
                              if( img != null && options.matches(img) ) {
+                                 img.setTag("isISO", "true");
                                  iterator.push(img);
                              }
                          }
@@ -1062,9 +1063,10 @@ public class Templates extends AbstractImageSupport {
 
                              for( int i=0; i<matches.getLength(); i++ ) {
                                  MachineImage img = toImage(matches.item(i), true);
-                                 img.setTag("isISO", "true");
+
 
                                  if( img != null && options.matches(img) && !allImages.contains(img)) {
+                                    img.setTag("isISO", "true");
                                     iterator.push(img);
                                 }
                             }
