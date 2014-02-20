@@ -207,11 +207,12 @@ public class Templates extends AbstractImageSupport {
                 Node node = matches.item(i);
 
                 MachineImage image = toImage(node, false);
-                if (!isTemplate) {
-                    image.setTag("isISO", "true");
-                }
+
 
                 if( image != null ) {
+                    if (!isTemplate) {
+                        image.setTag("isISO", "true");
+                    }
                     return image;
                 }
             }
@@ -426,9 +427,6 @@ public class Templates extends AbstractImageSupport {
                 Node node = matches.item(i);
 
                 MachineImage image = toImage(node, true);
-                if (!isTemplate) {
-                    image.setTag("isISO", "true");
-                }
 
                 if( image != null && image.getProviderMachineImageId().equals(templateId) ) {
                     return true;
@@ -668,9 +666,10 @@ public class Templates extends AbstractImageSupport {
 
             for( int i=0; i<matches.getLength(); i++ ) {
                 MachineImage image = toImage(matches.item(i), false);
-                image.setTag("isISO", "true");
+
 
                 if( image != null && (options == null || options.matches(image)) ) {
+                    image.setTag("isISO", "true");
                     templates.add(image);
                 }
             }
@@ -1002,9 +1001,10 @@ public class Templates extends AbstractImageSupport {
 
                         for( int i=0; i<matches.getLength(); i++ ) {
                             MachineImage img = toImage(matches.item(i), true);
-                            img.setTag("isISO", "true");
+
 
                             if( img != null && options.matches(img) ) {
+                                img.setTag("isISO", "true");
                                 iterator.push(img);
                             }
                         }
@@ -1068,9 +1068,10 @@ public class Templates extends AbstractImageSupport {
 
                             for( int i=0; i<matches.getLength(); i++ ) {
                                 MachineImage img = toImage(matches.item(i), true);
-                                img.setTag("isISO", "true");
+
 
                                 if( img != null && options.matches(img) && !allImages.contains(img)) {
+                                    img.setTag("isISO", "true");
                                     iterator.push(img);
                                 }
                             }
