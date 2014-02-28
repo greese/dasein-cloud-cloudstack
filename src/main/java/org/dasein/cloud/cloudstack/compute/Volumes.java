@@ -628,16 +628,36 @@ public class Volumes extends AbstractVolumeSupport {
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
         ArrayList<Volume> volumes = new ArrayList<Volume>();
-        NodeList matches = doc.getElementsByTagName("volume");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node v = matches.item(i);
 
-            if( v != null ) {
-                Volume volume = toVolume(v, rootOnly);
-                
-                if( volume != null ) {
-                    volumes.add(volume);
+        int numPages = 1;
+        NodeList nodes = doc.getElementsByTagName("count");
+        Node n = nodes.item(0);
+        if (n != null) {
+            String value = n.getFirstChild().getNodeValue().trim();
+            int count = Integer.parseInt(value);
+            numPages = count/500;
+            int remainder = count % 500;
+            if (remainder > 0) {
+                numPages++;
+            }
+        }
+
+        for (int page = 1; page <= numPages; page++) {
+            if (page > 1) {
+                String nextPage = String.valueOf(page+1);
+                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VOLUMES);
+            }
+            NodeList matches = doc.getElementsByTagName("volume");
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node v = matches.item(i);
+
+                if( v != null ) {
+                    Volume volume = toVolume(v, rootOnly);
+
+                    if( volume != null ) {
+                        volumes.add(volume);
+                    }
                 }
             }
         }
@@ -879,26 +899,7 @@ public class Volumes extends AbstractVolumeSupport {
         volume.setProviderRegionId(provider.getContext().getRegionId());
         volume.setProviderDataCenterId(provider.getContext().getRegionId());
 
-        if( volume.getProviderVirtualMachineId() != null ) {
-            VirtualMachine vm = null;
-            try {
-                vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(volume.getProviderVirtualMachineId());
-                if( vm == null ) {
-                    logger.warn("Could not find Virtual machine " + volume.getProviderVirtualMachineId() + " for root volume " + volume.getProviderVolumeId() + " .");
-                }
-                else{
-                    volume.setDeviceId(toDeviceID(deviceNumber, vm.getPlatform().isWindows()));
-                }
-            }
-            catch( Exception e ) {
-                if(logger.isDebugEnabled()){
-                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage(),e);
-                }
-                else{
-                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage());
-                }
-            }
-        }
+        volume.setDeviceId(deviceNumber);
         volume.setRootVolume(root);
         volume.setType(VolumeType.HDD);
         if( root ) {
