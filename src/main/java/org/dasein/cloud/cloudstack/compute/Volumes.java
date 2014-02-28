@@ -899,26 +899,7 @@ public class Volumes extends AbstractVolumeSupport {
         volume.setProviderRegionId(provider.getContext().getRegionId());
         volume.setProviderDataCenterId(provider.getContext().getRegionId());
 
-        if( volume.getProviderVirtualMachineId() != null ) {
-            VirtualMachine vm = null;
-            try {
-                vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(volume.getProviderVirtualMachineId());
-                if( vm == null ) {
-                    logger.warn("Could not find Virtual machine " + volume.getProviderVirtualMachineId() + " for root volume " + volume.getProviderVolumeId() + " .");
-                }
-                else{
-                    volume.setDeviceId(toDeviceID(deviceNumber, vm.getPlatform().isWindows()));
-                }
-            }
-            catch( Exception e ) {
-                if(logger.isDebugEnabled()){
-                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage(),e);
-                }
-                else{
-                    logger.warn("Error trying to determine device id for a volume : " + e.getMessage());
-                }
-            }
-        }
+        volume.setDeviceId(deviceNumber);
         volume.setRootVolume(root);
         volume.setType(VolumeType.HDD);
         if( root ) {
