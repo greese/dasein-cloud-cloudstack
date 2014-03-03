@@ -30,12 +30,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.concurrent.Callable;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -182,6 +180,16 @@ public class VirtualMachines extends AbstractVMSupport {
         }
     }
 
+    private transient volatile VMCapabilities capabilities;
+    @Nonnull
+    @Override
+    public VirtualMachineCapabilities getCapabilities() throws InternalException, CloudException {
+        if( capabilities == null ) {
+            capabilities = new VMCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     @Nullable
     @Override
     public VMScalingCapabilities describeVerticalScalingCapabilities() throws CloudException, InternalException {
@@ -189,16 +197,6 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     @Override
-    public int getCostFactor(@Nonnull VmState state) throws InternalException, CloudException {
-        return 100;
-    }
-
-    @Override
-    public int getMaximumVirtualMachineCount() throws CloudException, InternalException {
-        return -2;
-    }
-
-    @Override 
     public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.getProduct");
         try {
@@ -219,11 +217,6 @@ public class VirtualMachines extends AbstractVMSupport {
         }
     }
     
-    @Override
-    public @Nonnull String getProviderTermForServer(@Nonnull Locale locale) {
-        return "virtual machine";
-    }
-
     private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.getPassword");
         try {
@@ -326,73 +319,6 @@ public class VirtualMachines extends AbstractVMSupport {
     }
 
     @Override
-    public @Nonnull Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
-        return (cls.equals(ImageClass.MACHINE) ? Requirement.REQUIRED : Requirement.NONE);
-    }
-
-    @Override
-    public @Nonnull Requirement identifyPasswordRequirement(Platform platform) throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyRootVolumeRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException {
-        return Requirement.OPTIONAL;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyStaticIPRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyVlanRequirement() throws CloudException, InternalException {
-        APITrace.begin(getProvider(), "VM.identifyVlanRequirement");
-        try {
-            if( provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                return Requirement.NONE;
-            }
-            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
-                ProviderContext ctx = provider.getContext();
-
-                if( ctx == null ) {
-                     throw new CloudException("No context was set for this request");
-                }
-                String regionId = ctx.getRegionId();
-
-                if( regionId == null ) {
-                    throw new CloudException("No region was set for this request");
-                }
-                return (provider.getDataCenterServices().requiresNetwork(regionId) ? Requirement.REQUIRED : Requirement.OPTIONAL);
-            }
-            return Requirement.OPTIONAL;
-        }
-        finally {
-            APITrace.end();
-        }
-    }
-
-    @Override
-    public boolean isAPITerminationPreventable() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isBasicAnalyticsSupported() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isExtendedAnalyticsSupported() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.isSubscribed");
         try {
@@ -422,11 +348,6 @@ public class VirtualMachines extends AbstractVMSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public boolean isUserDataSupported() throws CloudException, InternalException {
-        return true;
     }
 
     @Override
@@ -956,18 +877,6 @@ public class VirtualMachines extends AbstractVMSupport {
     private transient Collection<Architecture> architectures;
 
     @Override
-    public Iterable<Architecture> listSupportedArchitectures() throws InternalException, CloudException {
-        if( architectures == null ) {
-            ArrayList<Architecture> a = new ArrayList<Architecture>();
-
-            a.add(Architecture.I32);
-            a.add(Architecture.I64);
-            architectures = Collections.unmodifiableList(a);
-        }
-        return architectures;
-    }
-
-    @Override
     public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listVirtualMachineStatus");
         try {
@@ -1118,21 +1027,6 @@ public class VirtualMachines extends AbstractVMSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public boolean supportsPauseUnpause(@Nonnull VirtualMachine vm) {
-        return false;
-    }
-
-    @Override
-    public boolean supportsStartStop(@Nonnull VirtualMachine vm) {
-        return true;
-    }
-
-    @Override
-    public boolean supportsSuspendResume(@Nonnull VirtualMachine vm) {
-        return false;
     }
 
     @Override
