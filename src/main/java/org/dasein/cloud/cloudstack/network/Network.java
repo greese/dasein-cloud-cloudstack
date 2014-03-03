@@ -87,6 +87,7 @@ public class Network extends AbstractVLANSupport {
 
     private transient volatile CSVlanCapabilities capabilities;
     @Nonnull
+    @Override
     public VLANCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
             capabilities = new CSVlanCapabilities(cloudstack);
