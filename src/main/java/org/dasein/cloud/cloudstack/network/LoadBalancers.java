@@ -362,12 +362,32 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
-                NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
-                for( int i=0; i<rules.getLength(); i++ ) {
-                    Node node = rules.item(i);
+                int numPages = 1;
+                NodeList nodes = doc.getElementsByTagName("count");
+                Node n = nodes.item(0);
+                if (n != null) {
+                    String value = n.getFirstChild().getNodeValue().trim();
+                    int count = Integer.parseInt(value);
+                    numPages = count/500;
+                    int remainder = count % 500;
+                    if (remainder > 0) {
+                        numPages++;
+                    }
+                }
 
-                    toRule(node, matches);
+                for (int page = 1; page <= numPages; page++) {
+                    if (page > 1) {
+                        String nextPage = String.valueOf(page+1);
+                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
+                    }
+                    NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+                    for( int i=0; i<rules.getLength(); i++ ) {
+                        Node node = rules.item(i);
+
+                        toRule(node, matches);
+                    }
                 }
                 ArrayList<ResourceStatus> results = new ArrayList<ResourceStatus>();
 
@@ -439,17 +459,37 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         ArrayList<String> ids = new ArrayList<String>();
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId)), LIST_LOAD_BALANCER_RULE_INSTANCES);
-        NodeList instances = doc.getElementsByTagName("loadbalancerruleinstance");     
+
+        int numPages = 1;
+        NodeList nodes = doc.getElementsByTagName("count");
+        Node nd = nodes.item(0);
+        if (nd != null) {
+            String value = nd.getFirstChild().getNodeValue().trim();
+            int count = Integer.parseInt(value);
+            numPages = count/500;
+            int remainder = count % 500;
+            if (remainder > 0) {
+                numPages++;
+            }
+        }
+
+        for (int page = 1; page <= numPages; page++) {
+            if (page > 1) {
+                String nextPage = String.valueOf(page+1);
+                doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId), new Param("page", nextPage)), LIST_LOAD_BALANCER_RULE_INSTANCES);
+            }
+            NodeList instances = doc.getElementsByTagName("loadbalancerruleinstance");
         
-        for( int i=0; i<instances.getLength(); i++ ) {
-            Node node = instances.item(i);
-            NodeList attributes = node.getChildNodes();
-            
-            for( int j=0; j<attributes.getLength(); j++ ) {
-                Node n = attributes.item(j);
-                
-                if( n.getNodeName().equals("id") ) {
-                    ids.add(n.getFirstChild().getNodeValue());
+            for( int i=0; i<instances.getLength(); i++ ) {
+                Node node = instances.item(i);
+                NodeList attributes = node.getChildNodes();
+
+                for( int j=0; j<attributes.getLength(); j++ ) {
+                    Node n = attributes.item(j);
+
+                    if( n.getNodeName().equals("id") ) {
+                        ids.add(n.getFirstChild().getNodeValue());
+                    }
                 }
             }
         }
@@ -608,12 +648,32 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
-                NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
-                for( int i=0; i<rules.getLength(); i++ ) {
-                    Node node = rules.item(i);
+                int numPages = 1;
+                NodeList nodes = doc.getElementsByTagName("count");
+                Node n = nodes.item(0);
+                if (n != null) {
+                    String value = n.getFirstChild().getNodeValue().trim();
+                    int count = Integer.parseInt(value);
+                    numPages = count/500;
+                    int remainder = count % 500;
+                    if (remainder > 0) {
+                        numPages++;
+                    }
+                }
 
-                    toRule(node, matches);
+                for (int page = 1; page <= numPages; page++) {
+                    if (page > 1) {
+                        String nextPage = String.valueOf(page+1);
+                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
+                    }
+                    NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+                    for( int i=0; i<rules.getLength(); i++ ) {
+                        Node node = rules.item(i);
+
+                        toRule(node, matches);
+                    }
                 }
                 ArrayList<LoadBalancer> results = new ArrayList<LoadBalancer>();
 
