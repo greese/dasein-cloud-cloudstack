@@ -275,27 +275,46 @@ public class SecurityGroup extends AbstractFirewallSupport {
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
             ArrayList<FirewallRule> rules = new ArrayList<FirewallRule>();
 
-            NodeList matches = doc.getElementsByTagName("ingressrule");
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
-
-                if( node != null ) {
-                    FirewallRule rule = toRule(firewallId, node, Direction.INGRESS);
-
-                    if( rule != null ) {
-                        rules.add(rule);
-                    }
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
                 }
             }
-            matches = doc.getElementsByTagName("egressrule");
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
 
-                if( node != null ) {
-                    FirewallRule rule = toRule(firewallId, node, Direction.EGRESS);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                }
+                NodeList matches = doc.getElementsByTagName("ingressrule");
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
 
-                    if( rule != null ) {
-                        rules.add(rule);
+                    if( node != null ) {
+                        FirewallRule rule = toRule(firewallId, node, Direction.INGRESS);
+
+                        if( rule != null ) {
+                            rules.add(rule);
+                        }
+                    }
+                }
+                matches = doc.getElementsByTagName("egressrule");
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        FirewallRule rule = toRule(firewallId, node, Direction.EGRESS);
+
+                        if( rule != null ) {
+                            rules.add(rule);
+                        }
                     }
                 }
             }
@@ -343,16 +362,36 @@ public class SecurityGroup extends AbstractFirewallSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
             ArrayList<Firewall> firewalls = new ArrayList<Firewall>();
-            NodeList matches = doc.getElementsByTagName("securitygroup");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    Firewall fw = toFirewall(node, ctx);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                }
+                NodeList matches = doc.getElementsByTagName("securitygroup");
 
-                    if( fw != null ) {
-                        firewalls.add(fw);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        Firewall fw = toFirewall(node, ctx);
+
+                        if( fw != null ) {
+                            firewalls.add(fw);
+                        }
                     }
                 }
             }
@@ -375,16 +414,36 @@ public class SecurityGroup extends AbstractFirewallSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
             ArrayList<ResourceStatus> firewalls = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("securitygroup");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    ResourceStatus fw = toStatus(node);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                }
+                NodeList matches = doc.getElementsByTagName("securitygroup");
 
-                    if( fw != null ) {
-                        firewalls.add(fw);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        ResourceStatus fw = toStatus(node);
+
+                        if( fw != null ) {
+                            firewalls.add(fw);
+                        }
                     }
                 }
             }
@@ -480,16 +539,36 @@ public class SecurityGroup extends AbstractFirewallSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId)), LIST_SECURITY_GROUPS);
             ArrayList<String> firewalls = new ArrayList<String>();
-            NodeList matches = doc.getElementsByTagName("securitygroup");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    Firewall fw = toFirewall(node, ctx);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                }
+                NodeList matches = doc.getElementsByTagName("securitygroup");
 
-                    if( fw != null ) {
-                        firewalls.add(fw.getProviderFirewallId());
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        Firewall fw = toFirewall(node, ctx);
+
+                        if( fw != null ) {
+                            firewalls.add(fw.getProviderFirewallId());
+                        }
                     }
                 }
             }
