@@ -38,7 +38,6 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
@@ -55,6 +54,7 @@ import org.dasein.cloud.network.LbProtocol;
 import org.dasein.cloud.network.LbType;
 import org.dasein.cloud.network.LoadBalancer;
 import org.dasein.cloud.network.LoadBalancerAddressType;
+import org.dasein.cloud.network.LoadBalancerCapabilities;
 import org.dasein.cloud.network.LoadBalancerCreateOptions;
 import org.dasein.cloud.network.LoadBalancerEndpoint;
 import org.dasein.cloud.network.LoadBalancerState;
@@ -301,7 +301,17 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     public @Nonnull LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
         return LoadBalancerAddressType.IP;
     }
-    
+
+    private transient volatile LBCapabilities capabilities;
+    @Nonnull
+    @Override
+    public LoadBalancerCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new LBCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     private boolean isId(String ipAddressIdCandidate) {
         String[] parts = ipAddressIdCandidate.split("\\.");
         
