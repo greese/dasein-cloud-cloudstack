@@ -252,16 +252,36 @@ public class Network extends AbstractVLANSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
             ArrayList<VLAN> networks = new ArrayList<VLAN>();
-            NodeList matches = doc.getElementsByTagName("network");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    VLAN vlan = toNetwork(node, ctx);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                }
+                NodeList matches = doc.getElementsByTagName("network");
 
-                    if( vlan != null ) {
-                        networks.add(vlan);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        VLAN vlan = toNetwork(node, ctx);
+
+                        if( vlan != null ) {
+                            networks.add(vlan);
+                        }
                     }
                 }
             }
@@ -577,16 +597,36 @@ public class Network extends AbstractVLANSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
             ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("network");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    ResourceStatus vlan = toVLANStatus(node);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                }
+                NodeList matches = doc.getElementsByTagName("network");
 
-                    if( vlan != null ) {
-                        networks.add(vlan);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        ResourceStatus vlan = toVLANStatus(node);
+
+                        if( vlan != null ) {
+                            networks.add(vlan);
+                        }
                     }
                 }
             }

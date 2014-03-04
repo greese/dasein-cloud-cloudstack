@@ -269,15 +269,35 @@ public class Snapshots extends AbstractSnapshotSupport {
 
             doc = method.get(url, LIST_SNAPSHOTS);
             ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("snapshot");
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node s = matches.item(i);
 
-                if( s != null ) {
-                    ResourceStatus snapshot = toStatus(s);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                    if( snapshot != null ) {
-                        snapshots.add(snapshot);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                }
+                NodeList matches = doc.getElementsByTagName("snapshot");
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node s = matches.item(i);
+
+                    if( s != null ) {
+                        ResourceStatus snapshot = toStatus(s);
+
+                        if( snapshot != null ) {
+                            snapshots.add(snapshot);
+                        }
                     }
                 }
             }
@@ -314,15 +334,35 @@ public class Snapshots extends AbstractSnapshotSupport {
 
             doc = method.get(url, LIST_SNAPSHOTS);
             ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
-            NodeList matches = doc.getElementsByTagName("snapshot");
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node s = matches.item(i);
 
-                if( s != null ) {
-                    Snapshot snapshot = toSnapshot(s, ctx, volumes);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                    if( snapshot != null ) {
-                        snapshots.add(snapshot);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page+1);
+                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                }
+                NodeList matches = doc.getElementsByTagName("snapshot");
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node s = matches.item(i);
+
+                    if( s != null ) {
+                        Snapshot snapshot = toSnapshot(s, ctx, volumes);
+
+                        if( snapshot != null ) {
+                            snapshots.add(snapshot);
+                        }
                     }
                 }
             }
