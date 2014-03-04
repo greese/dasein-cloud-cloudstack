@@ -39,13 +39,13 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.AddressType;
 import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.IPAddressCapabilities;
 import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IpForwardingRule;
 import org.dasein.cloud.network.LoadBalancer;
@@ -123,7 +123,17 @@ public class IpAddress implements IpAddressSupport {
             APITrace.end();
         }
     }
-    
+
+    private transient volatile CSIPAddressCapabilities capabilities;
+    @Nonnull
+    @Override
+    public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new CSIPAddressCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     private boolean isId() {
         return provider.getVersion().greaterThan(CSVersion.CS21);
     }
