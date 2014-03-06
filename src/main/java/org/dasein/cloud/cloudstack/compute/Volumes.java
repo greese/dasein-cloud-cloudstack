@@ -40,7 +40,6 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
@@ -48,6 +47,7 @@ import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.compute.VolumeCapabilities;
 import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.compute.VolumeFormat;
 import org.dasein.cloud.compute.VolumeProduct;
@@ -352,6 +352,15 @@ public class Volumes extends AbstractVolumeSupport {
         finally {
             APITrace.end();
         }
+    }
+
+    private transient volatile CSVolumeCapabilities capabilities;
+    @Override
+    public VolumeCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new CSVolumeCapabilities(provider);
+        }
+        return capabilities;
     }
 
     @Override

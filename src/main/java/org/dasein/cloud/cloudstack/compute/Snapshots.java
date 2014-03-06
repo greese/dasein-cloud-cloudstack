@@ -28,7 +28,6 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
@@ -37,6 +36,7 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractSnapshotSupport;
 import org.dasein.cloud.compute.Snapshot;
+import org.dasein.cloud.compute.SnapshotCapabilities;
 import org.dasein.cloud.compute.SnapshotCreateOptions;
 import org.dasein.cloud.compute.SnapshotState;
 import org.dasein.cloud.compute.Volume;
@@ -232,6 +232,16 @@ public class Snapshots extends AbstractSnapshotSupport {
         }
     }
 
+    private transient volatile CSSnapshotCapabilities capabilities;
+    @Nonnull
+    @Override
+    public SnapshotCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new CSSnapshotCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     @Override
     public void remove(@Nonnull String snapshotId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Snapshot.remove");
@@ -306,11 +316,6 @@ public class Snapshots extends AbstractSnapshotSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public @Nonnull Requirement identifyAttachmentRequirement() throws InternalException, CloudException {
-        return Requirement.REQUIRED;
     }
 
     @Override
@@ -409,11 +414,6 @@ public class Snapshots extends AbstractSnapshotSupport {
             }
         }
         return latest;
-    }
-
-    @Override
-    public boolean supportsSnapshotCreation() throws CloudException, InternalException {
-        return true;
     }
 
     private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Iterable<Volume> volumes) throws CloudException, InternalException {
