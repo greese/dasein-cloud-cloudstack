@@ -1012,7 +1012,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
                 }
                 NodeList matches = doc.getElementsByTagName("virtualmachine");
@@ -1064,7 +1064,7 @@ public class VirtualMachines extends AbstractVMSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
                 }
                 NodeList matches = doc.getElementsByTagName("virtualmachine");

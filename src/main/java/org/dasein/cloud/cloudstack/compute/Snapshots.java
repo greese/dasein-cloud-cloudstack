@@ -284,7 +284,7 @@ public class Snapshots extends AbstractSnapshotSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");
@@ -349,7 +349,7 @@ public class Snapshots extends AbstractSnapshotSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");

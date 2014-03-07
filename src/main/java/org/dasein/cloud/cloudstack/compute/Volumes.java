@@ -603,7 +603,7 @@ public class Volumes extends AbstractVolumeSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
                 }
                 NodeList matches = doc.getElementsByTagName("volume");
@@ -645,7 +645,7 @@ public class Volumes extends AbstractVolumeSupport {
             throw new CloudException("No context was specified for this request");
         }
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", "1")), LIST_VOLUMES);
+        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
         ArrayList<Volume> volumes = new ArrayList<Volume>();
 
         int numPages = 1;
@@ -663,7 +663,7 @@ public class Volumes extends AbstractVolumeSupport {
 
         for (int page = 1; page <= numPages; page++) {
             if (page > 1) {
-                String nextPage = String.valueOf(page+1);
+                String nextPage = String.valueOf(page);
                 doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
             }
             NodeList matches = doc.getElementsByTagName("volume");
