@@ -40,7 +40,6 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
@@ -604,8 +603,8 @@ public class Volumes extends AbstractVolumeSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VOLUMES);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
                 }
                 NodeList matches = doc.getElementsByTagName("volume");
 
@@ -664,8 +663,8 @@ public class Volumes extends AbstractVolumeSupport {
 
         for (int page = 1; page <= numPages; page++) {
             if (page > 1) {
-                String nextPage = String.valueOf(page+1);
-                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VOLUMES);
+                String nextPage = String.valueOf(page);
+                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
             }
             NodeList matches = doc.getElementsByTagName("volume");
 

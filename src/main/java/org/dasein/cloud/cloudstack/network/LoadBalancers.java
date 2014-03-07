@@ -38,7 +38,6 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
@@ -378,8 +377,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
                 for (int page = 1; page <= numPages; page++) {
                     if (page > 1) {
-                        String nextPage = String.valueOf(page+1);
-                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
+                        String nextPage = String.valueOf(page);
+                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
                     }
                     NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
@@ -475,8 +474,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
         for (int page = 1; page <= numPages; page++) {
             if (page > 1) {
-                String nextPage = String.valueOf(page+1);
-                doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId), new Param("page", nextPage)), LIST_LOAD_BALANCER_RULE_INSTANCES);
+                String nextPage = String.valueOf(page);
+                doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_LOAD_BALANCER_RULE_INSTANCES);
             }
             NodeList instances = doc.getElementsByTagName("loadbalancerruleinstance");
         
@@ -664,8 +663,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
                 for (int page = 1; page <= numPages; page++) {
                     if (page > 1) {
-                        String nextPage = String.valueOf(page+1);
-                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
+                        String nextPage = String.valueOf(page);
+                        doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_LOAD_BALANCER_RULES);
                     }
                     NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 

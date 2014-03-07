@@ -58,7 +58,16 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
-import org.dasein.cloud.compute.*;
+import org.dasein.cloud.compute.AbstractVMSupport;
+import org.dasein.cloud.compute.Architecture;
+import org.dasein.cloud.compute.ImageClass;
+import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.VirtualMachineProduct;
+import org.dasein.cloud.compute.VMLaunchOptions;
+import org.dasein.cloud.compute.VMScalingCapabilities;
+import org.dasein.cloud.compute.VMScalingOptions;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
@@ -1003,8 +1012,8 @@ public class VirtualMachines extends AbstractVMSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
                 }
                 NodeList matches = doc.getElementsByTagName("virtualmachine");
 
@@ -1055,8 +1064,8 @@ public class VirtualMachines extends AbstractVMSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
                 }
                 NodeList matches = doc.getElementsByTagName("virtualmachine");
 

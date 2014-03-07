@@ -18,7 +18,6 @@
 
 package org.dasein.cloud.cloudstack.network;
 
-import org.dasein.cloud.cloudstack.CSServiceProvider;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.AbstractNetworkServices;
 
