@@ -187,7 +187,7 @@ public class Keypair implements ShellKeySupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("page", nextPage)), CSMethod.LIST_KEYPAIRS);
+                    doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("pagesize", "500"), new Param("page", nextPage)), CSMethod.LIST_KEYPAIRS);
                 }
                 NodeList matches = doc.getElementsByTagName("sshkeypair");
 
