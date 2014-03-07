@@ -301,8 +301,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
                 }
                 NodeList matches = doc.getElementsByTagName("ingressrule");
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -385,8 +385,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
@@ -437,8 +437,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
@@ -562,8 +562,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
