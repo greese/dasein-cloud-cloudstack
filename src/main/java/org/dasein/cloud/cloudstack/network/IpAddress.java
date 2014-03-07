@@ -298,8 +298,8 @@ public class IpAddress implements IpAddressSupport {
 
                 for (int page = 1; page <= numPages; page++) {
                     if (page > 1) {
-                        String nextPage = String.valueOf(page+1);
-                        doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                        String nextPage = String.valueOf(page);
+                        doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
                     }
                     NodeList matches = doc.getElementsByTagName("publicipaddress");
 
@@ -359,8 +359,8 @@ public class IpAddress implements IpAddressSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
                 }
                 NodeList matches = doc.getElementsByTagName("publicipaddress");
 

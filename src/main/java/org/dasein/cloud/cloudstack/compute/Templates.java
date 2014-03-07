@@ -571,8 +571,8 @@ public class Templates extends AbstractImageSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_TEMPLATES);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_TEMPLATES);
                 }
                 NodeList matches = doc.getElementsByTagName("template");
 
@@ -620,8 +620,8 @@ public class Templates extends AbstractImageSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_ISOS, new Param("isoFilter", "self"), new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true"), new Param("page", nextPage)), LIST_ISOS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_ISOS, new Param("isoFilter", "self"), new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_ISOS);
                 }
                 NodeList matches = doc.getElementsByTagName("iso");
 
@@ -649,12 +649,12 @@ public class Templates extends AbstractImageSupport {
             Param[] params;
 
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("page", "1") };
+                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1") };
             }
             else {
                 String domainId = provider.getDomainId(accountNumber);
                 String parentAccount = provider.getParentAccount(accountNumber);
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("page", "1") };
+                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("pagesize", "500"), new Param("page", "1") };
             }
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
@@ -676,7 +676,7 @@ public class Templates extends AbstractImageSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     int length = params.length;
                     params[length-1] = new Param("page", nextPage);
                     doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
@@ -710,12 +710,12 @@ public class Templates extends AbstractImageSupport {
             Param[] params;
 
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                params = new Param[] { new Param("isoFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true"), new Param("page", "1") };
+                params = new Param[] { new Param("isoFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", "1") };
             }
             else {
                 String domainId = provider.getDomainId(accountNumber);
                 String parentAccount = provider.getParentAccount(accountNumber);
-                params = new Param[] { new Param("isoFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("bootable", "true"), new Param("page", "1") };
+                params = new Param[] { new Param("isoFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", "1") };
             }
 
             Document doc = method.get(method.buildUrl(LIST_ISOS, params), LIST_ISOS);
@@ -737,7 +737,7 @@ public class Templates extends AbstractImageSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
+                    String nextPage = String.valueOf(page);
                     int length = params.length;
                     params[length-1] = new Param("page", nextPage);
                     doc = method.get(method.buildUrl(LIST_ISOS, params), LIST_ISOS);

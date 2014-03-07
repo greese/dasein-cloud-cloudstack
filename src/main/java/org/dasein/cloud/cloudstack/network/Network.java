@@ -277,8 +277,8 @@ public class Network extends AbstractVLANSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
@@ -622,8 +622,8 @@ public class Network extends AbstractVLANSupport {
 
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
-                    String nextPage = String.valueOf(page+1);
-                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
