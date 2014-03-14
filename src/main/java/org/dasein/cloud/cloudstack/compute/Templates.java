@@ -878,6 +878,7 @@ public class Templates extends AbstractImageSupport {
             if( ctx == null ) {
                 throw new CloudException("No context was set for the request");
             }
+            String regionId = ctx.getRegionId();
             String accountNumber = ctx.getAccountNumber();
             MachineImage img = getImage(providerImageId);
 
@@ -891,7 +892,7 @@ public class Templates extends AbstractImageSupport {
             CSMethod method = new CSMethod(provider);
             Document doc;
             try {
-                doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", providerImageId)), DELETE_TEMPLATE);
+                doc = method.get(method.buildUrl(DELETE_TEMPLATE, new Param("id", providerImageId), new Param("zoneid", regionId)), DELETE_TEMPLATE);
                 provider.waitForJob(doc, "Delete Template");
             }
             catch (CSException e) {
