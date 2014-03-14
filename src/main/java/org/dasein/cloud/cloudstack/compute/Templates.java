@@ -1188,7 +1188,7 @@ public class Templates extends AbstractImageSupport {
 
     @Override
     public boolean supportsImageSharing() {
-        return true;
+        return false;
     }
 
     @Override

@@ -415,6 +415,16 @@ public class Snapshots extends AbstractSnapshotSupport {
         return true;
     }
 
+    @Override
+    public boolean supportsSnapshotSharing() throws InternalException, CloudException {
+        return false;
+    }
+
+    @Override
+    public boolean supportsSnapshotSharingWithPublic() throws InternalException, CloudException {
+        return true;
+    }
+
     private @Nullable Snapshot toSnapshot(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Iterable<Volume> volumes) throws CloudException, InternalException {
         if( node == null ) {
             return null;
