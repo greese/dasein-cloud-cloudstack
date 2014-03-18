@@ -231,6 +231,12 @@ public class CSTopology implements DataCenterServices {
                     Region r = toRegion(matches.item(i));
 
                     if( r != null ) {
+                        if (provider.getProviderName().contains("Datapipe")) {
+                            // don't return Shanghai region as there are Chinese license concerns
+                            if (r.getName().contains("Shanghai")) {
+                                continue;
+                            }
+                        }
                         regions.add(r);
                     }
                 }
