@@ -259,7 +259,7 @@ public class Network extends AbstractVLANSupport {
                 throw new InternalException("No context was established");
             }
             CSMethod method = new CSMethod(cloudstack);
-            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("canusefordeploy", "true")), Network.LIST_NETWORKS);
             ArrayList<VLAN> networks = new ArrayList<VLAN>();
 
             int numPages = 1;
