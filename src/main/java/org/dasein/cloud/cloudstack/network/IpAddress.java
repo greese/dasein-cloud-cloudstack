@@ -39,7 +39,6 @@ import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSTopology;
 import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
@@ -272,13 +271,33 @@ public class IpAddress implements IpAddressSupport {
                 CSMethod method = new CSMethod(provider);
                 Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
                 ArrayList<org.dasein.cloud.network.IpAddress> addresses = new ArrayList<org.dasein.cloud.network.IpAddress>();
-                NodeList matches = doc.getElementsByTagName("publicipaddress");
 
-                for( int i=0; i<matches.getLength(); i++ ) {
-                    org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), ctx, loadBalancers);
+                int numPages = 1;
+                NodeList nodes = doc.getElementsByTagName("count");
+                Node n = nodes.item(0);
+                if (n != null) {
+                    String value = n.getFirstChild().getNodeValue().trim();
+                    int count = Integer.parseInt(value);
+                    numPages = count/500;
+                    int remainder = count % 500;
+                    if (remainder > 0) {
+                        numPages++;
+                    }
+                }
 
-                    if( addr != null && (!unassignedOnly || !addr.isAssigned()) ) {
-                        addresses.add(addr);
+                for (int page = 1; page <= numPages; page++) {
+                    if (page > 1) {
+                        String nextPage = String.valueOf(page);
+                        doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                    }
+                    NodeList matches = doc.getElementsByTagName("publicipaddress");
+
+                    for( int i=0; i<matches.getLength(); i++ ) {
+                        org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), ctx, loadBalancers);
+
+                        if( addr != null && (!unassignedOnly || !addr.isAssigned()) ) {
+                            addresses.add(addr);
+                        }
                     }
                 }
                 return addresses;
@@ -313,13 +332,33 @@ public class IpAddress implements IpAddressSupport {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
             ArrayList<ResourceStatus> addresses = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("publicipaddress");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                ResourceStatus addr = toStatus(matches.item(i), loadBalancers);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( addr != null ) {
-                    addresses.add(addr);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                }
+                NodeList matches = doc.getElementsByTagName("publicipaddress");
+
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    ResourceStatus addr = toStatus(matches.item(i), loadBalancers);
+
+                    if( addr != null ) {
+                        addresses.add(addr);
+                    }
                 }
             }
             return addresses;

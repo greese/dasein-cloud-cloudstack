@@ -58,7 +58,16 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
-import org.dasein.cloud.compute.*;
+import org.dasein.cloud.compute.AbstractVMSupport;
+import org.dasein.cloud.compute.Architecture;
+import org.dasein.cloud.compute.ImageClass;
+import org.dasein.cloud.compute.Platform;
+import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.VirtualMachineProduct;
+import org.dasein.cloud.compute.VMLaunchOptions;
+import org.dasein.cloud.compute.VMScalingCapabilities;
+import org.dasein.cloud.compute.VMScalingOptions;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.util.CalendarWrapper;
@@ -987,16 +996,36 @@ public class VirtualMachines extends AbstractVMSupport {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    ResourceStatus vm = toStatus(node);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
+                }
+                NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-                    if( vm != null ) {
-                        servers.add(vm);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        ResourceStatus vm = toStatus(node);
+
+                        if( vm != null ) {
+                            servers.add(vm);
+                        }
                     }
                 }
             }
@@ -1019,20 +1048,40 @@ public class VirtualMachines extends AbstractVMSupport {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
-            NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    try {
-                        VirtualMachine vm = toVirtualMachine(node);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VIRTUAL_MACHINES);
+                }
+                NodeList matches = doc.getElementsByTagName("virtualmachine");
 
-                        if( vm != null ) {
-                            servers.add(vm);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        try {
+                            VirtualMachine vm = toVirtualMachine(node);
+
+                            if( vm != null ) {
+                                servers.add(vm);
+                            }
+                        } catch (Throwable t) {
+                            logger.error("Problem discovering a virtual machine: " + t.getMessage());
                         }
-                    } catch (Throwable t) {
-                        logger.error("Problem discovering a virtual machine: " + t.getMessage());
                     }
                 }
             }

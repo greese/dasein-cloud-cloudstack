@@ -170,13 +170,33 @@ public class Keypair implements ShellKeySupport {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS), CSMethod.LIST_KEYPAIRS);
             ArrayList<SSHKeypair> keys = new ArrayList<SSHKeypair>();
-            NodeList matches = doc.getElementsByTagName("sshkeypair");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                SSHKeypair key = toKeypair(ctx, matches.item(i));
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( key != null ) {
-                    keys.add(key);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("pagesize", "500"), new Param("page", nextPage)), CSMethod.LIST_KEYPAIRS);
+                }
+                NodeList matches = doc.getElementsByTagName("sshkeypair");
+
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    SSHKeypair key = toKeypair(ctx, matches.item(i));
+
+                    if( key != null ) {
+                        keys.add(key);
+                    }
                 }
             }
             return keys;

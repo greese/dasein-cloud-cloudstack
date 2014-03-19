@@ -42,7 +42,16 @@ import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.network.*;
+import org.dasein.cloud.network.AbstractVLANSupport;
+import org.dasein.cloud.network.Firewall;
+import org.dasein.cloud.network.FirewallSupport;
+import org.dasein.cloud.network.IpAddressSupport;
+import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.Networkable;
+import org.dasein.cloud.network.NetworkServices;
+import org.dasein.cloud.network.RoutingTable;
+import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.VLANState;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
@@ -308,18 +317,38 @@ public class Network extends AbstractVLANSupport {
                 throw new InternalException("No context was established");
             }
             CSMethod method = new CSMethod(cloudstack);
-            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("canusefordeploy", "true")), Network.LIST_NETWORKS);
             ArrayList<VLAN> networks = new ArrayList<VLAN>();
-            NodeList matches = doc.getElementsByTagName("network");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    VLAN vlan = toNetwork(node, ctx);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                }
+                NodeList matches = doc.getElementsByTagName("network");
 
-                    if( vlan != null ) {
-                        networks.add(vlan);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        VLAN vlan = toNetwork(node, ctx);
+
+                        if( vlan != null ) {
+                            networks.add(vlan);
+                        }
                     }
                 }
             }
@@ -667,16 +696,36 @@ public class Network extends AbstractVLANSupport {
             CSMethod method = new CSMethod(cloudstack);
             Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
             ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("network");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( node != null ) {
-                    ResourceStatus vlan = toVLANStatus(node);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
+                }
+                NodeList matches = doc.getElementsByTagName("network");
 
-                    if( vlan != null ) {
-                        networks.add(vlan);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node node = matches.item(i);
+
+                    if( node != null ) {
+                        ResourceStatus vlan = toVLANStatus(node);
+
+                        if( vlan != null ) {
+                            networks.add(vlan);
+                        }
                     }
                 }
             }

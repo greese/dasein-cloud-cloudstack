@@ -40,7 +40,6 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.AbstractVolumeSupport;
 import org.dasein.cloud.compute.Platform;
@@ -588,16 +587,36 @@ public class Volumes extends AbstractVolumeSupport {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
             ArrayList<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
-            NodeList matches = doc.getElementsByTagName("volume");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                Node v = matches.item(i);
+            int numPages = 1;
+            NodeList nodes = doc.getElementsByTagName("count");
+            Node n = nodes.item(0);
+            if (n != null) {
+                String value = n.getFirstChild().getNodeValue().trim();
+                int count = Integer.parseInt(value);
+                numPages = count/500;
+                int remainder = count % 500;
+                if (remainder > 0) {
+                    numPages++;
+                }
+            }
 
-                if( v != null ) {
-                    ResourceStatus volume = toStatus(v);
+            for (int page = 1; page <= numPages; page++) {
+                if (page > 1) {
+                    String nextPage = String.valueOf(page);
+                    doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
+                }
+                NodeList matches = doc.getElementsByTagName("volume");
 
-                    if( volume != null ) {
-                        volumes.add(volume);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    Node v = matches.item(i);
+
+                    if( v != null ) {
+                        ResourceStatus volume = toStatus(v);
+
+                        if( volume != null ) {
+                            volumes.add(volume);
+                        }
                     }
                 }
             }
@@ -644,8 +663,8 @@ public class Volumes extends AbstractVolumeSupport {
 
         for (int page = 1; page <= numPages; page++) {
             if (page > 1) {
-                String nextPage = String.valueOf(page+1);
-                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_VOLUMES);
+                String nextPage = String.valueOf(page);
+                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
             }
             NodeList matches = doc.getElementsByTagName("volume");
 
