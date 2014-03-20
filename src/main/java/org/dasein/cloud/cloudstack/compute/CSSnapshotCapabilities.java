@@ -50,6 +50,6 @@ public class CSSnapshotCapabilities extends AbstractCapabilities<CSCloud> implem
 
     @Override
     public boolean supportsSnapshotSharingWithPublic() throws InternalException, CloudException {
-        return true;
+        return false;
     }
 }

@@ -576,11 +576,16 @@ public class VirtualMachines extends AbstractVMSupport {
             count++;
         }
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
-            if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) && !provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
-                securityGroupIds = null;
+            if (!provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1)) {
+                securityGroupIds = null;;
             }
             else {
-                count++;
+                if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+                    securityGroupIds = null;
+                }
+                else {
+                    count++;
+                }
             }
         }
         else if( provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
