@@ -205,6 +205,12 @@ public class VirtualMachines extends AbstractVMSupport {
         return VMScalingCapabilities.getInstance(false,true,Requirement.NONE,Requirement.NONE);
     }
 
+    @Nullable
+    @Override
+    public String getPassword(@Nonnull String vmId) throws InternalException, CloudException {
+        return getRootPassword(vmId);
+    }
+
     @Override
     public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.getProduct");

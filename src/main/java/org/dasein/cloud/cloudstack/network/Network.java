@@ -545,7 +545,7 @@ public class Network extends AbstractVLANSupport {
     @Nonnull
     @Override
     public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        throw new OperationNotSupportedException("Internet gateways not supported in "+getProvider().getCloudName());
     }
 
     @Override
