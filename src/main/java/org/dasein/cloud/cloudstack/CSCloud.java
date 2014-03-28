@@ -22,11 +22,13 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.List;
 import java.util.Properties;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
 import org.dasein.cloud.CloudException;
+import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.cloudstack.compute.CSComputeServices;
@@ -87,6 +89,13 @@ public class CSCloud extends AbstractCloud {
             return "Citrix";
         }
         return name;
+    }
+
+    @Override
+    public @Nonnull ContextRequirements getContextRequirements() {
+        return new ContextRequirements(
+                new ContextRequirements.Field("apiKey", "The API Keypair", ContextRequirements.FieldType.KEYPAIR, ContextRequirements.Field.ACCESS_KEYS, true)
+        );
     }
     
     @Override
@@ -212,7 +221,13 @@ public class CSCloud extends AbstractCloud {
                 }
                 String ctxKey = null;
                 try {
-                    ctxKey = new String(getContext().getAccessPublic(), "utf-8");
+                    List<ContextRequirements.Field> fields = getContextRequirements().getConfigurableValues();
+                    for(ContextRequirements.Field f : fields ) {
+                        if(f.type.equals(ContextRequirements.FieldType.KEYPAIR)){
+                            byte[][] keyPair = (byte[][])getContext().getConfigurationValue(f);
+                            ctxKey = new String(keyPair[0], "utf-8");
+                        }
+                    }
                 }
                 catch( UnsupportedEncodingException e ) {
                     e.printStackTrace();
@@ -247,7 +262,9 @@ public class CSCloud extends AbstractCloud {
                         }
                     }
                     if (found) {
-                        getContext().setAccountNumber(account);
+                        if (!getContext().getAccountNumber().equals(account)) {
+                            getContext().setAccountNumber(account);
+                        }
                         return true;
                     }
                 }

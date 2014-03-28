@@ -358,7 +358,7 @@ public class Network extends AbstractVLANSupport {
     public @Nonnull VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nullable String domainName, @Nullable String[] dnsServers, @Nullable String[] ntpServers) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.createVlan");
         try {
-            if( !allowsNewVlanCreation() ) {
+            if( !getCapabilities().allowsNewVlanCreation() ) {
                 throw new OperationNotSupportedException();
             }
             ProviderContext ctx = cloudstack.getContext();
@@ -545,7 +545,7 @@ public class Network extends AbstractVLANSupport {
     @Nonnull
     @Override
     public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        throw new OperationNotSupportedException("Internet gateways not supported in "+getProvider().getCloudName());
     }
 
     @Override

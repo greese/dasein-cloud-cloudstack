@@ -205,6 +205,12 @@ public class VirtualMachines extends AbstractVMSupport {
         return VMScalingCapabilities.getInstance(false,true,Requirement.NONE,Requirement.NONE);
     }
 
+    @Nullable
+    @Override
+    public String getPassword(@Nonnull String vmId) throws InternalException, CloudException {
+        return getRootPassword(vmId);
+    }
+
     @Override
     public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.getProduct");
@@ -576,11 +582,16 @@ public class VirtualMachines extends AbstractVMSupport {
             count++;
         }
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
-            if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) && !provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
-                securityGroupIds = null;
+            if (!provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1)) {
+                securityGroupIds = null;;
             }
             else {
-                count++;
+                if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+                    securityGroupIds = null;
+                }
+                else {
+                    count++;
+                }
             }
         }
         else if( provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
@@ -1084,7 +1095,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
         
-            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)), DESTROY_VIRTUAL_MACHINE);
+            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId), new Param("expunge", "true")), DESTROY_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();

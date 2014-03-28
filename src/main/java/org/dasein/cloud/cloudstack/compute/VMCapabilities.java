@@ -40,7 +40,10 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean canAlter(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return fromState.equals(VmState.STOPPED);
+        if (!getProvider().getProviderName().contains("Datapipe")) {
+            return fromState.equals(VmState.STOPPED);
+        }
+        return false;
     }
 
     @Override

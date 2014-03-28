@@ -50,10 +50,11 @@ import org.dasein.cloud.compute.ImageFilterOptions;
 import org.dasein.cloud.compute.MachineImage;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageState;
-import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VirtualMachine;
+import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.util.CalendarWrapper;
 import org.dasein.util.Jiterator;
 import org.dasein.util.JiteratorPopulator;
 import org.dasein.util.PopulatorThread;
@@ -307,6 +308,21 @@ public class Templates extends AbstractImageSupport {
                 throw new CloudException("No such server: " + vmId);
             }
             CSMethod method = new CSMethod(provider);
+            boolean restart = false;
+            if (!server.getCurrentState().equals(VmState.STOPPED)) {
+                restart = true;
+                provider.getComputeServices().getVirtualMachineSupport().stop(vmId);
+                long timeout = System.currentTimeMillis() + (CalendarWrapper.MINUTE * 10);
+                server = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+                while (timeout > System.currentTimeMillis()) {
+                    if (server.getCurrentState().equals(VmState.STOPPED)) {
+                        break;
+                    }
+                    server = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(vmId);
+                    try {Thread.sleep(15000l);}
+                    catch (InterruptedException ignore) {}
+                }
+            }
             Document doc;
 
             String rootVolumeId = getRootVolume(vmId);
@@ -382,6 +398,9 @@ public class Templates extends AbstractImageSupport {
             }
             if( task != null ) {
                 task.completeWithResult(img);
+            }
+            if (restart) {
+                provider.getComputeServices().getVirtualMachineSupport().start(vmId);
             }
             return img;
         }
