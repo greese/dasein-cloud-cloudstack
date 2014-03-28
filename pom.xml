@@ -61,7 +61,7 @@
     <dependency>
         <groupId>org.dasein</groupId>
         <artifactId>dasein-cloud-core</artifactId>
-        <version>2014.03-SNAPSHOT</version>
+        <version>2014.03.2-SNAPSHOT</version>
         <scope>compile</scope>
         <optional>false</optional>
     </dependency>
@@ -112,7 +112,7 @@
       <dependency>
           <groupId>org.dasein</groupId>
           <artifactId>dasein-cloud-test</artifactId>
-          <version>2014.03-SNAPSHOT</version>
+          <version>2014.03.2-SNAPSHOT</version>
           <scope>test</scope>
           <optional>false</optional>
       </dependency>
@@ -218,11 +218,11 @@
                     <value>${accountNumber}</value>
                 </property>
                 <property>
-                    <name>accessPublic</name>
+                    <name>apiKeyShared</name>
                     <value>${apiSharedKey}</value>
                 </property>
                 <property>
-                    <name>accessPrivate</name>
+                    <name>apiKeySecret</name>
                     <value>${apiSecretKey}</value>
                 </property>
                 <property>
@@ -242,9 +242,10 @@
                     <value>${cloudstack.version}</value>
                 </property>                
             </systemProperties> 
-          <includes>
-            <include>**/TestSuite.java</include>
-          </includes>
+          <excludes>
+            <exclude>**/TestSuite.java</exclude>
+          </excludes>
+           <!-- <argLine>-Ddasein.inclusions=StatefulLoadBalancerTests,StatefulVMTests.launch</argLine> -->
         </configuration>
       </plugin>   
       <plugin>
