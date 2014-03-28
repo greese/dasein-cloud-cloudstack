@@ -34,7 +34,7 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
 
     @Override
     public boolean canImage(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return true;
+        return fromState.equals(VmState.STOPPED);
     }
 
     @Nonnull
