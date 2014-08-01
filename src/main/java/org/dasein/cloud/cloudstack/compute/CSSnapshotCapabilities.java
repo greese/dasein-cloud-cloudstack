@@ -4,10 +4,12 @@ import org.dasein.cloud.AbstractCapabilities;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.compute.SnapshotCapabilities;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.Locale;
 
 /**
@@ -25,6 +27,12 @@ public class CSSnapshotCapabilities extends AbstractCapabilities<CSCloud> implem
     @Override
     public String getProviderTermForSnapshot(@Nonnull Locale locale) {
         return "snapshot";
+    }
+
+    @Nullable
+    @Override
+    public VisibleScope getSnapshotVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Nonnull

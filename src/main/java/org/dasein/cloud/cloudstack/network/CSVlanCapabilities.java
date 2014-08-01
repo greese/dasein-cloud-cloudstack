@@ -4,11 +4,13 @@ import org.dasein.cloud.AbstractCapabilities;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.VLANCapabilities;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -110,6 +112,12 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
     @Override
     public Requirement getSubnetSupport() throws CloudException, InternalException {
         return Requirement.NONE;
+    }
+
+    @Nullable
+    @Override
+    public VisibleScope getVLANVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Nonnull

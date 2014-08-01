@@ -4,6 +4,7 @@ import org.dasein.cloud.AbstractCapabilities;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.compute.ImageCapabilities;
 import org.dasein.cloud.compute.ImageClass;
@@ -12,6 +13,7 @@ import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.VmState;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
@@ -51,6 +53,12 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     @Override
     public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
         return getProviderTermForImage(locale, cls);
+    }
+
+    @Nullable
+    @Override
+    public VisibleScope getImageVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Nonnull

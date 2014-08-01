@@ -28,8 +28,11 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.dc.DataCenter;
+import org.dasein.cloud.dc.DataCenterCapabilities;
 import org.dasein.cloud.dc.DataCenterServices;
 import org.dasein.cloud.dc.Region;
+import org.dasein.cloud.dc.ResourcePool;
+import org.dasein.cloud.dc.StoragePool;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
@@ -50,7 +53,17 @@ public class CSTopology implements DataCenterServices {
     public CSTopology(@Nonnull CSCloud provider) {
         this.provider = provider;
     }
-    
+
+    private transient volatile CSTopologyCapabilities capabilities;
+    @Nonnull
+    @Override
+    public DataCenterCapabilities getCapabilities() throws InternalException, CloudException {
+        if( capabilities == null ) {
+            capabilities = new CSTopologyCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     public @Nullable DataCenter getDataCenter(@Nonnull String zoneId) throws InternalException, CloudException {
         APITrace.begin(provider, "DC.getDataCenter");
         try {
@@ -248,7 +261,22 @@ public class CSTopology implements DataCenterServices {
             APITrace.end();
         }
     }
-    
+
+    @Override
+    public Collection<ResourcePool> listResourcePools(String providerDataCenterId) throws InternalException, CloudException {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public ResourcePool getResourcePool(String providerResourcePoolId) throws InternalException, CloudException {
+        return null;
+    }
+
+    @Override
+    public Collection<StoragePool> listStoragePools() throws InternalException, CloudException {
+        return Collections.emptyList();
+    }
+
     private @Nullable Region toRegion(@Nullable Node node) {
         if( node == null ) {
             return null;
