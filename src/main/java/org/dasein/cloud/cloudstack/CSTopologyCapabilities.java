@@ -17,26 +17,26 @@ public class CSTopologyCapabilities extends AbstractCapabilities<CSCloud> implem
     }
     @Override
     public String getProviderTermForDataCenter(Locale locale) {
-        return "cluster";
+        return "zone";
     }
 
     @Override
     public String getProviderTermForRegion(Locale locale) {
-        return "datacenter";
+        return "region";
     }
 
     @Override
     public boolean supportsAffinityGroups() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean supportsResourcePools() {
-        return true;
+        return false;
     }
 
     @Override
     public boolean supportsStoragePools() {
-        return true;
+        return false;
     }
 }
