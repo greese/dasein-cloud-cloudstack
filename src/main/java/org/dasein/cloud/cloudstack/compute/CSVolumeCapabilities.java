@@ -53,6 +53,26 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
         return -2;
     }
 
+    @Override
+    public int getMaximumVolumeProductIOPS() throws InternalException, CloudException {
+        return LIMIT_UNKNOWN;
+    }
+
+    @Override
+    public int getMinimumVolumeProductIOPS() throws InternalException, CloudException {
+        return LIMIT_UNKNOWN;
+    }
+
+    @Override
+    public int getMaximumVolumeSizeIOPS() throws InternalException, CloudException {
+        return LIMIT_UNKNOWN;
+    }
+
+    @Override
+    public int getMinimumVolumeSizeIOPS() throws InternalException, CloudException {
+        return LIMIT_UNKNOWN;
+    }
+
     @Nullable
     @Override
     public Storage<Gigabyte> getMaximumVolumeSize() throws InternalException, CloudException {

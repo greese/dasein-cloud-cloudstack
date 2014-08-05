@@ -61,6 +61,11 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
         return true;
     }
 
+    @Override
+    public Requirement healthCheckRequiresName() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
     @Nonnull
     @Override
     public Requirement identifyEndpointsOnCreateRequirement() throws CloudException, InternalException {
