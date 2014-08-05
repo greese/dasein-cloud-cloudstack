@@ -649,9 +649,7 @@ public class Templates extends AbstractImageSupport {
                 params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1") };
             }
             else {
-                String domainId = provider.getDomainId(accountNumber);
-                String parentAccount = provider.getParentAccount(accountNumber);
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("pagesize", "500"), new Param("page", "1") };
+                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()),new Param("pagesize", "500"), new Param("page", "1") };
             }
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
@@ -710,9 +708,7 @@ public class Templates extends AbstractImageSupport {
                 params = new Param[] { new Param("isoFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", "1") };
             }
             else {
-                String domainId = provider.getDomainId(accountNumber);
-                String parentAccount = provider.getParentAccount(accountNumber);
-                params = new Param[] { new Param("isoFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("account", parentAccount), new Param("domainId", domainId), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", "1") };
+                params = new Param[] { new Param("isoFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true"), new Param("pagesize", "500"), new Param("page", "1") };
             }
 
             Document doc = method.get(method.buildUrl(LIST_ISOS, params), LIST_ISOS);
