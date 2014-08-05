@@ -242,10 +242,9 @@
                     <value>${cloudstack.version}</value>
                 </property>                
             </systemProperties> 
-          <includes>
-            <include>**/TestSuite.java</include>
-          </includes>
-            <argLine>-Ddasein.inclusions=Statesle</argLine>
+          <excludes>
+            <exclude>**/TestSuite.java</exclude>
+          </excludes>
         </configuration>
       </plugin>   
       <plugin>
