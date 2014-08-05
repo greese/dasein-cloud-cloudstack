@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -318,6 +319,12 @@ public class IpAddress implements IpAddressSupport {
         finally {
             APITrace.end();
         }
+    }
+
+    @Nonnull
+    @Override
+    public Future<Iterable<org.dasein.cloud.network.IpAddress>> listIpPoolConcurrently(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override

@@ -4,6 +4,7 @@ import org.dasein.cloud.AbstractCapabilities;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.Direction;
 import org.dasein.cloud.network.FirewallCapabilities;
@@ -12,6 +13,7 @@ import org.dasein.cloud.network.Permission;
 import org.dasein.cloud.network.RuleTargetType;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
@@ -37,6 +39,12 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     @Override
     public String getProviderTermForFirewall(@Nonnull Locale locale) {
         return "security group";
+    }
+
+    @Nullable
+    @Override
+    public VisibleScope getFirewallVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Nonnull

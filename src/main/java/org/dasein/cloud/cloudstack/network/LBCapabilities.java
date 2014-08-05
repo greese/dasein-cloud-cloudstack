@@ -4,6 +4,7 @@ import org.dasein.cloud.AbstractCapabilities;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.LbAlgorithm;
@@ -14,6 +15,7 @@ import org.dasein.cloud.network.LoadBalancerAddressType;
 import org.dasein.cloud.network.LoadBalancerCapabilities;
 
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -48,9 +50,20 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
         return "load balancer";
     }
 
+    @Nullable
+    @Override
+    public VisibleScope getLoadBalancerVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
     @Override
     public boolean healthCheckRequiresLoadBalancer() throws CloudException, InternalException {
         return true;
+    }
+
+    @Override
+    public Requirement healthCheckRequiresName() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
     }
 
     @Nonnull

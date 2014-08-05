@@ -6,6 +6,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
+import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSServiceProvider;
 import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.compute.Architecture;
@@ -119,6 +120,18 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
         return NamingConstraints.getAlphaNumeric(1, 64);
     }
 
+    @Nullable
+    @Override
+    public VisibleScope getVirtualMachineVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
+    @Nullable
+    @Override
+    public VisibleScope getVirtualMachineProductVisibleScope() {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    }
+
     @Nonnull
     @Override
     public Requirement identifyDataCenterLaunchRequirement() throws CloudException, InternalException {
@@ -221,5 +234,63 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
             architectures = Collections.unmodifiableList(a);
         }
         return architectures;
+    }
+
+    @Override
+    public boolean supportsSpotVirtualMachines() throws InternalException, CloudException {
+        return false;
+    }
+
+    @Override
+    public boolean supportsAlterVM() {
+        if (!getProvider().getProviderName().contains("Datapipe")) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean supportsClone() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsPause() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsReboot() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsResume() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsStart() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsStop() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsSuspend() {
+        return false;
+    }
+
+    @Override
+    public boolean supportsTerminate() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsUnPause() {
+        return false;
     }
 }
