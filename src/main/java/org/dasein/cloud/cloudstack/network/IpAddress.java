@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -45,6 +46,7 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
 import org.dasein.cloud.network.AddressType;
 import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.IPAddressCapabilities;
 import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IpForwardingRule;
 import org.dasein.cloud.network.LoadBalancer;
@@ -122,7 +124,17 @@ public class IpAddress implements IpAddressSupport {
             APITrace.end();
         }
     }
-    
+
+    private transient volatile CSIPAddressCapabilities capabilities;
+    @Nonnull
+    @Override
+    public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new CSIPAddressCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     private boolean isId() {
         return provider.getVersion().greaterThan(CSVersion.CS21);
     }
@@ -307,6 +319,12 @@ public class IpAddress implements IpAddressSupport {
         finally {
             APITrace.end();
         }
+    }
+
+    @Nonnull
+    @Override
+    public Future<Iterable<org.dasein.cloud.network.IpAddress>> listIpPoolConcurrently(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
     @Override

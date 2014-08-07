@@ -21,7 +21,7 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-cloudstack</artifactId>
-  <version>2013.07.14</version>
+  <version>2014.08.2-SNAPSHOT</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-cloudstack</name>
@@ -61,7 +61,7 @@
     <dependency>
         <groupId>org.dasein</groupId>
         <artifactId>dasein-cloud-core</artifactId>
-        <version>2013.07.1</version>
+        <version>2014.08.1</version>
         <scope>compile</scope>
         <optional>false</optional>
     </dependency>
@@ -89,10 +89,10 @@
           <artifactId>lingo</artifactId>
           <version>1.2</version>
           <exclusions>
-          <exclusion>
-              <groupId>incubator-activemq</groupId>
-              <artifactId>activeio-core</artifactId>
-          </exclusion>
+              <exclusion>
+                  <groupId>incubator-activemq</groupId>
+                  <artifactId>activeio-core</artifactId>
+              </exclusion>
               <exclusion>
                   <groupId>incubator-activemq</groupId>
                   <artifactId>activemq-core</artifactId>
@@ -112,7 +112,7 @@
       <dependency>
           <groupId>org.dasein</groupId>
           <artifactId>dasein-cloud-test</artifactId>
-          <version>2013.07.1</version>
+          <version>2014.08.1</version>
           <scope>test</scope>
           <optional>false</optional>
       </dependency>
@@ -218,11 +218,11 @@
                     <value>${accountNumber}</value>
                 </property>
                 <property>
-                    <name>accessPublic</name>
+                    <name>apiKeyShared</name>
                     <value>${apiSharedKey}</value>
                 </property>
                 <property>
-                    <name>accessPrivate</name>
+                    <name>apiKeySecret</name>
                     <value>${apiSecretKey}</value>
                 </property>
                 <property>

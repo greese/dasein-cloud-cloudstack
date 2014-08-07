@@ -47,6 +47,7 @@ import org.dasein.cloud.compute.Snapshot;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.compute.Volume;
+import org.dasein.cloud.compute.VolumeCapabilities;
 import org.dasein.cloud.compute.VolumeCreateOptions;
 import org.dasein.cloud.compute.VolumeFormat;
 import org.dasein.cloud.compute.VolumeProduct;
@@ -353,6 +354,15 @@ public class Volumes extends AbstractVolumeSupport {
         }
     }
 
+    private transient volatile CSVolumeCapabilities capabilities;
+    @Override
+    public VolumeCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new CSVolumeCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     @Override
     public int getMaximumVolumeCount() throws InternalException, CloudException {
         return -2;
@@ -647,7 +657,6 @@ public class Volumes extends AbstractVolumeSupport {
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
         ArrayList<Volume> volumes = new ArrayList<Volume>();
-
         int numPages = 1;
         NodeList nodes = doc.getElementsByTagName("count");
         Node n = nodes.item(0);

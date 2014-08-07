@@ -51,8 +51,10 @@ import org.dasein.cloud.network.LbEndpointType;
 import org.dasein.cloud.network.LbListener;
 import org.dasein.cloud.network.LbPersistence;
 import org.dasein.cloud.network.LbProtocol;
+import org.dasein.cloud.network.LbType;
 import org.dasein.cloud.network.LoadBalancer;
 import org.dasein.cloud.network.LoadBalancerAddressType;
+import org.dasein.cloud.network.LoadBalancerCapabilities;
 import org.dasein.cloud.network.LoadBalancerCreateOptions;
 import org.dasein.cloud.network.LoadBalancerEndpoint;
 import org.dasein.cloud.network.LoadBalancerState;
@@ -149,7 +151,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     @SuppressWarnings("deprecation")
     @Override
     @Deprecated
-    public @Nonnull String create(@Nonnull String name, @Nonnull String description, @Nullable String addressId, @Nullable String[] zoneIds, @Nullable LbListener[] listeners, @Nullable String[] serverIds) throws CloudException, InternalException {
+    public @Nonnull String create(@Nonnull String name, @Nonnull String description, @Nullable String addressId, @Nullable String[] zoneIds, @Nullable LbListener[] listeners, @Nullable String[] serverIds, @Nullable String[] subnetIds, LbType type) throws CloudException, InternalException {
         if( addressId == null ) {
             throw new CloudException("You must specify an IP address for load balancer creation");
         }
@@ -163,6 +165,12 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         if( serverIds != null && serverIds.length > 0 ) {
             options.withVirtualMachines(serverIds);
+        }
+        if( subnetIds != null && subnetIds.length > 0 ) {
+            options.withProviderSubnetIds(subnetIds);
+        }
+        if (type != null) {
+            options.asType(type);
         }
         return createLoadBalancer(options);
     }
@@ -293,7 +301,17 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     public @Nonnull LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
         return LoadBalancerAddressType.IP;
     }
-    
+
+    private transient volatile LBCapabilities capabilities;
+    @Nonnull
+    @Override
+    public LoadBalancerCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new LBCapabilities(provider);
+        }
+        return capabilities;
+    }
+
     private boolean isId(String ipAddressIdCandidate) {
         String[] parts = ipAddressIdCandidate.split("\\.");
         

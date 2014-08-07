@@ -28,7 +28,6 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
@@ -37,6 +36,7 @@ import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.network.AbstractFirewallSupport;
 import org.dasein.cloud.network.Direction;
 import org.dasein.cloud.network.Firewall;
+import org.dasein.cloud.network.FirewallCapabilities;
 import org.dasein.cloud.network.FirewallCreateOptions;
 import org.dasein.cloud.network.FirewallRule;
 import org.dasein.cloud.network.Permission;
@@ -105,7 +105,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             else {
                 params = new Param[] { new Param("securitygroupid", firewallId), new Param("cidrlist", sourceCidr), new Param("startport", String.valueOf(beginPort)), new Param("endport", String.valueOf(endPort)), new Param("protocol", protocol.name()) };
             }
-            Document doc;
+            Document doc = null;
             if( direction.equals(Direction.INGRESS) ) {
                 doc = method.get(method.buildUrl(AUTHORIZE_SECURITY_GROUP_INGRESS, params), AUTHORIZE_SECURITY_GROUP_INGRESS);
             }
@@ -114,6 +114,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             }
             cloudstack.waitForJob(doc, "Authorize rule");
 
+            cloudstack.waitForJob(doc, "Authorize rule");
             String id = getRuleId(firewallId, direction, permission, protocol, sourceEndpoint, destinationEndpoint, beginPort, endPort);
             if( id == null ) {
                 throw new CloudException("Unable to identify newly created firewall rule ID");
@@ -224,6 +225,16 @@ public class SecurityGroup extends AbstractFirewallSupport {
         }
     }
 
+    private transient volatile SecurityGroupCapabilities capabilities;
+    @Nonnull
+    @Override
+    public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new SecurityGroupCapabilities(cloudstack);
+        }
+        return capabilities;
+    }
+
     @Override
     public @Nullable Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getFirewall");
@@ -277,6 +288,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
             ArrayList<FirewallRule> rules = new ArrayList<FirewallRule>();
 
+
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
             Node n = nodes.item(0);
@@ -307,6 +319,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
                         }
                     }
                 }
+
                 matches = doc.getElementsByTagName("egressrule");
                 for( int i=0; i<matches.getLength(); i++ ) {
                     Node node = matches.item(i);
@@ -325,11 +338,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public @Nonnull Requirement identifyPrecedenceRequirement(boolean inVlan) throws InternalException, CloudException {
-        return Requirement.NONE;
     }
 
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -618,11 +626,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
             return;
         }
         revoke(ruleId);
-    }
-
-    @Override
-    public boolean supportsRules(@Nonnull Direction direction, @Nonnull Permission permission, boolean inVlan) throws CloudException, InternalException {
-        return (!inVlan && permission.equals(Permission.ALLOW));
     }
 
     @Override

@@ -24,6 +24,7 @@ import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.security.SignatureException;
 import java.util.Date;
+import java.util.List;
 import java.util.Properties;
 import java.util.TreeSet;
 
@@ -52,6 +53,7 @@ import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudErrorType;
 import org.dasein.cloud.CloudException;
+import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.util.APITrace;
@@ -77,13 +79,28 @@ public class CSMethod {
     public String buildUrl(String command, Param ... params) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
+
+        String apiShared = "";
+        String apiSecret = "";
+        try {
+            List<ContextRequirements.Field> fields = provider.getContextRequirements().getConfigurableValues();
+            for(ContextRequirements.Field f : fields ) {
+                if(f.type.equals(ContextRequirements.FieldType.KEYPAIR)){
+                    byte[][] keyPair = (byte[][])ctx.getConfigurationValue(f);
+                    apiShared = new String(keyPair[0], "utf-8");
+                    apiSecret = new String(keyPair[1], "utf-8");
+                }
+            }
+        }
+        catch (UnsupportedEncodingException ignore) {}
+
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
         try {
             StringBuilder str = new StringBuilder();
-            String apiKey = new String(ctx.getAccessPublic(), "utf-8");
-            String accessKey = new String(ctx.getAccessPrivate(), "utf-8");
+            String apiKey = apiShared;
+            String accessKey = apiSecret;
 
             StringBuilder newKey = new StringBuilder();
             for( int i =0; i<apiKey.length(); i++ ) {

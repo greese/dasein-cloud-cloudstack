@@ -22,7 +22,6 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -35,7 +34,6 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
@@ -45,12 +43,14 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.network.AbstractVLANSupport;
 import org.dasein.cloud.network.Firewall;
 import org.dasein.cloud.network.FirewallSupport;
+import org.dasein.cloud.network.InternetGateway;
 import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.Networkable;
 import org.dasein.cloud.network.NetworkServices;
 import org.dasein.cloud.network.RoutingTable;
 import org.dasein.cloud.network.VLAN;
+import org.dasein.cloud.network.VLANCapabilities;
 import org.dasein.cloud.network.VLANState;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
@@ -78,38 +78,6 @@ public class Network extends AbstractVLANSupport {
         this.cloudstack = cloudstack;
     }
 
-    @Override
-    public boolean allowsNewVlanCreation() throws CloudException, InternalException {
-        //dmayne 20131002: changed this from false to true as networks are supported in the CS console
-        return true;
-        /*
-        CSMethod method = new CSMethod(cloudstack);
-        Document doc = method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("id", cloudstack.getContext().getRegionId())));
-        NodeList matches = doc.getElementsByTagName("zone");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node node = matches.item(i);
-            NodeList attrs = node.getChildNodes();
-            
-            for( int j=0; j<attrs.getLength(); j++ ) {
-                Node attr = attrs.item(j);
-                                                         
-                if( attr.getNodeName().equalsIgnoreCase("securitygroupsenabled") ) {
-                    String val = null;
-                    
-                    if( attr.hasChildNodes() ) {
-                        val = attr.getFirstChild().getNodeValue().trim();
-                    }
-                    if( val != null && val.equalsIgnoreCase("true") ) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-        */
-    }
-
     public List<String> findFreeNetworks() throws CloudException, InternalException {
         ArrayList<String> vlans = new ArrayList<String>();
 
@@ -126,9 +94,14 @@ public class Network extends AbstractVLANSupport {
         return vlans;
     }
 
+    private transient volatile CSVlanCapabilities capabilities;
+    @Nonnull
     @Override
-    public int getMaxVlanCount() throws CloudException, InternalException {
-        return 1;
+    public VLANCapabilities getCapabilities() throws InternalException, CloudException {
+        if( capabilities == null ) {
+            capabilities = new CSVlanCapabilities(cloudstack);
+        }
+        return capabilities;
     }
 
     static public class NetworkOffering {
@@ -235,48 +208,17 @@ public class Network extends AbstractVLANSupport {
         }
     }
 
+    @Nullable
     @Override
-    public boolean isNetworkInterfaceSupportEnabled() throws CloudException, InternalException {
-        return false;
+    public String getAttachedInternetGatewayId(@Nonnull String vlanId) throws CloudException, InternalException {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
-    /*
-    public boolean isBasicNetworking() throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
-        
-        if( ctx == null ) {
-            throw new InternalException("No context was established");
-        }
-        String regionId = ctx.getRegionId();
-
-        CSMethod method = new CSMethod(cloudstack);
-        String url = method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true"));
-        Document doc = method.get(url);
-
-        NodeList matches = doc.getElementsByTagName("zone");
-        for( int i=0; i<matches.getLength(); i++ ) {
-            Node zone = matches.item(i);
-            NodeList attrs = zone.getChildNodes();
-            String id = null, networking = "basic";
-
-            for( int j=0; j<attrs.getLength(); j++ ) {
-                Node attr = attrs.item(j);
-                String nn = attr.getNodeName();
-
-                if( nn.equalsIgnoreCase("networktype") && attr.hasChildNodes() ) {
-                    networking = attr.getFirstChild().getNodeValue().trim();
-                }
-                else if ( nn.equalsIgnoreCase("id") && attr.hasChildNodes() ) {
-                    id = attr.getFirstChild().getNodeValue().trim();
-                }
-            }
-            if( id != null && id.equals(regionId) ) {
-                return networking.equalsIgnoreCase("basic");
-            }
-        }
-        return true;
+    @Nullable
+    @Override
+    public InternetGateway getInternetGatewayById(@Nonnull String gatewayId) throws CloudException, InternalException {
+        return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
-    */
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -336,7 +278,7 @@ public class Network extends AbstractVLANSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("page", nextPage)), LIST_NETWORKS);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
@@ -359,6 +301,11 @@ public class Network extends AbstractVLANSupport {
         }
     }
 
+    @Override
+    public void removeInternetGatewayById(@Nonnull String id) throws CloudException, InternalException {
+        //To change body of implemented methods use File | Settings | File Templates.
+    }
+
     public @Nonnull Iterable<VLAN> listDefaultNetworks(boolean shared, boolean forDeploy) throws CloudException, InternalException {
         ProviderContext ctx = cloudstack.getContext();
 
@@ -379,7 +326,6 @@ public class Network extends AbstractVLANSupport {
         }
         params[0] = new Param("zoneId", ctx.getRegionId());
         int idx = 1;
-
         if( forDeploy ) {
             params[idx++]  = new Param("canUseForDeploy", "true");
         }
@@ -412,7 +358,7 @@ public class Network extends AbstractVLANSupport {
     public @Nonnull VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nullable String domainName, @Nullable String[] dnsServers, @Nullable String[] ntpServers) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.createVlan");
         try {
-            if( !allowsNewVlanCreation() ) {
+            if( !getCapabilities().allowsNewVlanCreation() ) {
                 throw new OperationNotSupportedException();
             }
             ProviderContext ctx = cloudstack.getContext();
@@ -465,7 +411,6 @@ public class Network extends AbstractVLANSupport {
             else {
                 doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name)), CREATE_NETWORK);
             }
-
             NodeList matches = doc.getElementsByTagName("network");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -482,7 +427,6 @@ public class Network extends AbstractVLANSupport {
                         catch (Throwable ignore) {
                             logger.warn("Unable to create default egress rule");
                         }
-
                         return network;
                     }
                 }
@@ -492,21 +436,6 @@ public class Network extends AbstractVLANSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
-        return 0;
-    }
-
-    @Override
-    public boolean supportsInternetGatewayCreation() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean supportsRawAddressRouting() throws CloudException, InternalException {
-        return false;
     }
 
     public @Nullable VLAN toNetwork(@Nullable Node node, @Nonnull ProviderContext ctx) {
@@ -545,10 +474,10 @@ public class Network extends AbstractVLANSupport {
             else if( name.equalsIgnoreCase("displaytext") ) {
                 network.setName(value);
             }
-            else if( name.equalsIgnoreCase("displaynetwork") ) {
+            else if( name.equalsIgnoreCase("displaynetwork")) {
                 network.setTag("displaynetwork", value);
             }
-            else if( name.equalsIgnoreCase("isdefault") ) {
+            else if( name.equalsIgnoreCase("isdefault")) {
                 network.setTag("isdefault", value);
             }
             else if( name.equalsIgnoreCase("networkdomain") ) {
@@ -613,19 +542,10 @@ public class Network extends AbstractVLANSupport {
         return "network";
     }
 
+    @Nonnull
     @Override
-    public @Nonnull Requirement getRoutingTableSupport() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement getSubnetSupport() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public boolean isVlanDataCenterConstrained() throws CloudException, InternalException {
-        return true;
+    public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
+        throw new OperationNotSupportedException("Internet gateways not supported in "+getProvider().getCloudName());
     }
 
     @Override
@@ -672,16 +592,6 @@ public class Network extends AbstractVLANSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public boolean isSubnetDataCenterConstrained() throws CloudException, InternalException {
-        return true;
-    }
-
-    @Override
-    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
-        return Collections.singletonList(IPVersion.IPV4);
     }
 
     @Override
