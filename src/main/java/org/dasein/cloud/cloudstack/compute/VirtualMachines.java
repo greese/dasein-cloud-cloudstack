@@ -62,6 +62,7 @@ import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VirtualMachineCapabilities;
 import org.dasein.cloud.compute.VirtualMachineProduct;
+import org.dasein.cloud.compute.VirtualMachineProductFilterOptions;
 import org.dasein.cloud.compute.VMLaunchOptions;
 import org.dasein.cloud.compute.VMScalingCapabilities;
 import org.dasein.cloud.compute.VMScalingOptions;
@@ -787,6 +788,37 @@ public class VirtualMachines extends AbstractVMSupport {
 
     @Override
     public @Nonnull Iterable<VirtualMachineProduct> listProducts(@Nonnull Architecture architecture) throws InternalException, CloudException {
+        return listProducts(null, architecture);
+    }
+
+    @Override
+    public Iterable<VirtualMachineProduct> listProducts( VirtualMachineProductFilterOptions options ) throws InternalException, CloudException {
+        List<VirtualMachineProduct> products = new ArrayList<VirtualMachineProduct>();
+        for( Architecture arch : Architecture.values() ) {
+            mergeProductLists(products, listProducts(options, arch));
+        }
+        return products;
+    }
+
+    // Merges product iterable to the list, using providerProductId as a unique key
+    private void mergeProductLists(List<VirtualMachineProduct> to, Iterable<VirtualMachineProduct> from) {
+        List<VirtualMachineProduct> copy = new ArrayList<VirtualMachineProduct>(to);
+        for( VirtualMachineProduct productFrom : from ) {
+            boolean found = false;
+            for( VirtualMachineProduct productTo : copy ) {
+                if( productTo.getProviderProductId().equalsIgnoreCase(productFrom.getProviderProductId()) ) {
+                    found = true;
+                    break;
+                }
+            }
+            if( !found ) {
+                to.add(productFrom);
+            }
+        }
+    }
+
+    @Override
+    public Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
         try {
             ProviderContext ctx = provider.getContext();
@@ -802,7 +834,7 @@ public class VirtualMachines extends AbstractVMSupport {
             productCache.purge();
             cached = (HashMap<Architecture, Collection<VirtualMachineProduct>>) productCache.get(endpoint+"_"+accountId+"_"+regionId);
             if (cached != null && !cached.isEmpty()) {
-                if( cached.containsKey(architecture) ) {
+                if( architecture != null && cached.containsKey(architecture) ) {
                     Collection<VirtualMachineProduct> products = cached.get(architecture);
 
                     if( products != null ) {
@@ -882,11 +914,20 @@ public class VirtualMachines extends AbstractVMSupport {
                         product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
                         product.setCpuCount(cpu);
                         product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
-                        products.add(product);
+                        if (options != null) {
+                            if (options.matches(product)) {
+                                products.add(product);
+                            }
+                        }
+                        else {
+                            products.add(product);
+                        }
                     }
                 }
             }
-            cached.put(architecture, products);
+            if (architecture != null) {
+                cached.put(architecture, products);
+            }
             return products;
         }
         finally {
