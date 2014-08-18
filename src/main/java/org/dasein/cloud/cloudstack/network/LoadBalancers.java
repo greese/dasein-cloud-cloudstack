@@ -18,6 +18,8 @@
 
 package org.dasein.cloud.cloudstack.network;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,6 +33,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.http.client.utils.URLEncodedUtils;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
@@ -43,21 +46,7 @@ import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.identity.ServiceAction;
-import org.dasein.cloud.network.AbstractLoadBalancerSupport;
-import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.LbAlgorithm;
-import org.dasein.cloud.network.LbEndpointState;
-import org.dasein.cloud.network.LbEndpointType;
-import org.dasein.cloud.network.LbListener;
-import org.dasein.cloud.network.LbPersistence;
-import org.dasein.cloud.network.LbProtocol;
-import org.dasein.cloud.network.LbType;
-import org.dasein.cloud.network.LoadBalancer;
-import org.dasein.cloud.network.LoadBalancerAddressType;
-import org.dasein.cloud.network.LoadBalancerCapabilities;
-import org.dasein.cloud.network.LoadBalancerCreateOptions;
-import org.dasein.cloud.network.LoadBalancerEndpoint;
-import org.dasein.cloud.network.LoadBalancerState;
+import org.dasein.cloud.network.*;
 import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -70,6 +59,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     static public final String LIST_LOAD_BALANCER_RULES           = "listLoadBalancerRules";
     static public final String LIST_LOAD_BALANCER_RULE_INSTANCES  = "listLoadBalancerRuleInstances";
     static public final String REMOVE_FROM_LOAD_BALANCER_RULE     = "removeFromLoadBalancerRule";
+    static public final String UPLOAD_SSL_CERTIFICATE             = "uploadSslCert";
+    public static final String LIST_SSL_CERTIFICATES              = "listSslCerts";
+    public static final String DELETE_SSL_CERTIFICATE             = "deleteSslCert";
     
     private CSCloud provider;
     
@@ -356,21 +348,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     @Override
-    public @Nonnull String getProviderTermForLoadBalancer(@Nonnull Locale locale) {
-        return "load balancer";
-    }
-
-    @Override
-    public @Nonnull Requirement identifyEndpointsOnCreateRequirement() throws CloudException, InternalException {
-        return Requirement.NONE;
-    }
-
-    @Override
-    public @Nonnull Requirement identifyListenersOnCreateRequirement() throws CloudException, InternalException {
-        return Requirement.REQUIRED;
-    }
-
-    @Override
     public @Nonnull Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
         APITrace.begin(provider, "LB.listLoadBalancerStatus");
         try {
@@ -429,48 +406,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     static private volatile List<LbAlgorithm> algorithms = null;
-    
-    @Override
-    public @Nonnull Iterable<LbAlgorithm> listSupportedAlgorithms() {
-        List<LbAlgorithm> list = algorithms;
-        
-        if( list == null ) {
-            list = new ArrayList<LbAlgorithm>();
-            list.add(LbAlgorithm.ROUND_ROBIN);
-            list.add(LbAlgorithm.LEAST_CONN);
-            list.add(LbAlgorithm.SOURCE);
-            algorithms = Collections.unmodifiableList(list);
-        }
-        return algorithms;
-    }
-
-    @Override
-    public @Nonnull Iterable<LbEndpointType> listSupportedEndpointTypes() throws CloudException, InternalException {
-        return Collections.singletonList(LbEndpointType.VM);
-    }
-
-    @Override
-    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
-        return Collections.singletonList(IPVersion.IPV4);
-    }
-
-    @Override
-    public @Nonnull Iterable<LbPersistence> listSupportedPersistenceOptions() throws CloudException, InternalException {
-        return Collections.singletonList(LbPersistence.NONE);
-    }
-
-    static private volatile List<LbProtocol> protocols = null;
-    
-    @Override
-    public @Nonnull Iterable<LbProtocol> listSupportedProtocols() {
-        if( protocols == null ) {
-            List<LbProtocol> list = new ArrayList<LbProtocol>();
-
-            list.add(LbProtocol.RAW_TCP);
-            protocols = Collections.unmodifiableList(list);
-        }
-        return protocols;
-    }
     
     private @Nonnull Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
         ArrayList<String> ids = new ArrayList<String>();
@@ -583,20 +518,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     @Override
-    public boolean isAddressAssignedByProvider() throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isDataCenterLimited() {
-        return false;
-    }
-
-    @Override
     public @Nonnull String[] mapServiceAction(@Nonnull ServiceAction action) {
         return new String[0];
     }
-
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
@@ -644,16 +568,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public boolean supportsMonitoring() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsMultipleTrafficTypes() throws CloudException, InternalException {
-        return false;
     }
 
     @Override
@@ -810,8 +724,179 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     @Override
-    public boolean supportsAddingEndpoints() throws CloudException, InternalException {
-        return true;
+    public SSLCertificate createSSLCertificate( @Nonnull SSLCertificateCreateOptions options ) throws CloudException, InternalException {
+        Document doc = null;
+        try {
+            doc = uploadSslCertificate(options, false);
+        } catch (CloudException e) {
+            if( e.getHttpCode() == 530 ) {
+                doc = uploadSslCertificate(options, true);
+            } else {
+                throw e;
+            }
+        }
+        String certId = null;
+        String certBody = null;
+        String certChain = null;
+        NodeList matches = doc.getElementsByTagName("sslcert");
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node n = matches.item(i);
+            NodeList attributes = n.getChildNodes();
+
+            for( int j=0; j<attributes.getLength(); j++ ) {
+                Node child = attributes.item(j);
+                String name = child.getNodeName().toLowerCase();
+                String value;
+
+                if( child.getChildNodes().getLength() > 0 ) {
+                    value = child.getFirstChild().getNodeValue();
+                }
+                else {
+                    value = null;
+                }
+                if( "id".equalsIgnoreCase(name) ) {
+                    certId = value;
+                }
+                else if( "certificate".equalsIgnoreCase(name) ) {
+                    certBody = value;
+                }
+                else if( "certchain".equalsIgnoreCase(name) ) {
+                    certChain = value;
+                }
+            }
+        }
+        return SSLCertificate.getInstance(certId, certId, null, certBody, certChain, "");
+    }
+
+    /**
+     * Upload SSL certificate, optionally using parameter double encoding to address CLOUDSTACK-6864 found in 4.4
+     * @param opts
+     * @param cs44hack
+     * @return Document
+     */
+    private Document uploadSslCertificate(SSLCertificateCreateOptions opts, boolean cs44hack) throws InternalException, CloudException {
+        CSMethod method = new CSMethod(provider);
+        List<Param> params = new ArrayList<Param>();
+        try {
+            params.add(new Param("certificate",
+                    cs44hack ? URLEncoder.encode(opts.getCertificateBody(), "UTF-8") : opts.getCertificateBody()));
+            params.add(new Param("privatekey",
+                    cs44hack ? URLEncoder.encode(opts.getPrivateKey(), "UTF-8") : opts.getPrivateKey()));
+            if( opts.getCertificateChain() != null ) {
+                params.add(new Param("certchain",
+                        cs44hack ? URLEncoder.encode(opts.getCertificateChain(), "UTF-8") : opts.getCertificateChain()));
+            }
+        } catch (UnsupportedEncodingException e) {
+            throw new InternalException(e);
+        }
+        return method.get(method.buildUrl(UPLOAD_SSL_CERTIFICATE,
+                params.toArray(new Param[params.size()])
+        ), UPLOAD_SSL_CERTIFICATE);
+    }
+
+    @Override
+    public @Nonnull Iterable<SSLCertificate> listSSLCertificates() throws CloudException, InternalException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(LIST_SSL_CERTIFICATES, new Param("accountid", provider.getAccountId())), LIST_SSL_CERTIFICATES);
+        List<SSLCertificate> results = new ArrayList<SSLCertificate>();
+
+        NodeList matches = doc.getElementsByTagName("sslcert");
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node n = matches.item(i);
+            NodeList attributes = n.getChildNodes();
+            String certId = null;
+            String certBody = null;
+            String certChain = null;
+
+            for( int j=0; j<attributes.getLength(); j++ ) {
+                Node child = attributes.item(j);
+                String name = child.getNodeName().toLowerCase();
+                String value;
+
+                if( child.getChildNodes().getLength() > 0 ) {
+                    value = child.getFirstChild().getNodeValue();
+                }
+                else {
+                    value = null;
+                }
+                if( "id".equalsIgnoreCase(name) ) {
+                    certId = value;
+                }
+                else if( "certificate".equalsIgnoreCase(name) ) {
+                    certBody = value;
+                }
+                else if( "certchain".equalsIgnoreCase(name) ) {
+                    certChain = value;
+                }
+            }
+            results.add(SSLCertificate.getInstance(certId, certId, null, certBody, certChain, ""));
+        }
+
+        return results;
+    }
+
+    @Override
+    public @Nullable SSLCertificate getSSLCertificate( @Nonnull String certificateName ) throws CloudException, InternalException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = null;
+        try {
+            doc = method.get(method.buildUrl(LIST_SSL_CERTIFICATES, new Param("certid", certificateName)), LIST_SSL_CERTIFICATES);
+        } catch (CSException e) {
+            if( e.getHttpCode() == 431 ) {
+                return null; // not found
+            }
+            throw e;
+        }
+        NodeList matches = doc.getElementsByTagName("sslcert");
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node n = matches.item(i);
+            NodeList attributes = n.getChildNodes();
+            String certId = null;
+            String certBody = null;
+            String certChain = null;
+
+            for( int j=0; j<attributes.getLength(); j++ ) {
+                Node child = attributes.item(j);
+                String name = child.getNodeName().toLowerCase();
+                String value;
+
+                if( child.getChildNodes().getLength() > 0 ) {
+                    value = child.getFirstChild().getNodeValue();
+                }
+                else {
+                    value = null;
+                }
+                if( "id".equalsIgnoreCase(name) ) {
+                    certId = value;
+                }
+                else if( "certificate".equalsIgnoreCase(name) ) {
+                    certBody = value;
+                }
+                else if( "certchain".equalsIgnoreCase(name) ) {
+                    certChain = value;
+                }
+            }
+            return SSLCertificate.getInstance(certId, certId, null, certBody, certChain, "");
+        }
+
+        return null;
+    }
+
+    @Override public void removeSSLCertificate( @Nonnull String certificateName ) throws CloudException, InternalException {
+        CSMethod method = new CSMethod(provider);
+        Document doc = method.get(method.buildUrl(DELETE_SSL_CERTIFICATE, new Param("id", certificateName)), DELETE_SSL_CERTIFICATE);
+        NodeList matches = doc.getElementsByTagName("success");
+        if( matches.getLength() > 0 ) {
+            boolean success = CSCloud.getBooleanValue(matches.item(0));
+            if(!success) {
+                matches = doc.getElementsByTagName("displaytext");
+                if( matches.getLength() > 0 ) {
+                    String description = CSCloud.getTextValue(matches.item(0));
+                    throw new CloudException("Unable to remove SSL certificate: " + description);
+                }
+            }
+        }
+
     }
 
     private void removeVmOpsRule(@Nonnull String ruleId) throws CloudException, InternalException {
