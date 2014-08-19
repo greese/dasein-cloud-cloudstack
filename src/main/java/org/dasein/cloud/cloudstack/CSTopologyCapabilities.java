@@ -39,4 +39,9 @@ public class CSTopologyCapabilities extends AbstractCapabilities<CSCloud> implem
     public boolean supportsStoragePools() {
         return false;
     }
+
+    @Override
+    public boolean supportsFolders() {
+        return false;
+    }
 }
