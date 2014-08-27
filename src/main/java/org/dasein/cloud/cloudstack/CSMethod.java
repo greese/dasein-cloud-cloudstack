@@ -36,11 +36,7 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.commons.codec.binary.Base64;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpVersion;
+import org.apache.http.*;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.conn.params.ConnRoutePNames;
@@ -279,6 +275,9 @@ public class CSMethod {
                 HttpEntity entity = response.getEntity();
 
                 return parseResponse(status, EntityUtils.toString(entity));
+            }
+            catch( NoHttpResponseException e ) {
+                throw new CloudException("No answer from endpoint: " + e.getMessage());
             }
             catch( IOException e ) {
                 throw new CloudException("IOException getting stream: " + e.getMessage());

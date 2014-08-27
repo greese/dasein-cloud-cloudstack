@@ -20,14 +20,7 @@ package org.dasein.cloud.cloudstack.network;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TreeSet;
+import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -62,6 +55,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     static public final String UPLOAD_SSL_CERTIFICATE             = "uploadSslCert";
     public static final String LIST_SSL_CERTIFICATES              = "listSslCerts";
     public static final String DELETE_SSL_CERTIFICATE             = "deleteSslCert";
+    public static final String CREATE_LB_HEALTH_CHECK_POLICY      = "createLBHealthCheckPolicy";
     
     private CSCloud provider;
     
@@ -140,6 +134,56 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
     }
 
+    @Override
+    public LoadBalancerHealthCheck createLoadBalancerHealthCheck( @Nonnull HealthCheckOptions options ) throws CloudException, InternalException {
+        CSMethod method = new CSMethod(provider);
+        List<Param> params = new ArrayList<Param>();
+        params.add(new Param("lbruleid", options.getProviderLoadBalancerId()));
+        if( options.getDescription() != null ) {
+            params.add(new Param("description", options.getDescription()));
+        }
+        params.add(new Param("healthythreshold", String.valueOf(options.getHealthyCount())));
+        params.add(new Param("unhealthythreshold", String.valueOf(options.getUnhealthyCount())));
+        params.add(new Param("intervaltime", String.valueOf(options.getInterval())));
+        params.add(new Param("responsetimeout", String.valueOf(options.getTimeout())));
+        params.add(new Param("pingpath", options.getHost() + options.getPort() + options.getPath()));
+
+        Document doc = method.get(method.buildUrl(CREATE_LB_HEALTH_CHECK_POLICY,
+                params.toArray(new Param[params.size()])
+        ), CREATE_LB_HEALTH_CHECK_POLICY);
+        NodeList matches = doc.getElementsByTagName("healthcheckpolicy");
+        for( int i=0; i<matches.getLength(); i++ ) {
+            Node n = matches.item(i);
+            NodeList attributes = n.getChildNodes();
+            String lbhcId = null;
+            LoadBalancerHealthCheck.HCProtocol protocol = null;
+            String path = null;
+            int port = 0;
+            int interval = 0;
+            int healthyCount = 0;
+            int unhealthyCount = 0;
+            int timeout = 0;
+
+            for( int j = 0; j < attributes.getLength(); j++ ) {
+                Node child = attributes.item(j);
+                String name = child.getNodeName().toLowerCase();
+                String value;
+
+                if( child.getChildNodes().getLength() > 0 ) {
+                    value = child.getFirstChild().getNodeValue();
+                }
+                else {
+                    value = null;
+                }
+                if( "id".equalsIgnoreCase(name) ) {
+                    lbhcId = value;
+                }
+            }
+            return LoadBalancerHealthCheck.getInstance(lbhcId, protocol, port, path, interval, timeout, healthyCount, unhealthyCount);
+        }
+        return null;
+    }
+
     @SuppressWarnings("deprecation")
     @Override
     @Deprecated
@@ -173,7 +217,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         if( id != null ) {
             return;
         }
-        Param[] params = new Param[6];
+        List<Param> params = new ArrayList<Param>();
         String algor;
         
         switch( algorithm ) {
@@ -182,24 +226,24 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             case SOURCE: algor = "source"; break;
             default: algor = "roundrobin"; break;
         }
-        params[0] = new Param("publicIp", publicIp);
-        params[1] = new Param("publicPort", String.valueOf(publicPort));
-        params[2] = new Param("privatePort", String.valueOf(privatePort));
-        params[3] = new Param("algorithm", algor);
+        params.add(new Param("publicIp", publicIp));
+        params.add(new Param("publicPort", String.valueOf(publicPort)));
+        params.add(new Param("privatePort", String.valueOf(privatePort)));
+        params.add(new Param("algorithm", algor));
         if (lbName != null && !lbName.equals("")) {
-            params[4] = new Param("name", lbName);
+            params.add(new Param("name", lbName));
         }
         else {
-            params[4] = new Param("name", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
+            params.add(new Param("name", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort));
         }
-        params[5] = new Param("description", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort);
+        params.add(new Param("description", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort));
         
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params), CREATE_LOAD_BALANCER_RULE);
+        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params.toArray(new Param[params.size()])), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
         for( int i=0; i<matches.getLength(); i++ ) {
-            HashMap<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
             Collection<LoadBalancer> lbs;
             Node node = matches.item(i);
             
@@ -211,7 +255,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         matches = doc.getElementsByTagName("loadbalancer"); // v2.2
         for( int i=0; i<matches.getLength(); i++ ) {
-            HashMap<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
             Collection<LoadBalancer> lbs;
             Node node = matches.item(i);
             
@@ -230,8 +274,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         if( id != null ) {
             return;
         }
-        
-        Param[] params = new Param[6];
+
+        List<Param> params = new ArrayList<Param>();
         String algor;
         
         switch( algorithm ) {
@@ -240,24 +284,24 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             case SOURCE: algor = "source"; break;
             default: algor = "roundrobin"; break;
         }
-        params[0] = new Param("publicIpId", publicIpId);
-        params[1] = new Param("publicPort", String.valueOf(publicPort));
-        params[2] = new Param("privatePort", String.valueOf(privatePort));
-        params[3] = new Param("algorithm", algor);
+        params.add(new Param("publicIpId", publicIpId));
+        params.add(new Param("publicPort", String.valueOf(publicPort)));
+        params.add(new Param("privatePort", String.valueOf(privatePort)));
+        params.add(new Param("algorithm", algor));
         if (lbName != null && !lbName.equals("")) {
-            params[4] = new Param("name", lbName);
+            params.add(new Param("name", lbName));
         }
         else {
-            params[4] = new Param("name", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
+            params.add(new Param("name", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort));
         }
-        params[5] = new Param("description", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort);
+        params.add(new Param("description", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort));
 
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params), CREATE_LOAD_BALANCER_RULE);
+        Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params.toArray(new Param[params.size()])), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
         for( int i=0; i<matches.getLength(); i++ ) {
-            HashMap<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
             Collection<LoadBalancer> lbs;
             Node node = matches.item(i);
             
@@ -269,7 +313,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         matches = doc.getElementsByTagName("loadbalancer"); // v2.2.0 - v2.2.10
         for( int i=0; i<matches.getLength(); i++ ) {
-            HashMap<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> current = new HashMap<String,LoadBalancer>();
             Collection<LoadBalancer> lbs;
             Node node = matches.item(i);
             
@@ -315,7 +359,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         APITrace.begin(provider, "LB.getLoadBalancer");
         try {
             try {
-                HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+                Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
                 boolean isId = isId(loadBalancerId);
                 String key = (isId ? "publicIpId" : "publicIp");
 
@@ -351,7 +395,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     public @Nonnull Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
         APITrace.begin(provider, "LB.listLoadBalancerStatus");
         try {
-            HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
             CSMethod method = new CSMethod(provider);
 
             try {
@@ -383,7 +427,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                         toRule(node, matches);
                     }
                 }
-                ArrayList<ResourceStatus> results = new ArrayList<ResourceStatus>();
+                List<ResourceStatus> results = new ArrayList<ResourceStatus>();
 
                 for( LoadBalancer lb : matches.values() ) {
                     if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
@@ -408,7 +452,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     static private volatile List<LbAlgorithm> algorithms = null;
     
     private @Nonnull Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
-        ArrayList<String> ids = new ArrayList<String>();
+        List<String> ids = new ArrayList<String>();
         CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId)), LIST_LOAD_BALANCER_RULE_INSTANCES);
 
@@ -555,7 +599,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             if( lb == null ) {
                 return Collections.emptyList();
             }
-            ArrayList<LoadBalancerEndpoint> endpoints = new ArrayList<LoadBalancerEndpoint>();
+            List<LoadBalancerEndpoint> endpoints = new ArrayList<LoadBalancerEndpoint>();
 
             //noinspection deprecation
             for( String serverId : lb.getProviderServerIds() ) {
@@ -574,7 +618,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     public @Nonnull Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
         APITrace.begin(provider, "LB.listLoadBalancers");
         try {
-            HashMap<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+            Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
             CSMethod method = new CSMethod(provider);
 
             try {
@@ -606,7 +650,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                         toRule(node, matches);
                     }
                 }
-                ArrayList<LoadBalancer> results = new ArrayList<LoadBalancer>();
+                List<LoadBalancer> results = new ArrayList<LoadBalancer>();
 
                 for( LoadBalancer lb : matches.values() ) {
                     if( matchesRegion(lb.getProviderLoadBalancerId()) ) {
@@ -913,7 +957,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         String publicIp = null;
         String ruleId = null;
         String lbName = null;
-        String lbDesc = null;
+        String lbDesc = ""; // can't be null
         
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node n = attributes.item(i);
@@ -967,16 +1011,18 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
             @SuppressWarnings("deprecation") String[] currentIds = lb.getProviderServerIds();
             LbListener[] listeners = lb.getListeners();
+
+            // TODO: WTF?
             TreeSet<Integer> ports = new TreeSet<Integer>();
 
             for( int port : lb.getPublicPorts() ) {
                 ports.add(port);
             }
             ports.add(publicPort);
-            
+
             int[] portList = new int[ports.size()];
             int i = 0;
-            
+
             for( Integer p : ports ) {
                 portList[i++] = p;
             }
@@ -1000,7 +1046,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             if( !there ) {
                 lb.withListeners(listener);
             }
-            
+            // TODO: WTF?
             TreeSet<String> newIds = new TreeSet<String>();
 
             Collections.addAll(newIds, currentIds);
