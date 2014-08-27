@@ -795,7 +795,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("No context was configured for this request");
             }
             Map<Architecture,Collection<VirtualMachineProduct>> cached;
-            String endpoint = provider.getContext().getEndpoint();
+            String endpoint = provider.getContext().getCloud().getEndpoint();
             String accountId = provider.getContext().getAccountNumber();
             String regionId = provider.getContext().getRegionId();
 
@@ -821,7 +821,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 load();
             }
             if( customServiceMappings != null ) {
-                String cloudId = cloudMappings.getProperty(provider.getContext().getEndpoint());
+                String cloudId = cloudMappings.getProperty(endpoint);
 
                 if( cloudId != null ) {
                     Map<String,Set<String>> map = customServiceMappings.get(cloudId);
@@ -871,7 +871,7 @@ public class VirtualMachines extends AbstractVMSupport {
                         break;
                     }
                 }
-                if( id != null ) {
+                if( id != null  && name != null && cpu > 0 && memory > 0 ) {
                     if( mapping == null || mapping.contains(id) ) {
                         VirtualMachineProduct product;
 
