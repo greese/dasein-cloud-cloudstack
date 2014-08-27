@@ -212,27 +212,6 @@ public class VirtualMachines extends AbstractVMSupport {
         return getRootPassword(vmId);
     }
 
-    @Override
-    public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.getProduct");
-        try {
-            for( Architecture architecture : Architecture.values() ) {
-                for( VirtualMachineProduct product : listProducts(architecture) ) {
-                    if( product.getProviderProductId().equals(productId) ) {
-                        return product;
-                    }
-                }
-            }
-            if( logger.isDebugEnabled() ) {
-                logger.debug("Unknown product ID for cloud.com: " + productId);
-            }
-            return null;
-        }
-        finally {
-            APITrace.end();
-        }
-    }
-    
     private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.getPassword");
         try {

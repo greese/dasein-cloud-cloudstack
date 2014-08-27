@@ -549,52 +549,6 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
-    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
-        APITrace.begin(getProvider(), "VLAN.listResources");
-        try {
-            ArrayList<Networkable> resources = new ArrayList<Networkable>();
-            NetworkServices network = cloudstack.getNetworkServices();
-
-            FirewallSupport fwSupport = network.getFirewallSupport();
-
-            if( fwSupport != null ) {
-                for( Firewall fw : fwSupport.list() ) {
-                    if( inVlanId.equals(fw.getProviderVlanId()) ) {
-                        resources.add(fw);
-                    }
-                }
-            }
-
-            IpAddressSupport ipSupport = network.getIpAddressSupport();
-
-            if( ipSupport != null ) {
-                for( IPVersion version : ipSupport.listSupportedIPVersions() ) {
-                    for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
-                        if( inVlanId.equals(addr.getProviderVlanId()) ) {
-                            resources.add(addr);
-                        }
-                    }
-
-                }
-            }
-            for( RoutingTable table : listRoutingTables(inVlanId) ) {
-                resources.add(table);
-            }
-            Iterable<VirtualMachine> vms = cloudstack.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
-
-            for( VirtualMachine vm : vms ) {
-                if( inVlanId.equals(vm.getProviderVlanId()) ) {
-                    resources.add(vm);
-                }
-            }
-            return resources;
-        }
-        finally {
-            APITrace.end();
-        }
-    }
-
-    @Override
     public @Nonnull Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.listVlanStatus");
         try {
