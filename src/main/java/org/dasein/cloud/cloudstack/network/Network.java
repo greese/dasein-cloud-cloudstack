@@ -22,6 +22,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -545,7 +546,7 @@ public class Network extends AbstractVLANSupport {
     @Nonnull
     @Override
     public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Internet gateways not supported in "+getProvider().getCloudName());
+        return Collections.emptyList();
     }
 
     @Override
