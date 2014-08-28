@@ -43,6 +43,7 @@ import org.apache.http.HttpResponse;
 import org.apache.http.HttpVersion;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
@@ -120,8 +121,17 @@ public class CSMethod {
                 }
             }
             accessKey = newKey.toString();
-            str.append(ctx.getEndpoint());
-            str.append("/api?command=");
+            str.append(ctx.getCloud().getEndpoint());
+
+            // Make sure the url ends up exactly as http://x.x.x.x:y/client/api?command=
+            // otherwise the server may choke like we've found it does for uploadSslCert command.
+            while( str.lastIndexOf("/") == str.length()-1 ) {
+                str.deleteCharAt(str.length()-1);
+            }
+            if( !str.toString().endsWith("/api") ) {
+                str.append("/api");
+            }
+            str.append("?command=");
             str.append(command);
             for( Param param : params ) {
                 str.append("&");
