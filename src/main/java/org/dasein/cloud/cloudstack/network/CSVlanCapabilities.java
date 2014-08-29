@@ -81,7 +81,7 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
 
     @Override
     public int getMaxVlanCount() throws CloudException, InternalException {
-        return 1;
+        return AbstractCapabilities.LIMIT_UNLIMITED;
     }
 
     @Nonnull
@@ -93,7 +93,7 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
     @Nonnull
     @Override
     public String getProviderTermForSubnet(@Nonnull Locale locale) {
-        return "network";
+        return "";
     }
 
     @Nonnull
