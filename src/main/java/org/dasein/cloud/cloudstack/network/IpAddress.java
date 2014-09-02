@@ -714,6 +714,7 @@ public class IpAddress implements IpAddressSupport {
             else if( name.equalsIgnoreCase("associatednetworkid") ) {
                 if( value != null ) {
                     address.setForVlan(true);
+                    address.setProviderVlanId(value);
                 }
             }
         }
