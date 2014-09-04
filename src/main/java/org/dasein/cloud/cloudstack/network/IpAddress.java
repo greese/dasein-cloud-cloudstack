@@ -154,10 +154,11 @@ public class IpAddress implements IpAddressSupport {
                 HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
                 LoadBalancerSupport support = provider.getNetworkServices().getLoadBalancerSupport();
                 LoadBalancer lb = (support == null ? null : support.getLoadBalancer(addressId));
-
-                loadBalancers.put(addressId, lb);
+                if( lb != null ) {
+                    loadBalancers.put(addressId, lb);
+                }
                 NodeList matches = doc.getElementsByTagName("publicipaddress");
-                for( int i=0; i<matches.getLength(); i++ ) {
+                for( int i = 0; i < matches.getLength(); i++ ) {
                     org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), ctx, loadBalancers);
 
                     if( addr != null ) {
@@ -179,6 +180,7 @@ public class IpAddress implements IpAddressSupport {
             APITrace.end();
         }
     }
+
 
     @Override
     public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
