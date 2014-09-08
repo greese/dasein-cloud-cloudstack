@@ -216,7 +216,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.getProduct");
         try {
-            for( Architecture architecture : Architecture.values() ) {
+            for( Architecture architecture : getCapabilities().listSupportedArchitectures() ) {
                 for( VirtualMachineProduct product : listProducts(architecture) ) {
                     if( product.getProviderProductId().equals(productId) ) {
                         return product;
