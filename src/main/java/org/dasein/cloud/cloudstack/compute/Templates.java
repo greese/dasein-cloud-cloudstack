@@ -96,7 +96,7 @@ public class Templates extends AbstractImageSupport {
                 return;
             }
             if( !ctx.getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount(ctx.getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
+                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "add") };
@@ -130,7 +130,7 @@ public class Templates extends AbstractImageSupport {
                 return;
             }
             if( !getContext().getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount(getContext().getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
+                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "true") };
@@ -965,7 +965,7 @@ public class Templates extends AbstractImageSupport {
                 throw new CloudException("No such machine image: " + providerImageId);
             }
             if( !accountNumber.equals(img.getProviderOwnerId())
-                      && !provider.getParentAccount(accountNumber).equalsIgnoreCase(img.getProviderOwnerId())) {
+                      && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
                 throw new CloudException(accountNumber + " cannot remove images belonging to " + img.getProviderOwnerId());
             }
             CSMethod method = new CSMethod(provider);
@@ -1014,7 +1014,7 @@ public class Templates extends AbstractImageSupport {
                 return;
             }
             if( !getContext().getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount(getContext().getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
+                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "remove") };
@@ -1053,7 +1053,7 @@ public class Templates extends AbstractImageSupport {
                 return;
             }
             if( !ctx.getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount(ctx.getAccountNumber()).equalsIgnoreCase(img.getProviderOwnerId())) {
+                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "false") };

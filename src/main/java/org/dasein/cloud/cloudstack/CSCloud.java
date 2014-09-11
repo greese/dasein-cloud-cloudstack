@@ -22,6 +22,7 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 
@@ -37,6 +38,10 @@ import org.dasein.cloud.cloudstack.network.CSNetworkServices;
 import org.dasein.cloud.storage.BlobStoreSupport;
 import org.dasein.cloud.storage.StorageServices;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Day;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -520,27 +525,30 @@ public class CSCloud extends AbstractCloud {
         }
     }
 
-    private transient String parentAccount;
-    private transient String domainId;
 
-    public String getParentAccount(@Nullable String account) throws CloudException, InternalException {
-        if( parentAccount == null ) {
-            refreshUserAccountData(account);
-        }
-        return parentAccount;
-    }
-    public String getDomainId(@Nullable String account) throws CloudException, InternalException {
-        if (domainId == null) {
-           refreshUserAccountData(account);
-        }
-        return domainId;
+    public String getParentAccount() throws CloudException, InternalException {
+        return getUserAccountData().getParentAccount();
     }
 
-    public void refreshUserAccountData(@Nullable String account) throws CloudException, InternalException {
-        APITrace.begin(this, "refreshAccountData");
-        if (account == null) {
-            account = getContext().getAccountNumber();
+    public String getDomainId() throws CloudException, InternalException {
+        return getUserAccountData().getDomainId();
+    }
+
+    public String getAccountId() throws CloudException, InternalException {
+        return getUserAccountData().getAccountId();
+    }
+
+    private @Nonnull AccountData getUserAccountData() throws CloudException, InternalException {
+        AccountData data = null;
+        Cache<AccountData> cache = Cache.getInstance(this, "account", AccountData.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
+        Iterable<AccountData> cachedValues = cache.get(getContext());
+        if( cachedValues != null && cachedValues.iterator().hasNext()) {
+            data = cachedValues.iterator().next();
         }
+        if( data != null ) {
+            return data;
+        }
+        APITrace.begin(this, "getUserAccountData");
 
         try {
             CSMethod method = new CSMethod(this);
@@ -553,6 +561,7 @@ public class CSCloud extends AbstractCloud {
                 boolean foundUser = false;
                 String accountForUser = null;
                 String domainIdForUser = null;
+                String accountIdForUser = null;
                 NodeList attributes = matches.item(i).getChildNodes();
 
                 for( int j=0; j<attributes.getLength(); j++ ) {
@@ -568,7 +577,7 @@ public class CSCloud extends AbstractCloud {
                     }
 
                     if (name.equalsIgnoreCase("username")) {
-                        if (account.equalsIgnoreCase(value)) {
+                        if (getContext().getAccountNumber().equalsIgnoreCase(value)) {
                             foundUser = true;
                         }
                     }
@@ -578,10 +587,12 @@ public class CSCloud extends AbstractCloud {
                     else if (name.equalsIgnoreCase("domainid")) {
                         domainIdForUser = value;
                     }
+                    else if( "accountid".equalsIgnoreCase(name) ) {
+                        accountIdForUser = value;
+                    }
                 }
                 if (foundUser) {
-                    parentAccount = accountForUser;
-                    domainId = domainIdForUser;
+                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser);
                     break;
                 }
             }
@@ -589,5 +600,58 @@ public class CSCloud extends AbstractCloud {
         finally {
             APITrace.end();
         }
+        if( data != null ) {
+            cache.put(getContext(), Arrays.asList(data));
+        }
+        else {
+            throw new InternalException("Unable to find user account for name " + getContext().getAccountNumber());
+        }
+        return data;
+    }
+
+    class AccountData {
+        private String accountId;
+        private String parentAccount;
+        private String domainId;
+        public AccountData(String accountId, String parentAccount, String domainId) {
+            this.accountId = accountId;
+            this.parentAccount = parentAccount;
+            this.domainId = domainId;
+        }
+
+        public String getAccountId() {
+            return accountId;
+        }
+
+        public String getParentAccount() {
+            return parentAccount;
+        }
+
+        public String getDomainId() {
+            return domainId;
+        }
+    }
+
+    /**
+     * Returns the text from the given node.
+     *
+     * @param node the node to extract the value from
+     * @return the text from the node
+     */
+    static public String getTextValue( Node node ) {
+        if( node.getChildNodes().getLength() == 0 ) {
+            return null;
+        }
+        return node.getFirstChild().getNodeValue();
+    }
+
+    /**
+     * Returns the boolean value of the given node.
+     *
+     * @param node the node to extract the value from
+     * @return the boolean value of the node
+     */
+    static public boolean getBooleanValue( Node node ) {
+        return Boolean.valueOf(getTextValue(node));
     }
 }

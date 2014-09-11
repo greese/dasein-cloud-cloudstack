@@ -126,8 +126,10 @@ public class CSMethod {
             for( Param param : params ) {
                 str.append("&");
                 str.append(param.getKey());
-                str.append("=");
-                str.append(URLEncoder.encode(param.getValue(), "UTF-8").replaceAll("\\+", "%20"));
+                if( param.getValue() != null ) {
+                    str.append("=");
+                    str.append(URLEncoder.encode(param.getValue(), "UTF-8").replaceAll("\\+", "%20"));
+                }
             }
             str.append("&apiKey=");
             str.append(URLEncoder.encode(apiKey, "UTF-8").replaceAll("\\+", "%20"));
