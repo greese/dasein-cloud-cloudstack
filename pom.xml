@@ -21,7 +21,7 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-cloudstack</artifactId>
-  <version>2014.08.2-SNAPSHOT</version>
+  <version>2014.08.2</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-cloudstack</name>
