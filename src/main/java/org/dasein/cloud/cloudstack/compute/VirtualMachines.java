@@ -69,15 +69,17 @@ import org.dasein.cloud.compute.VMScalingOptions;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.CalendarWrapper;
 import org.dasein.util.uom.storage.Gigabyte;
 import org.dasein.util.uom.storage.Megabyte;
 import org.dasein.util.uom.storage.Storage;
+import org.dasein.util.uom.time.Hour;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
-
-import org.logicblaze.lingo.util.DefaultTimeoutMap;
 
 public class VirtualMachines extends AbstractVMSupport {
     static public final Logger logger = Logger.getLogger(VirtualMachines.class);
@@ -95,9 +97,7 @@ public class VirtualMachines extends AbstractVMSupport {
     
     static private Properties                              cloudMappings;
     static private Map<String,Map<String,String>>          customNetworkMappings;
-    static private Map<String,Map<String,Set<String>>>     customServiceMappings; 
-    
-    static private DefaultTimeoutMap productCache = new DefaultTimeoutMap();
+    static private Map<String,Map<String,Set<String>>>     customServiceMappings;
     
     private CSCloud provider;
     
@@ -826,107 +826,89 @@ public class VirtualMachines extends AbstractVMSupport {
             if( ctx == null ) {
                 throw new CloudException("No context was configured for this request");
             }
-            Map<Architecture,Collection<VirtualMachineProduct>> cached;
-            String endpoint = provider.getContext().getCloud().getEndpoint();
-            String accountId = provider.getContext().getAccountNumber();
-            String regionId = provider.getContext().getRegionId();
 
-            productCache.purge();
-            cached = (HashMap<Architecture, Collection<VirtualMachineProduct>>) productCache.get(endpoint+"_"+accountId+"_"+regionId);
-            if (cached != null && !cached.isEmpty()) {
-                if( architecture != null && cached.containsKey(architecture) ) {
-                    Collection<VirtualMachineProduct> products = cached.get(architecture);
+            Cache<VirtualMachineProduct> cache = Cache.getInstance(provider, "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));
+            Collection<VirtualMachineProduct> products = (Collection<VirtualMachineProduct>)cache.get(provider.getContext());
+            if(products == null){
+                Set<String> mapping = null;
 
-                    if( products != null ) {
-                        return products;
+                if( customServiceMappings == null ) {
+                    load();
+                }
+                if( customServiceMappings != null ) {
+                    String cloudId = cloudMappings.getProperty(provider.getContext().getCloud().getEndpoint());
+
+                    if( cloudId != null ) {
+                        Map<String,Set<String>> map = customServiceMappings.get(cloudId);
+
+                        if( map != null ) {
+                            mapping = map.get(provider.getContext().getRegionId());
+                        }
                     }
                 }
-            }
-            else {
-                cached = new HashMap<Architecture, Collection<VirtualMachineProduct>>();
-                productCache.put(endpoint+"_"+accountId+"_"+regionId, cached, CalendarWrapper.HOUR * 4);
-            }
-            List<VirtualMachineProduct> products;
-            Set<String> mapping = null;
+                products = new ArrayList<VirtualMachineProduct>();
 
-            if( customServiceMappings == null ) {
-                load();
-            }
-            if( customServiceMappings != null ) {
-                String cloudId = cloudMappings.getProperty(endpoint);
+                CSMethod method = new CSMethod(provider);
+                Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())), LIST_SERVICE_OFFERINGS);
+                NodeList matches = doc.getElementsByTagName("serviceoffering");
 
-                if( cloudId != null ) {
-                    Map<String,Set<String>> map = customServiceMappings.get(cloudId);
+                for( int i=0; i<matches.getLength(); i++ ) {
+                    String id = null, name = null;
+                    Node node = matches.item(i);
+                    NodeList attributes;
+                    int memory = 0;
+                    int cpu = 0;
 
-                    if( map != null ) {
-                        mapping = map.get(provider.getContext().getRegionId());
-                    }
-                }
-            }
-            products = new ArrayList<VirtualMachineProduct>();
+                    attributes = node.getChildNodes();
+                    for( int j=0; j<attributes.getLength(); j++ ) {
+                        Node n = attributes.item(j);
+                        String value;
 
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())), LIST_SERVICE_OFFERINGS);
-            NodeList matches = doc.getElementsByTagName("serviceoffering");
+                        if( n.getChildNodes().getLength() > 0 ) {
+                            value = n.getFirstChild().getNodeValue();
+                        }
+                        else {
+                            value = null;
+                        }
+                        if( n.getNodeName().equals("id") ) {
+                            id = value;
+                        }
+                        else if( n.getNodeName().equals("name") ) {
+                            name = value;
+                        }
+                        else if( n.getNodeName().equals("cpunumber") ) {
+                            cpu = Integer.parseInt(value);
+                        }
+                        else if( n.getNodeName().equals("memory") ) {
+                            memory = Integer.parseInt(value);
+                        }
+                        if( id != null && name != null && cpu > 0 && memory > 0 ) {
+                            break;
+                        }
+                    }
+                    if( id != null  && name != null && cpu > 0 && memory > 0 ) {
+                        if( mapping == null || mapping.contains(id) ) {
+                            VirtualMachineProduct product;
 
-            for( int i=0; i<matches.getLength(); i++ ) {
-                String id = null, name = null;
-                Node node = matches.item(i);
-                NodeList attributes;
-                int memory = 0;
-                int cpu = 0;
-
-                attributes = node.getChildNodes();
-                for( int j=0; j<attributes.getLength(); j++ ) {
-                    Node n = attributes.item(j);
-                    String value;
-
-                    if( n.getChildNodes().getLength() > 0 ) {
-                        value = n.getFirstChild().getNodeValue();
-                    }
-                    else {
-                        value = null;
-                    }
-                    if( n.getNodeName().equals("id") ) {
-                        id = value;
-                    }
-                    else if( n.getNodeName().equals("name") ) {
-                        name = value;
-                    }
-                    else if( n.getNodeName().equals("cpunumber") ) {
-                        cpu = Integer.parseInt(value);
-                    }
-                    else if( n.getNodeName().equals("memory") ) {
-                        memory = Integer.parseInt(value);
-                    }
-                    if( id != null && name != null && cpu > 0 && memory > 0 ) {
-                        break;
-                    }
-                }
-                if( id != null  && name != null && cpu > 0 && memory > 0 ) {
-                    if( mapping == null || mapping.contains(id) ) {
-                        VirtualMachineProduct product;
-
-                        product = new VirtualMachineProduct();
-                        product.setProviderProductId(id);
-                        product.setName(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
-                        product.setDescription(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
-                        product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
-                        product.setCpuCount(cpu);
-                        product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
-                        if (options != null) {
-                            if (options.matches(product)) {
+                            product = new VirtualMachineProduct();
+                            product.setProviderProductId(id);
+                            product.setName(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
+                            product.setDescription(name + " (" + cpu + " CPU/" + memory + "MB RAM)");
+                            product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
+                            product.setCpuCount(cpu);
+                            product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+                            if (options != null) {
+                                if (options.matches(product)) {
+                                    products.add(product);
+                                }
+                            }
+                            else {
                                 products.add(product);
                             }
                         }
-                        else {
-                            products.add(product);
-                        }
                     }
                 }
-            }
-            if (architecture != null) {
-                cached.put(architecture, products);
+                cache.put(provider.getContext(), products);
             }
             return products;
         }
