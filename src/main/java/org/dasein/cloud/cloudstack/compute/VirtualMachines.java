@@ -212,27 +212,6 @@ public class VirtualMachines extends AbstractVMSupport {
         return getRootPassword(vmId);
     }
 
-    @Override
-    public @Nullable VirtualMachineProduct getProduct(@Nonnull String productId) throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.getProduct");
-        try {
-            for( Architecture architecture : Architecture.values() ) {
-                for( VirtualMachineProduct product : listProducts(architecture) ) {
-                    if( product.getProviderProductId().equals(productId) ) {
-                        return product;
-                    }
-                }
-            }
-            if( logger.isDebugEnabled() ) {
-                logger.debug("Unknown product ID for cloud.com: " + productId);
-            }
-            return null;
-        }
-        finally {
-            APITrace.end();
-        }
-    }
-    
     private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.getPassword");
         try {
@@ -796,7 +775,7 @@ public class VirtualMachines extends AbstractVMSupport {
             }
 
             Cache<VirtualMachineProduct> cache = Cache.getInstance(provider, "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));
-            Collection<VirtualMachineProduct> products = (Collection<VirtualMachineProduct>)cache.get(provider.getContext());
+            Collection<VirtualMachineProduct> products = (Collection<VirtualMachineProduct>)cache.get(getContext());
             if(products == null){
                 Set<String> mapping = null;
 
@@ -804,13 +783,13 @@ public class VirtualMachines extends AbstractVMSupport {
                     load();
                 }
                 if( customServiceMappings != null ) {
-                    String cloudId = cloudMappings.getProperty(provider.getContext().getCloud().getEndpoint());
+                    String cloudId = cloudMappings.getProperty(getContext().getCloud().getEndpoint());
 
                     if( cloudId != null ) {
                         Map<String,Set<String>> map = customServiceMappings.get(cloudId);
 
                         if( map != null ) {
-                            mapping = map.get(provider.getContext().getRegionId());
+                            mapping = map.get(getContext().getRegionId());
                         }
                     }
                 }
@@ -876,7 +855,7 @@ public class VirtualMachines extends AbstractVMSupport {
                         }
                     }
                 }
-                cache.put(provider.getContext(), products);
+                cache.put(getContext(), products);
             }
             return products;
         }

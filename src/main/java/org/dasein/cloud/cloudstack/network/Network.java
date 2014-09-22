@@ -22,6 +22,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -39,16 +40,9 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
-import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.network.AbstractVLANSupport;
-import org.dasein.cloud.network.Firewall;
-import org.dasein.cloud.network.FirewallSupport;
 import org.dasein.cloud.network.InternetGateway;
-import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IPVersion;
-import org.dasein.cloud.network.Networkable;
-import org.dasein.cloud.network.NetworkServices;
-import org.dasein.cloud.network.RoutingTable;
 import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.network.VLANCapabilities;
 import org.dasein.cloud.network.VLANState;
@@ -278,7 +272,7 @@ public class Network extends AbstractVLANSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage), new Param("canusefordeploy", "true")), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
@@ -507,6 +501,9 @@ public class Network extends AbstractVLANSupport {
             else if( name.equals("gateway") ) {
                 gateway = value;
             }
+            else if( name.equalsIgnoreCase("networkofferingdisplaytext")) {
+                network.setNetworkType(value);
+            }
         }
         if( network.getProviderVlanId() == null ) {
             return null;
@@ -545,53 +542,7 @@ public class Network extends AbstractVLANSupport {
     @Nonnull
     @Override
     public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
-        throw new OperationNotSupportedException("Internet gateways not supported in "+getProvider().getCloudName());
-    }
-
-    @Override
-    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
-        APITrace.begin(getProvider(), "VLAN.listResources");
-        try {
-            ArrayList<Networkable> resources = new ArrayList<Networkable>();
-            NetworkServices network = cloudstack.getNetworkServices();
-
-            FirewallSupport fwSupport = network.getFirewallSupport();
-
-            if( fwSupport != null ) {
-                for( Firewall fw : fwSupport.list() ) {
-                    if( inVlanId.equals(fw.getProviderVlanId()) ) {
-                        resources.add(fw);
-                    }
-                }
-            }
-
-            IpAddressSupport ipSupport = network.getIpAddressSupport();
-
-            if( ipSupport != null ) {
-                for( IPVersion version : ipSupport.listSupportedIPVersions() ) {
-                    for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
-                        if( inVlanId.equals(addr.getProviderVlanId()) ) {
-                            resources.add(addr);
-                        }
-                    }
-
-                }
-            }
-            for( RoutingTable table : listRoutingTables(inVlanId) ) {
-                resources.add(table);
-            }
-            Iterable<VirtualMachine> vms = cloudstack.getComputeServices().getVirtualMachineSupport().listVirtualMachines();
-
-            for( VirtualMachine vm : vms ) {
-                if( inVlanId.equals(vm.getProviderVlanId()) ) {
-                    resources.add(vm);
-                }
-            }
-            return resources;
-        }
-        finally {
-            APITrace.end();
-        }
+        return Collections.emptyList();
     }
 
     @Override
@@ -604,7 +555,7 @@ public class Network extends AbstractVLANSupport {
                 throw new InternalException("No context was established");
             }
             CSMethod method = new CSMethod(cloudstack);
-            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
+            Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("canusefordeploy", "true")), Network.LIST_NETWORKS);
             ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
@@ -623,7 +574,7 @@ public class Network extends AbstractVLANSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_NETWORKS);
+                    doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage), new Param("canusefordeploy", "true")), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
