@@ -136,9 +136,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public LoadBalancerHealthCheck createLoadBalancerHealthCheck( @Nonnull HealthCheckOptions options ) throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
         List<Param> params = new ArrayList<Param>();
-        params.add(new Param("lbruleid", options.getProviderLoadBalancerId()));
+        String ruleId = getRuleId(options.getProviderLoadBalancerId());
+        params.add(new Param("lbruleid", ruleId));
         if( options.getDescription() != null ) {
             params.add(new Param("description", options.getDescription()));
         }
@@ -146,8 +146,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         params.add(new Param("unhealthythreshold", String.valueOf(options.getUnhealthyCount())));
         params.add(new Param("intervaltime", String.valueOf(options.getInterval())));
         params.add(new Param("responsetimeout", String.valueOf(options.getTimeout())));
-        params.add(new Param("pingpath", options.getHost() + options.getPort() + options.getPath()));
+        params.add(new Param("pingpath", options.getHost() + ":" + options.getPort() + "/" + options.getPath()));
 
+        CSMethod method = new CSMethod(provider);
         Document doc = method.get(method.buildUrl(CREATE_LB_HEALTH_CHECK_POLICY,
                 params.toArray(new Param[params.size()])
         ), CREATE_LB_HEALTH_CHECK_POLICY);
@@ -178,6 +179,25 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                 if( "id".equalsIgnoreCase(name) ) {
                     lbhcId = value;
                 }
+                else if( "path".equalsIgnoreCase(name) ) {
+                    path = value;
+                }
+                else if( "healthcheckinterval".equalsIgnoreCase(name) ) {
+                    interval = Integer.parseInt(value);
+                }
+                else if( "healthcheckthresshold".equalsIgnoreCase(name) ) {
+                    healthyCount = Integer.parseInt(value);
+                }
+                else if( "unhealthcheckthresshold".equalsIgnoreCase(name) ) {
+                    unhealthyCount = Integer.parseInt(value);
+                }
+                else if( "pingpath".equalsIgnoreCase(name) ) {
+                    path = value;
+                }
+                else if( "responsetime".equalsIgnoreCase(name) ) {
+                    timeout = Integer.parseInt(value);
+                }
+
             }
             return LoadBalancerHealthCheck.getInstance(lbhcId, protocol, port, path, interval, timeout, healthyCount, unhealthyCount);
         }
@@ -1098,4 +1118,51 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
     }
     */
+
+    private @Nullable String getRuleId(@Nonnull String loadBalancerId) throws CloudException, InternalException {
+        try {
+            Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
+            boolean isId = isId(loadBalancerId);
+            String key = (isId ? "publicIpId" : "publicIp");
+
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, loadBalancerId)), LIST_LOAD_BALANCER_RULES);
+            NodeList rules = doc.getElementsByTagName("loadbalancerrule");
+
+            for( int i=0; i<rules.getLength(); i++ ) {
+                NodeList attributes = rules.item(i).getChildNodes();
+                String ruleId = null;
+                String publicIp = null;
+                for( int j=0; j<attributes.getLength(); j++ ) {
+                    Node n = attributes.item(j);
+                    String name = n.getNodeName().toLowerCase();
+                    String value;
+
+                    if( n.getChildNodes().getLength() > 0 ) {
+                        value = n.getFirstChild().getNodeValue();
+                    }
+                    else {
+                        value = null;
+                    }
+                    if( name.equals("publicip") ) {
+                        publicIp = value;
+                    }
+                    else if( name.equals("id") ) {
+                        ruleId = value;
+                    }
+                }
+                if( loadBalancerId.equals(publicIp) ) {
+                    return ruleId;
+                }
+            }
+        }
+        catch( CSException e ) {
+            if( e.getHttpCode() == 431 ) {
+                return null;
+            }
+            throw e;
+        }
+        return null;
+    }
+
 }

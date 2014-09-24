@@ -18,11 +18,7 @@
 
 package org.dasein.cloud.cloudstack.compute;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.TreeSet;
+import java.util.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -71,6 +67,7 @@ public class Templates extends AbstractImageSupport {
     static private final String LIST_ISO_PERMISSIONS        = "listIsoPermissions";
     static private final String LIST_TEMPLATE_PERMISSIONS   = "listTemplatePermissions";
     static private final String LIST_TEMPLATES              = "listTemplates";
+    static private final String LIST_CLUSTERS               = "listClusters";
     static private final String REGISTER_TEMPLATE           = "registerTemplate";
     static private final String UPDATE_ISO_PERMISSIONS      = "updateIsoPermissions";
     static private final String UPDATE_TEMPLATE_PERMISSIONS = "updateTemplatePermissions";
@@ -612,7 +609,31 @@ public class Templates extends AbstractImageSupport {
         }
     }
 
-    private @Nonnull ArrayList<ResourceStatus> listIsoStatus() throws CloudException, InternalException {
+    private @Nonnull String getZoneHypervisor(String regionId) throws CloudException, InternalException {
+        ProviderContext ctx = provider.getContext();
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+
+        try {
+            CSMethod method = new CSMethod(provider);
+            Document doc = method.get(method.buildUrl(LIST_CLUSTERS, new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_CLUSTERS);
+            List<String> clusters = new ArrayList<String>();
+            NodeList nodes = doc.getElementsByTagName("hypervisortype");
+            for( int i=0; i< nodes.getLength(); i++ ) {
+                Node item = nodes.item(i);
+                String value = item.getFirstChild().getNodeValue().trim();
+                clusters.add(value);
+            }
+            if( clusters.size() > 0 ) {
+                return clusters.get(0);
+            }
+        } finally {
+        }
+        throw new CloudException("No cluster found for zone " + ctx.getRegionId());
+    }
+
+    private @Nonnull List<ResourceStatus> listIsoStatus() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.listImageStatus");
         try {
             ProviderContext ctx = provider.getContext();
@@ -622,7 +643,7 @@ public class Templates extends AbstractImageSupport {
             }
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_ISOS, new Param("isoFilter", "self"), new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_ISOS);
-            ArrayList<ResourceStatus> templates = new ArrayList<ResourceStatus>();
+            List<ResourceStatus> templates = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -663,15 +684,17 @@ public class Templates extends AbstractImageSupport {
     public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.listImages");
         try {
+            String hypervisor = getZoneHypervisor(getContext().getRegionId());
+
             CSMethod method = new CSMethod(provider);
             String accountNumber = (options == null ? null : options.getAccountNumber());
             Param[] params;
 
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1") };
+                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1"), new Param("hypervisor", hypervisor) };
             }
             else {
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1") };
+                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1"), new Param("hypervisor", hypervisor) };
             }
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
@@ -1019,8 +1042,10 @@ public class Templates extends AbstractImageSupport {
         final Param[] params1, params2, params3, params4;
         final ArrayList<MachineImage> allImages = new ArrayList<MachineImage>();
         final CSMethod method = new CSMethod(provider);
+        String hypervisor = getZoneHypervisor(getContext().getRegionId());
 
-        params1 = new Param[] { new Param("templateFilter", "featured"),  new Param("zoneId", getContext().getRegionId()) };
+        params1 = new Param[] { new Param("templateFilter", "featured"),  new Param("zoneId", getContext().getRegionId()),
+                new Param("hypervisor", hypervisor) };
         params2 = new Param[] { new Param("templateFilter", "community"),  new Param("zoneId", getContext().getRegionId()) };
         //todo add public isos when we can support launching vms from them
         // params3 = new Param[] { new Param("isoFilter", "featured"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true") };
