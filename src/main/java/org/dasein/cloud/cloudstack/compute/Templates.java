@@ -29,14 +29,8 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
-import org.dasein.cloud.cloudstack.CSCloud;
-import org.dasein.cloud.cloudstack.CSException;
-import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.CSTopology;
-import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.cloudstack.*;
 import org.dasein.cloud.compute.AbstractImageSupport;
 import org.dasein.cloud.compute.Architecture;
 import org.dasein.cloud.compute.ImageCapabilities;
@@ -50,10 +44,14 @@ import org.dasein.cloud.compute.Platform;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.Cache;
+import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.CalendarWrapper;
 import org.dasein.util.Jiterator;
 import org.dasein.util.JiteratorPopulator;
 import org.dasein.util.PopulatorThread;
+import org.dasein.util.uom.time.Day;
+import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -610,11 +608,21 @@ public class Templates extends AbstractImageSupport {
     }
 
     private @Nonnull String getZoneHypervisor(String regionId) throws CloudException, InternalException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getContext();
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
+        String cacheName = "hypervisorCache";
+        Cache<Param> hypervisorCache = Cache.getInstance(getProvider(), cacheName, Param.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(7, TimePeriod.DAY));
 
+        Iterable<Param> zoneHypervisors = hypervisorCache.get(ctx);
+        if( zoneHypervisors != null ) {
+            for( Param zoneHypervisor : zoneHypervisors ) {
+                if( regionId.equalsIgnoreCase(zoneHypervisor.getKey())) {
+                    return zoneHypervisor.getValue();
+                }
+            }
+        }
         try {
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_CLUSTERS, new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_CLUSTERS);
@@ -622,11 +630,11 @@ public class Templates extends AbstractImageSupport {
             NodeList nodes = doc.getElementsByTagName("hypervisortype");
             for( int i=0; i< nodes.getLength(); i++ ) {
                 Node item = nodes.item(i);
-                String value = item.getFirstChild().getNodeValue().trim();
-                clusters.add(value);
-            }
-            if( clusters.size() > 0 ) {
-                return clusters.get(0);
+                String hypervisor = item.getFirstChild().getNodeValue().trim();
+                List<Param> zoneHypervisorsCopy = Iterables.toList(zoneHypervisors);
+                zoneHypervisorsCopy.add(new Param(ctx.getRegionId(), hypervisor));
+                hypervisorCache.put(ctx, zoneHypervisorsCopy);
+                return hypervisor;
             }
         } finally {
         }

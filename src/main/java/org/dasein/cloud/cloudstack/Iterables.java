@@ -1,5 +1,6 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2013 Dell, Inc.
+ * See annotations for authorship information
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,14 +16,34 @@
  * limitations under the License.
  * ====================================================================
  */
-
 package org.dasein.cloud.cloudstack;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
 
-public class Param extends Tuple<String, String> {
-    public Param( @Nonnull String key, @Nullable String value ) {
-        super(key, value);
+/**
+ * Description
+ * <p>Created by stas: 24/09/2014 11:52</p>
+ *
+ * @author Stas Maksimov
+ * @version 2014.08 initial version
+ * @since 2014.08
+ */
+public final class Iterables {
+
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        if( iterable == null ) {
+            return new ArrayList<T>();
+        }
+        if( iterable instanceof List ) {
+            return (List<T>) iterable;
+        } else {
+            List<T> list = new ArrayList<T>();
+            for( T item : iterable) {
+                list.add(item);
+            }
+            return list;
+        }
     }
+
 }
