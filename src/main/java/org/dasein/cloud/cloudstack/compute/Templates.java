@@ -24,6 +24,7 @@ import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.log4j.Logger;
 import org.dasein.cloud.AsynchronousTask;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
@@ -57,6 +58,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 public class Templates extends AbstractImageSupport {
+    static public final Logger logger = Logger.getLogger(Templates.class);
+
     static private final String CREATE_TEMPLATE             = "createTemplate";
     static private final String DELETE_ISO                  = "deleteIso";
     static private final String DELETE_TEMPLATE             = "deleteTemplate";
@@ -65,20 +68,19 @@ public class Templates extends AbstractImageSupport {
     static private final String LIST_ISO_PERMISSIONS        = "listIsoPermissions";
     static private final String LIST_TEMPLATE_PERMISSIONS   = "listTemplatePermissions";
     static private final String LIST_TEMPLATES              = "listTemplates";
-    static private final String LIST_CLUSTERS               = "listClusters";
     static private final String REGISTER_TEMPLATE           = "registerTemplate";
     static private final String UPDATE_ISO_PERMISSIONS      = "updateIsoPermissions";
     static private final String UPDATE_TEMPLATE_PERMISSIONS = "updateTemplatePermissions";
-    
+
     private CSCloud provider;
-    
-    public Templates(CSCloud provider) {
+
+    public Templates( CSCloud provider ) {
         super(provider);
         this.provider = provider;
     }
 
     @Override
-    public void addImageShare(@Nonnull String providerImageId, @Nonnull String accountNumber) throws CloudException, InternalException {
+    public void addImageShare( @Nonnull String providerImageId, @Nonnull String accountNumber ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.addImageShare");
         try {
             ProviderContext ctx = provider.getContext();
@@ -91,11 +93,10 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
+            if( !ctx.getAccountNumber().equals(img.getProviderOwnerId()) && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId()) ) {
                 return;
             }
-            Param[] params = new Param[] { new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "add") };
+            Param[] params = new Param[]{new Param("id", providerImageId), new Param("accounts", accountNumber), new Param("op", "add")};
 
             CSMethod method = new CSMethod(provider);
             Document doc;
@@ -103,8 +104,8 @@ public class Templates extends AbstractImageSupport {
                 doc = method.get(method.buildUrl(UPDATE_TEMPLATE_PERMISSIONS, params), UPDATE_TEMPLATE_PERMISSIONS);
                 provider.waitForJob(doc, "Share Template");
             }
-            catch (CSException e) {
-                if (e.getHttpCode()==431) {
+            catch( CSException e ) {
+                if( e.getHttpCode() == 431 ) {
                     //try update iso share
                     doc = method.get(method.buildUrl(UPDATE_ISO_PERMISSIONS, params), UPDATE_ISO_PERMISSIONS);
                     provider.waitForJob(doc, "Share Iso");
@@ -117,7 +118,7 @@ public class Templates extends AbstractImageSupport {
     }
 
     @Override
-    public void addPublicShare(@Nonnull String providerImageId) throws CloudException, InternalException {
+    public void addPublicShare( @Nonnull String providerImageId ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.addPublicShare");
         try {
             MachineImage img = getImage(providerImageId);
@@ -125,11 +126,10 @@ public class Templates extends AbstractImageSupport {
             if( img == null ) {
                 return;
             }
-            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId())
-                    && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId())) {
+            if( !getContext().getAccountNumber().equals(img.getProviderOwnerId()) && !provider.getParentAccount().equalsIgnoreCase(img.getProviderOwnerId()) ) {
                 return;
             }
-            Param[] params = new Param[] { new Param("id", providerImageId), new Param("isPublic", "true") };
+            Param[] params = new Param[]{new Param("id", providerImageId), new Param("isPublic", "true") };
 
             CSMethod method = new CSMethod(provider);
             Document doc;
@@ -219,15 +219,6 @@ public class Templates extends AbstractImageSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
-        switch( cls ) {
-            case KERNEL: return "kernel template";
-            case RAMDISK: return "ramdisk template";
-        }
-        return "template";
     }
 
     private @Nullable String getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
@@ -327,19 +318,19 @@ public class Templates extends AbstractImageSupport {
             }
 
             MachineImage img;
+
             String osId = server.getTag("guestosid").toString();
-
             String name = validateName(options.getName());
-            Param[] params = new Param[8];
 
-            params[0] = new Param("name", name);
-            params[1] = new Param("displayText", name);
-            params[2] = new Param("osTypeId", osId == null ? toOs(server.getPlatform(),server.getArchitecture()) : osId);
-            params[3] = new Param("zoneId", getContext().getRegionId());
-            params[4] = new Param("isPublic", "false");
-            params[5] = new Param("isFeatured", "false");
-            params[6] = new Param("volumeid",rootVolumeId);
-            params[7] = new Param("passwordEnabled", String.valueOf(server.getTag("passwordenabled")));
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("name", name));
+            params.add(new Param("displayText", name));
+            params.add(new Param("osTypeId", osId == null ? toOs(server.getPlatform(),server.getArchitecture()) : osId));
+            params.add(new Param("zoneId", getContext().getRegionId()));
+            params.add(new Param("isPublic", "false"));
+            params.add(new Param("isFeatured", "false"));
+            params.add(new Param("volumeid",rootVolumeId));
+            params.add(new Param("passwordEnabled", String.valueOf(server.getTag("passwordenabled"))));
             doc = method.get(method.buildUrl(CREATE_TEMPLATE, params), CREATE_TEMPLATE);
 
             NodeList matches = doc.getElementsByTagName("templateid"); // v2.1
@@ -568,7 +559,7 @@ public class Templates extends AbstractImageSupport {
             }
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, new Param("templateFilter", "self"), new Param("zoneId", ctx.getRegionId())), LIST_TEMPLATES);
-            ArrayList<ResourceStatus> templates = new ArrayList<ResourceStatus>();
+            List<ResourceStatus> templates = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -605,40 +596,6 @@ public class Templates extends AbstractImageSupport {
         finally {
             APITrace.end();
         }
-    }
-
-    private @Nonnull String getZoneHypervisor(String regionId) throws CloudException, InternalException {
-        ProviderContext ctx = getContext();
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        String cacheName = "hypervisorCache";
-        Cache<Param> hypervisorCache = Cache.getInstance(getProvider(), cacheName, Param.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(7, TimePeriod.DAY));
-
-        Iterable<Param> zoneHypervisors = hypervisorCache.get(ctx);
-        if( zoneHypervisors != null ) {
-            for( Param zoneHypervisor : zoneHypervisors ) {
-                if( regionId.equalsIgnoreCase(zoneHypervisor.getKey())) {
-                    return zoneHypervisor.getValue();
-                }
-            }
-        }
-        try {
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_CLUSTERS, new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_CLUSTERS);
-            List<String> clusters = new ArrayList<String>();
-            NodeList nodes = doc.getElementsByTagName("hypervisortype");
-            for( int i=0; i< nodes.getLength(); i++ ) {
-                Node item = nodes.item(i);
-                String hypervisor = item.getFirstChild().getNodeValue().trim();
-                List<Param> zoneHypervisorsCopy = Iterables.toList(zoneHypervisors);
-                zoneHypervisorsCopy.add(new Param(ctx.getRegionId(), hypervisor));
-                hypervisorCache.put(ctx, zoneHypervisorsCopy);
-                return hypervisor;
-            }
-        } finally {
-        }
-        throw new CloudException("No cluster found for zone " + ctx.getRegionId());
     }
 
     private @Nonnull List<ResourceStatus> listIsoStatus() throws CloudException, InternalException {
@@ -692,22 +649,25 @@ public class Templates extends AbstractImageSupport {
     public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.listImages");
         try {
-            String hypervisor = getZoneHypervisor(getContext().getRegionId());
+            String hypervisor = ((CSCloud)getProvider()).getZoneHypervisor(getContext().getRegionId());
 
             CSMethod method = new CSMethod(provider);
             String accountNumber = (options == null ? null : options.getAccountNumber());
-            Param[] params;
-
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("zoneId", getContext().getRegionId()));
+            params.add(new Param("pagesize", "500"));
+            params.add(new Param("hypervisor", hypervisor));
+            String templateFilter = "executable";
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
-                params = new Param[] { new Param("templateFilter", "selfexecutable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1"), new Param("hypervisor", hypervisor) };
+                templateFilter = "selfexecutable";
             }
-            else {
-                params = new Param[] { new Param("templateFilter", "executable"),  new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", "1"), new Param("hypervisor", hypervisor) };
-            }
+            params.add(new Param("templateFilter", templateFilter));
+            Param pageParam = new Param("page", "1");
+            params.add(pageParam);
 
             Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
 
-            ArrayList<MachineImage> templates = new ArrayList<MachineImage>();
+            List<MachineImage> templates = new ArrayList<MachineImage>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -725,8 +685,7 @@ public class Templates extends AbstractImageSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    int length = params.length;
-                    params[length-1] = new Param("page", nextPage);
+                    pageParam.setValue(nextPage);
                     doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
                 }
                 NodeList matches = doc.getElementsByTagName("template");
@@ -750,6 +709,7 @@ public class Templates extends AbstractImageSupport {
         }
     }
 
+    // TODO: refactor to use listImages, as the code is a copy-paste with minor changes.
     private @Nonnull ArrayList<MachineImage> listIsos(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.listIsos");
         try {
@@ -825,7 +785,7 @@ public class Templates extends AbstractImageSupport {
                     throw e;
                 }
             }
-            TreeSet<String> accounts = new TreeSet<String>();
+            Set<String> accounts = new TreeSet<String>();
             NodeList matches = doc.getElementsByTagName("account");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -858,32 +818,33 @@ public class Templates extends AbstractImageSupport {
 
             Platform platform = Platform.guess(name);
             Architecture architecture = guess(name);
-            Param[] params = new Param[8];
+            List<Param> params = new ArrayList<Param>();
 
-            params[0] = new Param("name", name);
-            params[1] = new Param("displayText", name);
-            params[2] = new Param("url", atStorageLocation);
+            params.add(new Param("name", name));
+            params.add(new Param("displayText", name));
+            params.add(new Param("url", atStorageLocation));
             MachineImageFormat fmt = options.getBundleFormat();
 
             if( fmt == null ) {
                 throw new CloudException("You must specify the bundle format for the new bundle");
             }
-            if( MachineImageFormat.VHD.equals(options.getBundleFormat()) ) {
-                params[3] = new Param("format", "VHD");
+            String format;
+            switch( options.getBundleFormat() ) {
+                case VHD:
+                    format = "VHD"; break;
+                case RAW:
+                    format = "RAW"; break;
+                case QCOW2:
+                    format = "QCOW2"; break;
+                default:
+                    throw new OperationNotSupportedException("Unsupported bundle format: " + options.getBundleFormat());
             }
-            else if( MachineImageFormat.RAW.equals(fmt) ) {
-                params[3] = new Param("format", "RAW");
-            }
-            else if( MachineImageFormat.QCOW2.equals(fmt) ) {
-                params[3] = new Param("format", "QCOW2");
-            }
-            else {
-                throw new OperationNotSupportedException("Unsupported bundle format: " + options.getBundleFormat());
-            }
-            params[4] = new Param("osTypeId", toOs(platform, architecture));
-            params[5] = new Param("zoneId", ctx.getRegionId());
-            params[6] = new Param("isPublic", "false");
-            params[7] = new Param("isFeatured", "false");
+            params.add(new Param("format", format));
+
+            params.add(new Param("osTypeId", toOs(platform, architecture)));
+            params.add(new Param("zoneId", ctx.getRegionId()));
+            params.add(new Param("isPublic", "false"));
+            params.add(new Param("isFeatured", "false"));
 
             CSMethod method = new CSMethod(provider);
             Document doc = method.get(method.buildUrl(REGISTER_TEMPLATE, params), REGISTER_TEMPLATE);
@@ -1047,15 +1008,16 @@ public class Templates extends AbstractImageSupport {
     @Override
     public @Nonnull Iterable<MachineImage> searchPublicImages(final @Nonnull ImageFilterOptions options) throws CloudException, InternalException {
         //dmayne 20131004: need to get both sets of filters (featured and community) to match direct console
-        final Param[] params1, params2, params3, params4;
-        final ArrayList<MachineImage> allImages = new ArrayList<MachineImage>();
+        final List<Param> params = new ArrayList<Param>();
+        final List<MachineImage> allImages = new ArrayList<MachineImage>();
         final CSMethod method = new CSMethod(provider);
-        String hypervisor = getZoneHypervisor(getContext().getRegionId());
+        Param filterParam = new Param("templateFilter", "featured");
+        params.add(filterParam);
+        params.add(new Param("hypervisor", ((CSCloud) getProvider()).getZoneHypervisor(getContext().getRegionId())));
+        params.add(new Param("zoneId", getContext().getRegionId()));
 
-        params1 = new Param[] { new Param("templateFilter", "featured"),  new Param("zoneId", getContext().getRegionId()),
-                new Param("hypervisor", hypervisor) };
-        params2 = new Param[] { new Param("templateFilter", "community"),  new Param("zoneId", getContext().getRegionId()) };
         //todo add public isos when we can support launching vms from them
+        //todo refactor to make smaller methods
         // params3 = new Param[] { new Param("isoFilter", "featured"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true") };
         // params4 = new Param[] { new Param("isoFilter", "community"),  new Param("zoneId", getContext().getRegionId()), new Param("bootable", "true") };
 
@@ -1067,7 +1029,7 @@ public class Templates extends AbstractImageSupport {
                 try {
                     APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
                     try {
-                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params1), LIST_TEMPLATES);
+                        Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
                         NodeList matches = doc.getElementsByTagName("template");
 
                         for( int i=0; i<matches.getLength(); i++ ) {
@@ -1091,7 +1053,7 @@ public class Templates extends AbstractImageSupport {
         populator.populate();
         allImages.addAll(populator.getResult());
 
-        /*todo add public isos when we can support launching vms from them
+        /*todo add public isos when we can suppor t launching vms from them
          provider.hold();
          populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
              @Override
@@ -1125,7 +1087,7 @@ public class Templates extends AbstractImageSupport {
          populator.populate();
          allImages.addAll(populator.getResult());
          */
-
+        filterParam.setValue("community");
         if (!provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
             provider.hold();
             populator = new PopulatorThread<MachineImage>(new JiteratorPopulator<MachineImage>() {
@@ -1134,7 +1096,7 @@ public class Templates extends AbstractImageSupport {
                     try {
                         APITrace.begin(getProvider(), "Image.searchPublicImages.populate");
                         try {
-                            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params2), LIST_TEMPLATES);
+                            Document doc = method.get(method.buildUrl(LIST_TEMPLATES, params), LIST_TEMPLATES);
                             NodeList matches = doc.getElementsByTagName("template");
 
                             for( int i=0; i<matches.getLength(); i++ ) {
@@ -1196,17 +1158,12 @@ public class Templates extends AbstractImageSupport {
         return allImages;
     }
 
-    @Override
-    public boolean supportsCustomImages() {
-        return true;
-    }
-
     private @Nullable MachineImage toImage(@Nullable Node node, boolean onlyIfPublic) throws CloudException, InternalException {
         if( node == null ) {
             return null;
         }
         Architecture bestArchitectureGuess = Architecture.I64;
-        HashMap<String,String> properties = new HashMap<String,String>();
+        Map<String, String> properties = new HashMap<String,String>();
         NodeList attributes = node.getChildNodes();
         boolean isPublic = false;
 
@@ -1222,13 +1179,9 @@ public class Templates extends AbstractImageSupport {
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
-            String value;
-            
+            String value = null;
             if( attribute.hasChildNodes() && attribute.getChildNodes().getLength() > 0 ) {
                 value = attribute.getFirstChild().getNodeValue();
-            }
-            else {
-                value = null;
             }
             if( name.equals("id") ) {
                 imageId = value;
@@ -1297,7 +1250,7 @@ public class Templates extends AbstractImageSupport {
             }
             else if( name.equals("status") ) {
                 if( value == null || !value.equalsIgnoreCase("Download Complete") ) {
-                    System.out.println("Template status=" + value);
+                    logger.warn("Template status=" + value);
                 }
             }
         }
@@ -1328,7 +1281,7 @@ public class Templates extends AbstractImageSupport {
         NodeList attributes = node.getChildNodes();
         MachineImageState imageState = null;
         String imageId = null;
-        Boolean isPublic = null;
+        boolean isPublic = false;
 
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
@@ -1352,9 +1305,6 @@ public class Templates extends AbstractImageSupport {
                     imageState = MachineImageState.ACTIVE;
                 }
             }
-        }
-        if( isPublic == null ) {
-            isPublic = false;
         }
         if( imageId != null && (!onlyIfPublic || isPublic) ) {
             if( imageState == null ) {
@@ -1407,7 +1357,7 @@ public class Templates extends AbstractImageSupport {
         do {
             found = false;
             for( MachineImage vm : listImages(ImageClass.MACHINE) ) {
-                if( vm.getName().equals(name) ) {
+                if( name.equals(vm.getName()) ) {
                     found = true;
                     break;
                 }

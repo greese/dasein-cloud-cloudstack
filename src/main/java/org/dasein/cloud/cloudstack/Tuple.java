@@ -46,6 +46,10 @@ public class Tuple<K, V> implements Comparable<Tuple<K, V>> {
         return value;
     }
 
+    public void setValue(@Nullable V value) {
+        this.value = value;
+    }
+
     @Override
     public String toString() {
         return key.toString() + ":" + value.toString();

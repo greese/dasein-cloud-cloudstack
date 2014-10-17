@@ -416,7 +416,6 @@ public class VirtualMachines extends AbstractVMSupport {
     
     private VirtualMachine launch21(String imageId, VirtualMachineProduct product, String inZoneId, String name) throws InternalException, CloudException {
         CSMethod method = new CSMethod(provider);
-        
         return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", getContext().getRegionId()), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) ), DEPLOY_VIRTUAL_MACHINE));
     }
     
