@@ -160,8 +160,8 @@
                     <exclude>**/LICENSE-APACHE.txt</exclude>
                 </excludes>
                 <properties>
-                    <year>2009-2013</year>
-                    <copyrightHolder>enstratius, Inc.</copyrightHolder>
+                    <year>2009-2014</year>
+                    <copyrightHolder>Dell, Inc.</copyrightHolder>
                 </properties>
             </configuration>
         </plugin>
