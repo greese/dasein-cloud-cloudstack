@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,8 @@ import javax.servlet.http.HttpServletResponse;
 
 public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
-    static public final String LIST_ACCOUNTS = "listAccounts";
+    static private final String LIST_ACCOUNTS = "listAccounts";
+    static private final String LIST_CLUSTERS               = "listClusters";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
@@ -167,8 +168,7 @@ public class CSCloud extends AbstractCloud {
 
     private transient CSVersion version;
 
-    public @Nonnull
-    CSVersion getVersion() {
+    public @Nonnull CSVersion getVersion() {
         if( version == null ) {
             ProviderContext ctx = getContext();
             Properties properties = (ctx == null ? null : ctx.getCustomProperties());
@@ -654,4 +654,38 @@ public class CSCloud extends AbstractCloud {
     static public boolean getBooleanValue( Node node ) {
         return Boolean.valueOf(getTextValue(node));
     }
+
+    public @Nonnull String getZoneHypervisor(String regionId) throws CloudException, InternalException {
+        ProviderContext ctx = getContext();
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        String cacheName = "hypervisorCache";
+        Cache<Param> hypervisorCache = Cache.getInstance(this, cacheName, Param.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(7, TimePeriod.DAY));
+
+        Iterable<Param> zoneHypervisors = hypervisorCache.get(ctx);
+        if( zoneHypervisors != null ) {
+            for( Param zoneHypervisor : zoneHypervisors ) {
+                if( regionId.equalsIgnoreCase(zoneHypervisor.getKey())) {
+                    return zoneHypervisor.getValue();
+                }
+            }
+        }
+        try {
+            CSMethod method = new CSMethod(this);
+            Document doc = method.get(method.buildUrl(LIST_CLUSTERS, new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_CLUSTERS);
+            NodeList nodes = doc.getElementsByTagName("hypervisortype");
+            for( int i=0; i< nodes.getLength(); i++ ) {
+                Node item = nodes.item(i);
+                String hypervisor = item.getFirstChild().getNodeValue().trim();
+                List<Param> zoneHypervisorsCopy = Iterables.toList(zoneHypervisors);
+                zoneHypervisorsCopy.add(new Param(ctx.getRegionId(), hypervisor));
+                hypervisorCache.put(ctx, zoneHypervisorsCopy);
+                return hypervisor;
+            }
+        } finally {
+        }
+        throw new CloudException("No cluster found for zone " + ctx.getRegionId());
+    }
+
 }

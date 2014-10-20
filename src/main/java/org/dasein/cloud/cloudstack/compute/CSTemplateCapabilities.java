@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -126,7 +126,7 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
 
     @Override
     public boolean supportsImageSharing() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override

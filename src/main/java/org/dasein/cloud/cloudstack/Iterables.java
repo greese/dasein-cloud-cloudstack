@@ -18,13 +18,32 @@
 
 package org.dasein.cloud.cloudstack;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Represents a specific cloud provider of CloudStack IaaS-based services. Enables support for custom functionality
- * and extensions, where appropriate.
- * @author George Reese
- * @version 2012.09 minor updates
- * @since unknown
+ * Description
+ * <p>Created by stas: 24/09/2014 11:52</p>
+ *
+ * @author Stas Maksimov
+ * @version 2014.08 initial version
+ * @since 2014.08
  */
-public enum CSServiceProvider {
-    DATAPIPE, DEMOCLOUD, KT, TATA, INTERNAL
+public final class Iterables {
+
+    public static <T> List<T> toList(Iterable<T> iterable) {
+        if( iterable == null ) {
+            return new ArrayList<T>();
+        }
+        if( iterable instanceof List ) {
+            return (List<T>) iterable;
+        } else {
+            List<T> list = new ArrayList<T>();
+            for( T item : iterable) {
+                list.add(item);
+            }
+            return list;
+        }
+    }
+
 }
