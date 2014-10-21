@@ -33,7 +33,7 @@ public final class Iterables {
 
     public static <T> List<T> toList(Iterable<T> iterable) {
         if( iterable == null ) {
-            return new ArrayList<T>();
+            return null;
         }
         if( iterable instanceof List ) {
             return (List<T>) iterable;

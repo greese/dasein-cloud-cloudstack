@@ -22,9 +22,7 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
@@ -54,7 +52,7 @@ import javax.servlet.http.HttpServletResponse;
 public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
     static private final String LIST_ACCOUNTS = "listAccounts";
-    static private final String LIST_CLUSTERS               = "listClusters";
+    static private final String LIST_HYPERVISORS = "listHypervisors";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
@@ -577,37 +575,31 @@ public class CSCloud extends AbstractCloud {
         return Boolean.valueOf(getTextValue(node));
     }
 
-    public @Nonnull String getZoneHypervisor(String regionId) throws CloudException, InternalException {
+    public @Nonnull List<String> getZoneHypervisors(String regionId) throws CloudException, InternalException {
         ProviderContext ctx = getContext();
         if( ctx == null ) {
             throw new CloudException("No context was set for this request");
         }
         String cacheName = "hypervisorCache";
-        Cache<Param> hypervisorCache = Cache.getInstance(this, cacheName, Param.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(7, TimePeriod.DAY));
+        Cache<String> hypervisorCache = Cache.getInstance(this, cacheName, String.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
 
-        Iterable<Param> zoneHypervisors = hypervisorCache.get(ctx);
+        List<String> zoneHypervisors = Iterables.toList(hypervisorCache.get(ctx));
         if( zoneHypervisors != null ) {
-            for( Param zoneHypervisor : zoneHypervisors ) {
-                if( regionId.equalsIgnoreCase(zoneHypervisor.getKey())) {
-                    return zoneHypervisor.getValue();
-                }
-            }
+            return zoneHypervisors;
         }
         try {
             CSMethod method = new CSMethod(this);
-            Document doc = method.get(method.buildUrl(LIST_CLUSTERS, new Param("zoneId", ctx.getRegionId()), new Param("bootable", "true")), LIST_CLUSTERS);
-            NodeList nodes = doc.getElementsByTagName("hypervisortype");
+            Document doc = method.get(method.buildUrl(LIST_HYPERVISORS, new Param("zoneid", ctx.getRegionId())), LIST_HYPERVISORS);
+            NodeList nodes = doc.getElementsByTagName("name");
+            zoneHypervisors = new ArrayList<String>();
             for( int i=0; i< nodes.getLength(); i++ ) {
                 Node item = nodes.item(i);
-                String hypervisor = item.getFirstChild().getNodeValue().trim();
-                List<Param> zoneHypervisorsCopy = Iterables.toList(zoneHypervisors);
-                zoneHypervisorsCopy.add(new Param(ctx.getRegionId(), hypervisor));
-                hypervisorCache.put(ctx, zoneHypervisorsCopy);
-                return hypervisor;
+                zoneHypervisors.add(item.getFirstChild().getNodeValue().trim());
             }
+            hypervisorCache.put(ctx, zoneHypervisors);
+            return zoneHypervisors;
         } finally {
         }
-        throw new CloudException("No cluster found for zone " + ctx.getRegionId());
     }
 
 }
