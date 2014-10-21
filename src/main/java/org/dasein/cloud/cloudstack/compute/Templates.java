@@ -205,7 +205,7 @@ public class Templates extends AbstractImageSupport {
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
 
-                MachineImage image = toImage(node, false);
+                MachineImage image = toImage(node, false, null);
 
 
                 if( image != null ) {
@@ -430,7 +430,7 @@ public class Templates extends AbstractImageSupport {
             for( int i=0; i<matches.getLength(); i++ ) {
                 Node node = matches.item(i);
 
-                MachineImage image = toImage(node, true);
+                MachineImage image = toImage(node, true, null);
 
                 if( image != null && image.getProviderMachineImageId().equals(templateId) ) {
                     return true;
@@ -650,14 +650,19 @@ public class Templates extends AbstractImageSupport {
     public @Nonnull Iterable<MachineImage> listImages(@Nullable ImageFilterOptions options) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Image.listImages");
         try {
-            String hypervisor = ((CSCloud)getProvider()).getZoneHypervisor(getContext().getRegionId());
+            List<String> hypervisors = provider.getZoneHypervisors(getContext().getRegionId());
 
             CSMethod method = new CSMethod(provider);
             String accountNumber = (options == null ? null : options.getAccountNumber());
             List<Param> params = new ArrayList<Param>();
             params.add(new Param("zoneId", getContext().getRegionId()));
             params.add(new Param("pagesize", "500"));
-            params.add(new Param("hypervisor", hypervisor));
+
+            // if only single hypervisor is supported by zone, let's limit to that
+            if( hypervisors != null && hypervisors.size() == 1 ) {
+                params.add(new Param("hypervisor", hypervisors.get(0)));
+            }
+
             String templateFilter = "executable";
             if( accountNumber == null || provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
                 templateFilter = "selfexecutable";
@@ -692,7 +697,7 @@ public class Templates extends AbstractImageSupport {
                 NodeList matches = doc.getElementsByTagName("template");
 
                 for( int i=0; i<matches.getLength(); i++ ) {
-                    MachineImage image = toImage(matches.item(i), false);
+                    MachineImage image = toImage(matches.item(i), false, hypervisors);
 
                     if( image != null && (options == null || options.matches(image)) ) {
                         templates.add(image);
@@ -752,7 +757,7 @@ public class Templates extends AbstractImageSupport {
                 NodeList matches = doc.getElementsByTagName("iso");
 
                 for( int i=0; i<matches.getLength(); i++ ) {
-                    MachineImage image = toImage(matches.item(i), false);
+                    MachineImage image = toImage(matches.item(i), false, provider.getZoneHypervisors(getContext().getRegionId()));
 
 
                     if( image != null && (options == null || options.matches(image)) ) {
@@ -1078,7 +1083,10 @@ public class Templates extends AbstractImageSupport {
         final CSMethod method = new CSMethod(provider);
         Param filterParam = new Param("templateFilter", "featured");
         params.add(filterParam);
-        params.add(new Param("hypervisor", ((CSCloud) getProvider()).getZoneHypervisor(getContext().getRegionId())));
+        final List<String> hypervisors = provider.getZoneHypervisors(getContext().getRegionId());
+        if( hypervisors != null && hypervisors.size() == 1) {
+            params.add(new Param("hypervisor", hypervisors.get(0)));
+        }
         params.add(new Param("zoneId", getContext().getRegionId()));
 
         //todo add public isos when we can support launching vms from them
@@ -1098,7 +1106,7 @@ public class Templates extends AbstractImageSupport {
                         NodeList matches = doc.getElementsByTagName("template");
 
                         for( int i=0; i<matches.getLength(); i++ ) {
-                            MachineImage img = toImage(matches.item(i), true);
+                            MachineImage img = toImage(matches.item(i), true, hypervisors);
 
                             if( img != null && options.matches(img) ) {
                                 iterator.push(img);
@@ -1165,7 +1173,7 @@ public class Templates extends AbstractImageSupport {
                             NodeList matches = doc.getElementsByTagName("template");
 
                             for( int i=0; i<matches.getLength(); i++ ) {
-                                MachineImage img = toImage(matches.item(i), true);
+                                MachineImage img = toImage(matches.item(i), true, hypervisors);
 
                                 if( img != null && options.matches(img) && !allImages.contains(img)) {
                                     iterator.push(img);
@@ -1223,7 +1231,7 @@ public class Templates extends AbstractImageSupport {
         return allImages;
     }
 
-    private @Nullable MachineImage toImage(@Nullable Node node, boolean onlyIfPublic) throws CloudException, InternalException {
+    private @Nullable MachineImage toImage(@Nullable Node node, boolean onlyIfPublic, List<String> desiredHypervisors) throws CloudException, InternalException {
         if( node == null ) {
             return null;
         }
@@ -1253,6 +1261,12 @@ public class Templates extends AbstractImageSupport {
             }
             else if( name.equals("zoneid") ) {
                 if( value == null || !value.equals(getContext().getRegionId()) ) {
+                    return null;
+                }
+            }
+            else if( name.equals("hypervisor") ) {
+                // check if the image hypervisor is not in the desired list
+                if( desiredHypervisors != null && !desiredHypervisors.contains(value) ) {
                     return null;
                 }
             }
