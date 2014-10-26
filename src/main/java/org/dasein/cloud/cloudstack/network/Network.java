@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,9 +40,16 @@ import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.network.AbstractVLANSupport;
+import org.dasein.cloud.network.Firewall;
+import org.dasein.cloud.network.FirewallSupport;
 import org.dasein.cloud.network.InternetGateway;
+import org.dasein.cloud.network.IpAddressSupport;
 import org.dasein.cloud.network.IPVersion;
+import org.dasein.cloud.network.Networkable;
+import org.dasein.cloud.network.NetworkServices;
+import org.dasein.cloud.network.RoutingTable;
 import org.dasein.cloud.network.VLAN;
 import org.dasein.cloud.network.VLANCapabilities;
 import org.dasein.cloud.network.VLANState;
@@ -55,7 +62,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Network extends AbstractVLANSupport {
+public class Network extends AbstractVLANSupport<CSCloud> {
     static public final Logger logger = Logger.getLogger(Network.class);
 
     static public final String CREATE_NETWORK         = "createNetwork";
@@ -65,11 +72,8 @@ public class Network extends AbstractVLANSupport {
 
     static public final String CREATE_EGRESS_RULE     = "createEgressFirewallRule";
 
-    private CSCloud cloudstack;
-    
-    Network(CSCloud cloudstack) {
-        super(cloudstack);
-        this.cloudstack = cloudstack;
+    Network(CSCloud provider) {
+        super(provider);
     }
 
     public List<String> findFreeNetworks() throws CloudException, InternalException {
@@ -93,7 +97,7 @@ public class Network extends AbstractVLANSupport {
     @Override
     public VLANCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
-            capabilities = new CSVlanCapabilities(cloudstack);
+            capabilities = new CSVlanCapabilities(getProvider());
         }
         return capabilities;
     }
@@ -116,7 +120,7 @@ public class Network extends AbstractVLANSupport {
                 return offerings;
             }
         }
-        CSMethod method = new CSMethod(cloudstack);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(LIST_NETWORK_OFFERINGS, new Param("zoneId", regionId)), LIST_NETWORK_OFFERINGS);
         NodeList matches = doc.getElementsByTagName("networkoffering");
         ArrayList<NetworkOffering> offerings = new ArrayList<NetworkOffering>();
@@ -167,13 +171,13 @@ public class Network extends AbstractVLANSupport {
     public @Nullable VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.getVlan");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getProvider().getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
             }
             try {
-                CSMethod method = new CSMethod(cloudstack);
+                CSMethod method = new CSMethod(getProvider());
                 Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("id", vlanId)), Network.LIST_NETWORKS);
                 NodeList matches = doc.getElementsByTagName("network");
 
@@ -218,12 +222,12 @@ public class Network extends AbstractVLANSupport {
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.isSubscribed");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getProvider().getContext();
 
             if( ctx == null ) {
                 throw new InternalException("No context was established");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId())), Network.LIST_NETWORKS);
@@ -247,12 +251,12 @@ public class Network extends AbstractVLANSupport {
     public @Nonnull Iterable<VLAN> listVlans() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.listVlans");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getProvider().getContext();
 
             if( ctx == null ) {
                 throw new InternalException("No context was established");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("canusefordeploy", "true")), Network.LIST_NETWORKS);
             ArrayList<VLAN> networks = new ArrayList<VLAN>();
 
@@ -301,12 +305,12 @@ public class Network extends AbstractVLANSupport {
     }
 
     public @Nonnull Iterable<VLAN> listDefaultNetworks(boolean shared, boolean forDeploy) throws CloudException, InternalException {
-        ProviderContext ctx = cloudstack.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         if( ctx == null ) {
             throw new InternalException("No context was set for this request");
         }
-        CSMethod method = new CSMethod(cloudstack);
+        CSMethod method = new CSMethod(getProvider());
         Param[] params;
 
         if( !shared && forDeploy ) {
@@ -355,7 +359,7 @@ public class Network extends AbstractVLANSupport {
             if( !getCapabilities().allowsNewVlanCreation() ) {
                 throw new OperationNotSupportedException();
             }
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getProvider().getContext();
 
             if( ctx == null ) {
                 throw new InternalException("No context was set for this request");
@@ -397,7 +401,7 @@ public class Network extends AbstractVLANSupport {
                 }
             }
 
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc;
             if (parts.length > 0) {
                 doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name), new Param("gateway", gateway), new Param("netmask", netmask)), CREATE_NETWORK);
@@ -501,8 +505,11 @@ public class Network extends AbstractVLANSupport {
             else if( name.equals("gateway") ) {
                 gateway = value;
             }
-            else if( name.equalsIgnoreCase("networkofferingdisplaytext")) {
+            else if( name.equalsIgnoreCase("networkofferingdisplaytext") ) {
                 network.setNetworkType(value);
+            }
+            else if( name.equalsIgnoreCase("account") ) {
+                network.setProviderOwnerId(value);
             }
         }
         if( network.getProviderVlanId() == null ) {
@@ -546,15 +553,61 @@ public class Network extends AbstractVLANSupport {
     }
 
     @Override
+    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
+        APITrace.begin(getProvider(), "VLAN.listResources");
+        try {
+            ArrayList<Networkable> resources = new ArrayList<Networkable>();
+            NetworkServices network = getProvider().getNetworkServices();
+
+            FirewallSupport fwSupport = network.getFirewallSupport();
+
+            if( fwSupport != null ) {
+                for( Firewall fw : fwSupport.list() ) {
+                    if( inVlanId.equals(fw.getProviderVlanId()) ) {
+                        resources.add(fw);
+                    }
+                }
+            }
+
+            IpAddressSupport ipSupport = network.getIpAddressSupport();
+
+            if( ipSupport != null ) {
+                for( IPVersion version : ipSupport.getCapabilities().listSupportedIPVersions() ) {
+                    for( org.dasein.cloud.network.IpAddress addr : ipSupport.listIpPool(version, false) ) {
+                        if( inVlanId.equals(addr.getProviderVlanId()) ) {
+                            resources.add(addr);
+                        }
+                    }
+
+                }
+            }
+            for( RoutingTable table : listRoutingTables(inVlanId) ) {
+                resources.add(table);
+            }
+            Iterable<VirtualMachine> vms = getProvider().getComputeServices().getVirtualMachineSupport().listVirtualMachines();
+
+            for( VirtualMachine vm : vms ) {
+                if( inVlanId.equals(vm.getProviderVlanId()) ) {
+                    resources.add(vm);
+                }
+            }
+            return resources;
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
     public @Nonnull Iterable<ResourceStatus> listVlanStatus() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.listVlanStatus");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getProvider().getContext();
 
             if( ctx == null ) {
                 throw new InternalException("No context was established");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("canusefordeploy", "true")), Network.LIST_NETWORKS);
             ArrayList<ResourceStatus> networks = new ArrayList<ResourceStatus>();
 
@@ -601,10 +654,10 @@ public class Network extends AbstractVLANSupport {
     public void removeVlan(String vlanId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.removeVlan");
         try {
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(DELETE_NETWORK, new Param("id", vlanId)), DELETE_NETWORK);
 
-            cloudstack.waitForJob(doc, "Delete VLAN");
+            getProvider().waitForJob(doc, "Delete VLAN");
         }
         finally {
             APITrace.end();

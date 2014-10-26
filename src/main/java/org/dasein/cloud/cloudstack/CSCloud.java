@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,6 +22,7 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -54,6 +55,7 @@ import javax.servlet.http.HttpServletResponse;
 public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
     static public final String LIST_ACCOUNTS = "listAccounts";
+    static private final String LIST_HYPERVISORS = "listHypervisors";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
@@ -575,5 +577,32 @@ public class CSCloud extends AbstractCloud {
      */
     static public boolean getBooleanValue( Node node ) {
         return Boolean.valueOf(getTextValue(node));
+    }
+
+    public @Nonnull List<String> getZoneHypervisors(String regionId) throws CloudException, InternalException {
+        ProviderContext ctx = getContext();
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        String cacheName = "hypervisorCache";
+        Cache<String> hypervisorCache = Cache.getInstance(this, cacheName, String.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
+
+        List<String> zoneHypervisors = Iterables.toList(hypervisorCache.get(ctx));
+        if( zoneHypervisors != null ) {
+            return zoneHypervisors;
+        }
+        try {
+            CSMethod method = new CSMethod(this);
+            Document doc = method.get(method.buildUrl(LIST_HYPERVISORS, new Param("zoneid", ctx.getRegionId())), LIST_HYPERVISORS);
+            NodeList nodes = doc.getElementsByTagName("name");
+            zoneHypervisors = new ArrayList<String>();
+            for( int i=0; i< nodes.getLength(); i++ ) {
+                Node item = nodes.item(i);
+                zoneHypervisors.add(item.getFirstChild().getNodeValue().trim());
+            }
+            hypervisorCache.put(ctx, zoneHypervisors);
+            return zoneHypervisors;
+        } finally {
+        }
     }
 }

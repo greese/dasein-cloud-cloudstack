@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -425,7 +425,7 @@ public class VirtualMachines extends AbstractVMSupport {
         }        
         try {
             InputStream input = VirtualMachines.class.getResourceAsStream("/customNetworkMappings.cfg");
-            HashMap<String,Map<String,String>> mapping = new HashMap<String,Map<String,String>>(); 
+            Map<String,Map<String,String>> mapping = new HashMap<String,Map<String,String>>();
             Properties properties = new Properties();
             
             properties.load(input);
@@ -446,7 +446,7 @@ public class VirtualMachines extends AbstractVMSupport {
         }
         try {
             InputStream input = VirtualMachines.class.getResourceAsStream("/customServiceMappings.cfg");
-            HashMap<String,Map<String,Set<String>>> mapping = new HashMap<String,Map<String,Set<String>>>();
+            Map<String,Map<String,Set<String>>> mapping = new HashMap<String,Map<String,Set<String>>>();
             Properties properties = new Properties();
             
             properties.load(input);
@@ -499,7 +499,7 @@ public class VirtualMachines extends AbstractVMSupport {
             load();
         }
         if( customNetworkMappings != null ) {
-            String cloudId = cloudMappings.getProperty(ctx.getEndpoint());
+            String cloudId = cloudMappings.getProperty(ctx.getCloud().getEndpoint());
             
             if( cloudId != null ) {
                 Map<String,String> map = customNetworkMappings.get(cloudId);
@@ -520,8 +520,7 @@ public class VirtualMachines extends AbstractVMSupport {
             userData = "";
         }
         String securityGroupIds = null;
-        Param[] params;
-        
+
         if( protectedByFirewalls != null && protectedByFirewalls.length > 0 ) {
             StringBuilder str = new StringBuilder();
             int idx = 0;
@@ -537,14 +536,6 @@ public class VirtualMachines extends AbstractVMSupport {
             }
             securityGroupIds = str.toString();
         }
-        int count = 4;
-
-        if( userData != null && userData.length() > 0 ) {
-            count++;
-        }
-        if( withKeypair != null ) {
-            count++;
-        }
         if( targetVlanId == null ) {
             Network vlan = provider.getNetworkServices().getVlanSupport();
             
@@ -558,19 +549,15 @@ public class VirtualMachines extends AbstractVMSupport {
             vlans = new ArrayList<String>();
             vlans.add(targetVlanId);
         }
-        if( vlans != null && vlans.size() > 0 ) {
-            count++;
-        }
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
+            // TODO: shouldn't we throw OpNotSupported if firewalls aren't supported but still requested?
+            // otherwise it's like a confusion, no?
             if (!provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1)) {
-                securityGroupIds = null;;
+                securityGroupIds = null;
             }
             else {
                 if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
                     securityGroupIds = null;
-                }
-                else {
-                    count++;
                 }
             }
         }
@@ -623,36 +610,35 @@ public class VirtualMachines extends AbstractVMSupport {
             }    
             */            
         }
-        params = new Param[count];
-        params[0] = new Param("zoneId", getContext().getRegionId());
-        params[1] = new Param("serviceOfferingId", prdId);
-        params[2] = new Param("templateId", imageId);
-        params[3] = new Param("displayName", name);
-        int i = 4;
+        List<Param> params = new ArrayList<Param>();
+        params.add(new Param("zoneId", getContext().getRegionId()));
+        params.add(new Param("serviceOfferingId", prdId));
+        params.add(new Param("templateId", imageId));
+        params.add(new Param("displayName", name));
         if( userData != null && userData.length() > 0 ) {
             try {
-                params[i++] = new Param("userdata", new String(Base64.encodeBase64(userData.getBytes("utf-8")), "utf-8"));
+                params.add(new Param("userdata", new String(Base64.encodeBase64(userData.getBytes("utf-8")), "utf-8")));
             }
             catch( UnsupportedEncodingException e ) {
-                e.printStackTrace();
+//                e.printStackTrace();
             }
         }
         if( withKeypair != null ) {
-            params[i++] = new Param("keypair", withKeypair);
+            params.add(new Param("keypair", withKeypair));
         }
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
-            params[i++] = new Param("securitygroupids", securityGroupIds);
+            params.add(new Param("securitygroupids", securityGroupIds));
         }
         if( vlans != null && vlans.size() > 0 ) {
             CloudException lastError = null;
 
             for( String withVlanId : vlans ) {
-                params[i] = new Param("networkIds", withVlanId);
+                params.add(new Param("networkIds", withVlanId));
 
                 try {
                     CSMethod method = new CSMethod(provider);
 
-                    return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params), DEPLOY_VIRTUAL_MACHINE));
+                    return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params.toArray(new Param[params.size()])), DEPLOY_VIRTUAL_MACHINE));
                 }
                 catch( CloudException e ) {
                     if( e.getMessage().contains("sufficient address capacity") ) {
@@ -670,7 +656,7 @@ public class VirtualMachines extends AbstractVMSupport {
         else {
             CSMethod method = new CSMethod(provider);
 
-            return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params), DEPLOY_VIRTUAL_MACHINE));
+            return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params.toArray(new Param[params.size()])), DEPLOY_VIRTUAL_MACHINE));
         }
     }
     
@@ -863,8 +849,6 @@ public class VirtualMachines extends AbstractVMSupport {
             APITrace.end();
         }
     }
-
-    private transient Collection<Architecture> architectures;
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {

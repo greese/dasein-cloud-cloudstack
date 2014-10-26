@@ -1,3 +1,21 @@
+/**
+ * Copyright (C) 2009-2014 Dell, Inc.
+ *
+ * ====================================================================
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * ====================================================================
+ */
+
 package org.dasein.cloud.cloudstack.network;
 
 import org.dasein.cloud.AbstractCapabilities;
@@ -6,15 +24,12 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
-import org.dasein.cloud.network.Direction;
-import org.dasein.cloud.network.FirewallCapabilities;
-import org.dasein.cloud.network.FirewallConstraints;
-import org.dasein.cloud.network.Permission;
-import org.dasein.cloud.network.RuleTargetType;
+import org.dasein.cloud.network.*;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -29,27 +44,23 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
 
     public SecurityGroupCapabilities(CSCloud cloud) {super(cloud);}
 
-    @Nonnull
     @Override
-    public FirewallConstraints getFirewallConstraintsForCloud() throws InternalException, CloudException {
+    public @Nonnull FirewallConstraints getFirewallConstraintsForCloud() throws InternalException, CloudException {
         return FirewallConstraints.getInstance();
     }
 
-    @Nonnull
     @Override
-    public String getProviderTermForFirewall(@Nonnull Locale locale) {
+    public @Nonnull String getProviderTermForFirewall(@Nonnull Locale locale) {
         return "security group";
     }
 
-    @Nullable
     @Override
-    public VisibleScope getFirewallVisibleScope() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public @Nullable VisibleScope getFirewallVisibleScope() {
+        return null;
     }
 
-    @Nonnull
     @Override
-    public Requirement identifyPrecedenceRequirement(boolean inVlan) throws InternalException, CloudException {
+    public @Nonnull Requirement identifyPrecedenceRequirement(boolean inVlan) throws InternalException, CloudException {
         return Requirement.NONE;
     }
 
@@ -58,9 +69,8 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
         return true;
     }
 
-    @Nonnull
     @Override
-    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
+    public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
@@ -69,9 +79,8 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
         }
     }
 
-    @Nonnull
     @Override
-    public Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
+    public @Nonnull Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
@@ -82,18 +91,21 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
         return directions;
     }
 
-    @Nonnull
     @Override
-    public Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
+    public @Nonnull Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
         return Collections.singletonList(Permission.ALLOW);
     }
 
-    @Nonnull
     @Override
-    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
+    public @Nonnull Iterable<Protocol> listSupportedProtocols( boolean inVlan ) throws InternalException, CloudException {
+        return Collections.unmodifiableList(Arrays.asList(Protocol.TCP, Protocol.UDP));
+    }
+
+    @Override
+    public @Nonnull Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
