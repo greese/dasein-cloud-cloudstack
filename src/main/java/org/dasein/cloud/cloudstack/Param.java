@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,32 +21,8 @@ package org.dasein.cloud.cloudstack;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class Param implements Comparable<Param> {
-    private String key   = null;
-    private String value = null;
-    
-    public Param(@Nonnull String key, @Nullable String value) {
-        this.key = key;
-        this.value = value;
-    }
-    
-    public int compareTo(@Nullable Param other) {
-        if( other == null ) {
-            return 1;
-        }
-        else if( other == this ) {
-            return 0;
-        }
-        else {
-            return getKey().toLowerCase().compareTo(other.getKey().toLowerCase());
-        }
-    }
-    
-    public @Nonnull String getKey() {
-        return key;
-    }
-    
-    public @Nullable String getValue() {
-        return value;
+public class Param extends Tuple<String, String> {
+    public Param( @Nonnull String key, @Nullable String value ) {
+        super(key, value);
     }
 }

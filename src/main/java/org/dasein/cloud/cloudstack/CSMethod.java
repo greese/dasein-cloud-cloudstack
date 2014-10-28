@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2013 enstratius, Inc.
+ * Copyright (C) 2009-2014 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,14 +36,9 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.commons.codec.binary.Base64;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpVersion;
+import org.apache.http.*;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
@@ -61,6 +56,9 @@ import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.w3c.dom.bootstrap.DOMImplementationRegistry;
+import org.w3c.dom.ls.DOMImplementationLS;
+import org.w3c.dom.ls.LSSerializer;
 import org.xml.sax.SAXException;
 
 public class CSMethod {
@@ -77,6 +75,10 @@ public class CSMethod {
     
     public CSMethod(@Nonnull CSCloud provider) { this.provider = provider; }
     
+    public String buildUrl( String command, List<Param> params ) throws CloudException, InternalException {
+        return buildUrl(command, params.toArray(new Param[params.size()]));
+    }
+
     public String buildUrl(String command, Param ... params) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
@@ -214,9 +216,10 @@ public class CSMethod {
             wire.debug("[" + (new Date()) + "] -------------------------------------------------------------------");
             wire.debug("");
         }
+        HttpClient client = null;
         try {
             HttpGet get = new HttpGet(url);
-            HttpClient client = getClient(url);
+            client = getClient(url);
             HttpResponse response;
 
             get.addHeader("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
@@ -290,9 +293,12 @@ public class CSMethod {
 
                 return parseResponse(status, EntityUtils.toString(entity));
             }
+            catch( NoHttpResponseException e ) {
+                throw new CloudException("No answer from endpoint: " + e.getMessage());
+            }
             catch( IOException e ) {
                 throw new CloudException("IOException getting stream: " + e.getMessage());
-            }         
+            }
         }
         finally {
             if( wire.isDebugEnabled() ) {
@@ -301,10 +307,13 @@ public class CSMethod {
             }
             if( logger.isTraceEnabled() ) {
                 logger.trace("exit - " + CSMethod.class.getName() + ".get()");
-            }            
+            }
+            if( client != null ) {
+                client.getConnectionManager().shutdown();
+            }
         }
     }
-    
+
     private String getSignature(String command, String apiKey, String accessKey, Param ... params) throws UnsupportedEncodingException, SignatureException {
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
         
@@ -404,30 +413,40 @@ public class CSMethod {
             }
         }
     }
-    
+
     private @Nonnull Document parseResponse(int code, String xml) throws CloudException, InternalException {
         Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
-        
+
         if( logger.isTraceEnabled() ) {
             logger.trace("enter - " + CSMethod.class.getName() + ".parseResponse(" + xml + ")");
         }
         try {
             try {
+                ByteArrayInputStream input = new ByteArrayInputStream(xml.getBytes("utf-8"));
+
+                Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
+                if( wire.isDebugEnabled() ) {
+                    wire.debug(prettifyXml(doc));
+                }
+                return doc;
+            }
+            catch( IOException e ) {
                 if( wire.isDebugEnabled() ) {
                     wire.debug(xml);
                 }
-                ByteArrayInputStream input = new ByteArrayInputStream(xml.getBytes("utf-8"));
-                
-                return DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(input);
-            }
-            catch( IOException e ) {
                 throw new CloudException(e);
             }
             catch( ParserConfigurationException e ) {
+                if( wire.isDebugEnabled() ) {
+                    wire.debug(xml);
+                }
                 throw new CloudException(e);
             }
             catch( SAXException e ) {
+                if( wire.isDebugEnabled() ) {
+                    wire.debug(xml);
+                }
                 throw new CloudException("Received error code from server [" + code + "]: " + xml);
             }
         }
@@ -435,6 +454,18 @@ public class CSMethod {
             if( logger.isTraceEnabled() ) {
                 logger.trace("exit - " + CSMethod.class.getName() + ".parseResponse()");
             }
+        }
+    }
+
+    private String prettifyXml( Document doc ) {
+        try {
+            DOMImplementationLS impl = ( DOMImplementationLS ) DOMImplementationRegistry.newInstance().getDOMImplementation("LS");
+            LSSerializer writer = impl.createLSSerializer();
+            writer.getDomConfig().setParameter("format-pretty-print", Boolean.TRUE);
+            return writer.writeToString(doc);
+        }
+        catch( Exception e ) {
+            throw new RuntimeException(e);
         }
     }
 }
