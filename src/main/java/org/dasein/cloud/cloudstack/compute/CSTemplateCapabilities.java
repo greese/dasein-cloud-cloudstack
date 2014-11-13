@@ -125,6 +125,11 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     }
 
     @Override
+    public boolean supportsImageCopy() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
     public boolean supportsImageSharing() throws CloudException, InternalException {
         return true;
     }
@@ -132,6 +137,11 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     @Override
     public boolean supportsImageSharingWithPublic() throws CloudException, InternalException {
         return true;
+    }
+
+    @Override
+    public boolean supportsListingAllRegions() throws CloudException, InternalException {
+        return false;
     }
 
     @Override

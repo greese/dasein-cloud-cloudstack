@@ -84,11 +84,7 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
         if( inVlan ) {
             return Collections.emptyList();
         }
-        ArrayList<Direction> directions = new ArrayList<Direction>();
-
-        directions.add(Direction.INGRESS);
-        directions.add(Direction.EGRESS);
-        return directions;
+        return Collections.unmodifiableList(Arrays.asList(Direction.INGRESS, Direction.EGRESS));
     }
 
     @Override

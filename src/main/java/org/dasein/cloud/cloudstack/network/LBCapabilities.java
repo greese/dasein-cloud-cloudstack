@@ -97,6 +97,11 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
     }
 
     @Override
+    public @Nonnull Requirement identifyVlanOnCreateRequirement() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
     public boolean isAddressAssignedByProvider() throws CloudException, InternalException {
         return false;
     }
