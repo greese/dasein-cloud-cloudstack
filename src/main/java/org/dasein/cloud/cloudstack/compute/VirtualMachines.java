@@ -1103,7 +1103,7 @@ public class VirtualMachines extends AbstractVMSupport {
         try {
             CSMethod method = new CSMethod(provider);
         
-            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId), new Param("expunge", "true")), DESTROY_VIRTUAL_MACHINE);
+            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId)/*, new Param("expunge", "true")*/), DESTROY_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();
