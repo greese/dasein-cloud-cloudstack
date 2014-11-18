@@ -18,55 +18,13 @@
 
 package org.dasein.cloud.cloudstack.compute;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.TreeSet;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.servlet.http.HttpServletResponse;
-
 import org.apache.commons.codec.binary.Base64;
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.ResourceStatus;
-import org.dasein.cloud.Tag;
-import org.dasein.cloud.cloudstack.CSCloud;
-import org.dasein.cloud.cloudstack.CSException;
-import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.CSTopology;
-import org.dasein.cloud.cloudstack.CSVersion;
-import org.dasein.cloud.cloudstack.Param;
+import org.dasein.cloud.*;
+import org.dasein.cloud.cloudstack.*;
 import org.dasein.cloud.cloudstack.network.Network;
 import org.dasein.cloud.cloudstack.network.SecurityGroup;
-import org.dasein.cloud.compute.AbstractVMSupport;
-import org.dasein.cloud.compute.Architecture;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.compute.VirtualMachineCapabilities;
-import org.dasein.cloud.compute.VirtualMachineProduct;
-import org.dasein.cloud.compute.VirtualMachineProductFilterOptions;
-import org.dasein.cloud.compute.VMLaunchOptions;
-import org.dasein.cloud.compute.VMScalingCapabilities;
-import org.dasein.cloud.compute.VMScalingOptions;
-import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.network.RawAddress;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
@@ -81,7 +39,19 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class VirtualMachines extends AbstractVMSupport {
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.servlet.http.HttpServletResponse;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UnsupportedEncodingException;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class VirtualMachines extends AbstractVMSupport<CSCloud> {
     static public final Logger logger = Logger.getLogger(VirtualMachines.class);
     
     static private final String DEPLOY_VIRTUAL_MACHINE  = "deployVirtualMachine";
@@ -99,11 +69,8 @@ public class VirtualMachines extends AbstractVMSupport {
     static private Map<String,Map<String,String>>          customNetworkMappings;
     static private Map<String,Map<String,Set<String>>>     customServiceMappings;
     
-    private CSCloud provider;
-    
     public VirtualMachines(CSCloud provider) {
         super(provider);
-        this.provider = provider;
     }
 
     @Override
@@ -116,7 +83,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 throw new CloudException("No vmid and/or product id set for this operation");
             }
 
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             VirtualMachine vm = getVirtualMachine(vmId);
             if (vm.getProductId().equals(productId)) {
@@ -165,7 +132,7 @@ public class VirtualMachines extends AbstractVMSupport {
             if( jobId == null ) {
                 throw new CloudException("Could not scale server");
             }
-            Document responseDoc = provider.waitForJob(doc, "Scale Server");
+            Document responseDoc = getProvider().waitForJob(doc, "Scale Server");
 
             if (responseDoc != null){
                 NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
@@ -195,7 +162,7 @@ public class VirtualMachines extends AbstractVMSupport {
     @Override
     public VirtualMachineCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
-            capabilities = new VMCapabilities(provider);
+            capabilities = new VMCapabilities(getProvider());
         }
         return capabilities;
     }
@@ -215,13 +182,13 @@ public class VirtualMachines extends AbstractVMSupport {
     private String getRootPassword(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.getPassword");
         try {
-            ProviderContext ctx = provider.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was specified for this request");
             }
 
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(GET_VIRTUAL_MACHINE_PASSWORD, new Param("id", serverId)), GET_VIRTUAL_MACHINE_PASSWORD);
 
             if (doc != null){
@@ -283,7 +250,7 @@ public class VirtualMachines extends AbstractVMSupport {
         APITrace.begin(getProvider(), "VM.getVirtualMachine");
         try {
 
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("id", serverId)), LIST_VIRTUAL_MACHINES);
@@ -317,7 +284,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.isSubscribed");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 method.get(method.buildUrl(CSTopology.LIST_ZONES, new Param("available", "true")), CSTopology.LIST_ZONES);
@@ -356,7 +323,7 @@ public class VirtualMachines extends AbstractVMSupport {
             if( product == null ) {
                 throw new CloudException("Invalid product ID: " + id);
             }
-            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+            if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
                 return launch22(withLaunchOptions.getMachineImageId(), product,  withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName(), withLaunchOptions.getBootstrapKey(), withLaunchOptions.getVlanId(), withLaunchOptions.getFirewallIds(), withLaunchOptions.getUserData());
             }
             else {
@@ -372,7 +339,7 @@ public class VirtualMachines extends AbstractVMSupport {
     @Deprecated
     @SuppressWarnings("deprecation")
     public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nonnull String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String usingKey, @Nullable String withVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String[] protectedByFirewalls, @Nullable Tag ... tags) throws InternalException, CloudException {
-        if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+        if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
             StringBuilder userData = new StringBuilder();
             
             if( tags != null && tags.length > 0 ) {
@@ -394,8 +361,7 @@ public class VirtualMachines extends AbstractVMSupport {
     }
     
     private VirtualMachine launch21(String imageId, VirtualMachineProduct product, String inZoneId, String name) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        
+        CSMethod method = new CSMethod(getProvider());
         return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, new Param("zoneId", getContext().getRegionId()), new Param("serviceOfferingId", product.getProviderProductId()), new Param("templateId", imageId), new Param("displayName", name) ), DEPLOY_VIRTUAL_MACHINE));
     }
     
@@ -482,7 +448,7 @@ public class VirtualMachines extends AbstractVMSupport {
     }
     
     private @Nonnull VirtualMachine launch22(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nullable String inZoneId, @Nonnull String name, @Nullable String withKeypair, @Nullable String targetVlanId, @Nullable String[] protectedByFirewalls, @Nullable String userData) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getContext();
         List<String> vlans = null;
 
         if( ctx == null ) {
@@ -537,10 +503,10 @@ public class VirtualMachines extends AbstractVMSupport {
             securityGroupIds = str.toString();
         }
         if( targetVlanId == null ) {
-            Network vlan = provider.getNetworkServices().getVlanSupport();
+            Network vlan = getProvider().getNetworkServices().getVlanSupport();
             
             if( vlan != null && vlan.isSubscribed() ) {
-                if( provider.getDataCenterServices().requiresNetwork(regionId) ) {
+                if( getCapabilities().identifyVlanRequirement().equals(Requirement.REQUIRED) ) {
                     vlans = vlan.findFreeNetworks();
                 }
             }
@@ -552,21 +518,21 @@ public class VirtualMachines extends AbstractVMSupport {
         if( securityGroupIds != null && securityGroupIds.length() > 0 ) {
             // TODO: shouldn't we throw OpNotSupported if firewalls aren't supported but still requested?
             // otherwise it's like a confusion, no?
-            if (!provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1)) {
+            if (!getProvider().getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1)) {
                 securityGroupIds = null;
             }
             else {
-                if( !provider.getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
+                if( !getProvider().getServiceProvider().equals(CSServiceProvider.DATAPIPE) ) {
                     securityGroupIds = null;
                 }
             }
         }
-        else if( provider.getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
+        else if( getProvider().getDataCenterServices().supportsSecurityGroups(regionId, vlans == null || vlans.size() < 1) ) {
             /*
             String sgId = null;
             
             if( withVlanId == null ) {
-                Collection<Firewall> firewalls = provider.getNetworkServices().getFirewallSupport().list();
+                Collection<Firewall> firewalls = getProvider().getNetworkServices().getFirewallSupport().list();
                 
                 for( Firewall fw : firewalls ) {
                     if( fw.getName().equalsIgnoreCase("default") && fw.getProviderVlanId() == null ) {
@@ -576,7 +542,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
                 if( sgId == null ) {
                     try {
-                        sgId = provider.getNetworkServices().getFirewallSupport().create("default", "Default security group");
+                        sgId = getProvider().getNetworkServices().getFirewallSupport().create("default", "Default security group");
                     }
                     catch( Throwable t ) {
                         logger.warn("Unable to create a default security group, gonna try anyways: " + t.getMessage());
@@ -587,7 +553,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
             }
             else {
-                Collection<Firewall> firewalls = provider.getNetworkServices().getFirewallSupport().list();
+                Collection<Firewall> firewalls = getProvider().getNetworkServices().getFirewallSupport().list();
                 
                 for( Firewall fw : firewalls ) {
                     if( (fw.getName().equalsIgnoreCase("default") || fw.getName().equalsIgnoreCase("default-" + withVlanId)) && withVlanId.equals(fw.getProviderVlanId()) ) {
@@ -597,7 +563,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
                 if( sgId == null ) {
                     try {
-                        sgId = provider.getNetworkServices().getFirewallSupport().createInVLAN("default-" + withVlanId, "Default " + withVlanId + " security group", withVlanId);
+                        sgId = getProvider().getNetworkServices().getFirewallSupport().createInVLAN("default-" + withVlanId, "Default " + withVlanId + " security group", withVlanId);
                     }
                     catch( Throwable t ) {
                         logger.warn("Unable to create a default security group, gonna try anyways: " + t.getMessage());
@@ -636,7 +602,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 params.add(new Param("networkIds", withVlanId));
 
                 try {
-                    CSMethod method = new CSMethod(provider);
+                    CSMethod method = new CSMethod(getProvider());
 
                     return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params.toArray(new Param[params.size()])), DEPLOY_VIRTUAL_MACHINE));
                 }
@@ -654,7 +620,7 @@ public class VirtualMachines extends AbstractVMSupport {
             throw new CloudException("Unable to identify a network into which a VM can be launched");
         }
         else {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             return launch(method.get(method.buildUrl(DEPLOY_VIRTUAL_MACHINE, params.toArray(new Param[params.size()])), DEPLOY_VIRTUAL_MACHINE));
         }
@@ -691,7 +657,7 @@ public class VirtualMachines extends AbstractVMSupport {
         VirtualMachine vm = null;
 
         // have to wait on jobs as sometimes they fail and we need to bubble error message up
-        Document responseDoc = provider.waitForJob(doc, "Launch Server");
+        Document responseDoc = getProvider().waitForJob(doc, "Launch Server");
 
         //parse vm from job completion response to capture vm passwords on initial launch.
         if (responseDoc != null){
@@ -718,7 +684,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public @Nonnull Iterable<String> listFirewalls(@Nonnull String vmId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listFirewalls");
         try {
-            SecurityGroup support = provider.getNetworkServices().getFirewallSupport();
+            SecurityGroup support = getProvider().getNetworkServices().getFirewallSupport();
 
             if( support == null ) {
                 return Collections.emptyList();
@@ -733,7 +699,7 @@ public class VirtualMachines extends AbstractVMSupport {
     private void setFirewalls(@Nonnull VirtualMachine vm) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.setFirewalls");
         try {
-            SecurityGroup support = provider.getNetworkServices().getFirewallSupport();
+            SecurityGroup support = getProvider().getNetworkServices().getFirewallSupport();
 
             if( support == null ) {
                 return;
@@ -754,13 +720,13 @@ public class VirtualMachines extends AbstractVMSupport {
     public Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
         try {
-            ProviderContext ctx = provider.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was configured for this request");
             }
 
-            Cache<VirtualMachineProduct> cache = Cache.getInstance(provider, "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));
+            Cache<VirtualMachineProduct> cache = Cache.getInstance(getProvider(), "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));
             Collection<VirtualMachineProduct> products = (Collection<VirtualMachineProduct>)cache.get(getContext());
             if(products == null){
                 Set<String> mapping = null;
@@ -781,7 +747,7 @@ public class VirtualMachines extends AbstractVMSupport {
                 }
                 products = new ArrayList<VirtualMachineProduct>();
 
-                CSMethod method = new CSMethod(provider);
+                CSMethod method = new CSMethod(getProvider());
                 Document doc = method.get(method.buildUrl(LIST_SERVICE_OFFERINGS, new Param("zoneId", ctx.getRegionId())), LIST_SERVICE_OFFERINGS);
                 NodeList matches = doc.getElementsByTagName("serviceoffering");
 
@@ -854,12 +820,12 @@ public class VirtualMachines extends AbstractVMSupport {
     public @Nonnull Iterable<ResourceStatus> listVirtualMachineStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listVirtualMachineStatus");
         try {
-            ProviderContext ctx = provider.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was specified for this request");
             }
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<ResourceStatus> servers = new ArrayList<ResourceStatus>();
 
@@ -906,12 +872,12 @@ public class VirtualMachines extends AbstractVMSupport {
     public @Nonnull Iterable<VirtualMachine> listVirtualMachines() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listVirtualMachines");
         try {
-            ProviderContext ctx = provider.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was specified for this request");
             }
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_VIRTUAL_MACHINES, new Param("zoneId", ctx.getRegionId())), LIST_VIRTUAL_MACHINES);
             ArrayList<VirtualMachine> servers = new ArrayList<VirtualMachine>();
 
@@ -957,16 +923,16 @@ public class VirtualMachines extends AbstractVMSupport {
     private String resetPassword(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.resetPassword");
         try {
-            ProviderContext ctx = provider.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was specified for this request");
             }
 
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(RESET_VIRTUAL_MACHINE_PASSWORD, new Param("id", serverId)), RESET_VIRTUAL_MACHINE_PASSWORD);
 
-            Document responseDoc = provider.waitForJob(doc, "reset vm password");
+            Document responseDoc = getProvider().waitForJob(doc, "reset vm password");
 
             if (responseDoc != null){
                 NodeList matches = responseDoc.getElementsByTagName("virtualmachine");
@@ -1008,7 +974,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public void reboot(@Nonnull String serverId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VM.reboot");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
         
             method.get(method.buildUrl(REBOOT_VIRTUAL_MACHINE, new Param("id", serverId)), REBOOT_VIRTUAL_MACHINE);
         }
@@ -1021,7 +987,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public void start(@Nonnull String serverId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.start");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             method.get(method.buildUrl(START_VIRTUAL_MACHINE, new Param("id", serverId)), START_VIRTUAL_MACHINE);
         }
@@ -1034,7 +1000,7 @@ public class VirtualMachines extends AbstractVMSupport {
     public void stop(@Nonnull String vmId, boolean force) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.stop");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             method.get(method.buildUrl(STOP_VIRTUAL_MACHINE, new Param("id", vmId), new Param("forced", String.valueOf(force))), STOP_VIRTUAL_MACHINE);
         }
@@ -1047,9 +1013,13 @@ public class VirtualMachines extends AbstractVMSupport {
     public void terminate(@Nonnull String serverId, @Nullable String explanation) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.terminate");
         try {
-            CSMethod method = new CSMethod(provider);
-        
-            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, new Param("id", serverId), new Param("expunge", "true")), DESTROY_VIRTUAL_MACHINE);
+            CSMethod method = new CSMethod(getProvider());
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("id", serverId));
+            if( getProvider().isAdminAccount() ) {
+                params.add(new Param("expunge", "true"));
+            }
+            method.get(method.buildUrl(DESTROY_VIRTUAL_MACHINE, params), DESTROY_VIRTUAL_MACHINE);
         }
         finally {
             APITrace.end();
@@ -1139,7 +1109,7 @@ public class VirtualMachines extends AbstractVMSupport {
         NodeList attributes = node.getChildNodes();
         String productId = null;
         
-        server.setProviderOwnerId(provider.getContext().getAccountNumber());
+        server.setProviderOwnerId(getContext().getAccountNumber());
         server.setClonable(false);
         server.setImagable(false);
         server.setPausable(true);
@@ -1326,10 +1296,10 @@ public class VirtualMachines extends AbstractVMSupport {
         }
         server.setProviderAssignedIpAddressId(null);
         if( server.getProviderRegionId() == null ) {
-            server.setProviderRegionId(provider.getContext().getRegionId());
+            server.setProviderRegionId(getContext().getRegionId());
         }
         if( server.getProviderDataCenterId() == null ) {
-            server.setProviderDataCenterId(provider.getContext().getRegionId());
+            server.setProviderDataCenterId(getContext().getRegionId());
         }
         if( productId != null ) {
             server.setProductId(productId);

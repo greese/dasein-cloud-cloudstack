@@ -28,6 +28,7 @@ import org.dasein.cloud.cloudstack.CSMethod;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.identity.SSHKeypair;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.identity.ShellKeyCapabilities;
 import org.dasein.cloud.identity.ShellKeySupport;
 import org.dasein.cloud.util.APITrace;
 import org.w3c.dom.Document;
@@ -49,7 +50,8 @@ import java.util.Locale;
  */
 public class Keypair implements ShellKeySupport {
     private CSCloud provider;
-    
+    private transient volatile KeypairCapabilities capabilities;
+
     Keypair(@Nonnull CSCloud provider) { this.provider = provider; }
 
     @Override
@@ -106,6 +108,7 @@ public class Keypair implements ShellKeySupport {
     }
 
     @Override
+    @Deprecated
     public Requirement getKeyImportSupport() throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -138,8 +141,16 @@ public class Keypair implements ShellKeySupport {
     }
 
     @Override
+    @Deprecated
     public @Nonnull String getProviderTermForKeypair(@Nonnull Locale locale) {
         return "SSH keypair";
+    }
+
+    @Nonnull @Override public ShellKeyCapabilities getCapabilities() throws CloudException, InternalException {
+        if( capabilities == null ) {
+            capabilities = new KeypairCapabilities(provider);
+        }
+        return capabilities;
     }
 
     @Override
