@@ -70,7 +70,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     static public final String LIST_NETWORK_OFFERINGS = "listNetworkOfferings";
     static public final String LIST_NETWORKS          = "listNetworks";
 
-    static public final String CREATE_EGRESS_RULE     = "createEgressFirewallRule";
+    static public final String CREATE_EGRESS_RULE = "createEgressFirewallRule";
 
     Network(CSCloud provider) {
         super(provider);
@@ -78,12 +78,13 @@ public class Network extends AbstractVLANSupport<CSCloud> {
 
     public List<String> findFreeNetworks() throws CloudException, InternalException {
         ArrayList<String> vlans = new ArrayList<String>();
-
-        for( VLAN n : listDefaultNetworks(true, true) ) {
-            if( n != null ) {
-                vlans.add(n.getProviderVlanId());
-            }
-        }
+        // FIXME: evidently "shared" networks are not supported for VM deploy, i.e. I can't launch a VM into someone else's
+        //        network. Also CS UI only shows my own networks there.
+        //        for( VLAN n : listDefaultNetworks(true, true) ) {
+        //            if( n != null ) {
+        //                vlans.add(n.getProviderVlanId());
+        //            }
+        //        }
         for( VLAN n : listDefaultNetworks(false, true) ) {
             if( n != null && !vlans.contains(n.getProviderVlanId()) ) {
                 vlans.add(n.getProviderVlanId());
@@ -93,8 +94,8 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     }
 
     private transient volatile CSVlanCapabilities capabilities;
-    @Nonnull
-    @Override
+
+    @Nonnull @Override
     public VLANCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
             capabilities = new CSVlanCapabilities(getProvider());
@@ -107,14 +108,14 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         public String networkType;
         public String offeringId;
     }
-    
-    public @Nonnull Collection<NetworkOffering> getNetworkOfferings(@Nonnull String regionId) throws InternalException, CloudException {
+
+    public @Nonnull Collection<NetworkOffering> getNetworkOfferings( @Nonnull String regionId ) throws InternalException, CloudException {
         Cache<NetworkOffering> cache = null;
 
         if( regionId.equals(getContext().getRegionId()) ) {
             cache = Cache.getInstance(getProvider(), "networkOfferings", NetworkOffering.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(1, TimePeriod.HOUR));
 
-            Collection<NetworkOffering> offerings = (Collection<NetworkOffering>)cache.get(getContext());
+            Collection<NetworkOffering> offerings = ( Collection<NetworkOffering> ) cache.get(getContext());
 
             if( offerings != null ) {
                 return offerings;
@@ -124,13 +125,13 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         Document doc = method.get(method.buildUrl(LIST_NETWORK_OFFERINGS, new Param("zoneId", regionId)), LIST_NETWORK_OFFERINGS);
         NodeList matches = doc.getElementsByTagName("networkoffering");
         ArrayList<NetworkOffering> offerings = new ArrayList<NetworkOffering>();
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
+
+        for( int i = 0; i < matches.getLength(); i++ ) {
             Node node = matches.item(i);
             NodeList attributes = node.getChildNodes();
             NetworkOffering offering = new NetworkOffering();
 
-            for( int j=0; j<attributes.getLength(); j++ ) {
+            for( int j = 0; j < attributes.getLength(); j++ ) {
                 Node n = attributes.item(j);
                 String value;
 
@@ -144,10 +145,10 @@ public class Network extends AbstractVLANSupport<CSCloud> {
                     offering.offeringId = value.trim();
                 }
                 else if( n.getNodeName().equalsIgnoreCase("availability") ) {
-                    offering.availability = (value == null ? "unavailable" : value.trim());
+                    offering.availability = ( value == null ? "unavailable" : value.trim() );
                 }
                 else if( n.getNodeName().equalsIgnoreCase("guestiptype") ) {
-                    offering.networkType = (value == null ? "direct" : value.trim());
+                    offering.networkType = ( value == null ? "direct" : value.trim() );
                 }
             }
             offerings.add(offering);
@@ -157,8 +158,8 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         }
         return offerings;
     }
-    
-    private @Nullable String getNetworkOffering(@Nonnull String regionId) throws InternalException, CloudException {
+
+    private @Nullable String getNetworkOffering( @Nonnull String regionId ) throws InternalException, CloudException {
         for( NetworkOffering offering : getNetworkOfferings(regionId) ) {
             if( !offering.availability.equalsIgnoreCase("unavailable") && offering.networkType.equals("Isolated") ) {
                 return offering.offeringId;
@@ -166,9 +167,9 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         }
         return null;
     }
-    
+
     @Override
-    public @Nullable VLAN getVlan(@Nonnull String vlanId) throws CloudException, InternalException {
+    public @Nullable VLAN getVlan( @Nonnull String vlanId ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.getVlan");
         try {
             ProviderContext ctx = getProvider().getContext();
@@ -181,7 +182,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
                 Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("id", vlanId)), Network.LIST_NETWORKS);
                 NodeList matches = doc.getElementsByTagName("network");
 
-                for( int i=0; i<matches.getLength(); i++ ) {
+                for( int i = 0; i < matches.getLength(); i++ ) {
                     Node node = matches.item(i);
 
                     if( node != null ) {
@@ -206,15 +207,13 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         }
     }
 
-    @Nullable
-    @Override
-    public String getAttachedInternetGatewayId(@Nonnull String vlanId) throws CloudException, InternalException {
+    @Nullable @Override
+    public String getAttachedInternetGatewayId( @Nonnull String vlanId ) throws CloudException, InternalException {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
-    @Nullable
-    @Override
-    public InternetGateway getInternetGatewayById(@Nonnull String gatewayId) throws CloudException, InternalException {
+    @Nullable @Override
+    public InternetGateway getInternetGatewayById( @Nonnull String gatewayId ) throws CloudException, InternalException {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
@@ -246,7 +245,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             APITrace.end();
         }
     }
-    
+
     @Override
     public @Nonnull Iterable<VLAN> listVlans() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.listVlans");
@@ -263,24 +262,24 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
             Node n = nodes.item(0);
-            if (n != null) {
+            if( n != null ) {
                 String value = n.getFirstChild().getNodeValue().trim();
                 int count = Integer.parseInt(value);
-                numPages = count/500;
+                numPages = count / 500;
                 int remainder = count % 500;
-                if (remainder > 0) {
+                if( remainder > 0 ) {
                     numPages++;
                 }
             }
 
-            for (int page = 1; page <= numPages; page++) {
-                if (page > 1) {
+            for( int page = 1; page <= numPages; page++ ) {
+                if( page > 1 ) {
                     String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage), new Param("canusefordeploy", "true")), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
-                for( int i=0; i<matches.getLength(); i++ ) {
+                for( int i = 0; i < matches.getLength(); i++ ) {
                     Node node = matches.item(i);
 
                     if( node != null ) {
@@ -300,7 +299,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     }
 
     @Override
-    public void removeInternetGatewayById(@Nonnull String id) throws CloudException, InternalException {
+    public void removeInternetGatewayById( @Nonnull String id ) throws CloudException, InternalException {
         //To change body of implemented methods use File | Settings | File Templates.
     }
 
@@ -311,49 +310,41 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             throw new InternalException("No context was set for this request");
         }
         CSMethod method = new CSMethod(getProvider());
-        Param[] params;
+        List<Param> params = new ArrayList<Param>();
 
-        if( !shared && forDeploy ) {
-            params = new Param[3];
-        }
-        else if( !shared || forDeploy ) {
-            params = new Param[2];
-        }
-        else {
-            params = new Param[1];
-        }
-        params[0] = new Param("zoneId", ctx.getRegionId());
-        int idx = 1;
+        params.add(new Param("zoneId", ctx.getRegionId()));
         if( forDeploy ) {
-            params[idx++]  = new Param("canUseForDeploy", "true");
+            params.add(new Param("canUseForDeploy", "true"));
         }
         if( !shared ) {
-            params[idx] = new Param("account", ctx.getAccountNumber());
+            params.add(new Param("account", ctx.getAccountNumber()));
+            // filtering by account only works with the domain now
+            params.add(new Param("domainid", getProvider().getDomainId()));
         }
         Document doc = method.get(method.buildUrl(Network.LIST_NETWORKS, params), Network.LIST_NETWORKS);
         ArrayList<VLAN> networks = new ArrayList<VLAN>();
         NodeList matches = doc.getElementsByTagName("network");
-        
-        for( int i=0; i<matches.getLength(); i++ ) {
+
+        for( int i = 0; i < matches.getLength(); i++ ) {
             Node node = matches.item(i);
-                
+
             if( node != null ) {
                 VLAN vlan = toNetwork(node, ctx);
-                    
+
                 if( vlan != null ) {
-                    if (vlan.getTag("displaynetwork") == null || vlan.getTag("displaynetwork").equals("true")) {
-                        if (vlan.getTag("isdefault") == null || vlan.getTag("isdefault").equals("true")) {
+                    if( vlan.getTag("displaynetwork") == null || vlan.getTag("displaynetwork").equals("true") ) {
+                        if( vlan.getTag("isdefault") == null || vlan.getTag("isdefault").equals("true") ) {
                             networks.add(vlan);
                         }
                     }
                 }
             }
         }
-        return networks;        
+        return networks;
     }
-    
+
     @Override
-    public @Nonnull VLAN createVlan(@Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nullable String domainName, @Nullable String[] dnsServers, @Nullable String[] ntpServers) throws CloudException, InternalException {
+    public @Nonnull VLAN createVlan( @Nonnull String cidr, @Nonnull String name, @Nonnull String description, @Nullable String domainName, @Nullable String[] dnsServers, @Nullable String[] ntpServers ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.createVlan");
         try {
             if( !getCapabilities().allowsNewVlanCreation() ) {
@@ -377,33 +368,32 @@ public class Network extends AbstractVLANSupport<CSCloud> {
 
             String[] parts = cidr.split("/");
             String gateway = "", netmask = "";
-            if (parts.length == 1) {
+            if( parts.length == 1 ) {
                 gateway = parts[0];
                 netmask = "255.255.255.255";
             }
 
-            if (parts.length == 2) {
+            if( parts.length == 2 ) {
                 gateway = parts[0];
                 netmask = parts[1];
                 int prefix = Integer.parseInt(netmask);
-                int mask = 0xffffffff << (32 - prefix);
+                int mask = 0xffffffff << ( 32 - prefix );
 
                 int value = mask;
-                byte[] bytes = new byte[]{
-                        (byte)(value >>> 24), (byte)(value >> 16 & 0xff), (byte)(value >> 8 & 0xff), (byte)(value & 0xff) };
+                byte[] bytes = new byte[]{( byte ) ( value >>> 24 ), ( byte ) ( value >> 16 & 0xff ), ( byte ) ( value >> 8 & 0xff ), ( byte ) ( value & 0xff )};
 
                 try {
                     InetAddress netAddr = InetAddress.getByAddress(bytes);
                     netmask = netAddr.getHostAddress();
                 }
-                catch (UnknownHostException e) {
-                    throw new InternalException("Unable to parse netmask from "+cidr);
+                catch( UnknownHostException e ) {
+                    throw new InternalException("Unable to parse netmask from " + cidr);
                 }
             }
 
             CSMethod method = new CSMethod(getProvider());
             Document doc;
-            if (parts.length > 0) {
+            if( parts.length > 0 ) {
                 doc = method.get(method.buildUrl(CREATE_NETWORK, new Param("zoneId", ctx.getRegionId()), new Param("networkOfferingId", offering), new Param("name", name), new Param("displayText", name), new Param("gateway", gateway), new Param("netmask", netmask)), CREATE_NETWORK);
             }
             else {
@@ -411,7 +401,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             }
             NodeList matches = doc.getElementsByTagName("network");
 
-            for( int i=0; i<matches.getLength(); i++ ) {
+            for( int i = 0; i < matches.getLength(); i++ ) {
                 Node node = matches.item(i);
 
                 if( node != null ) {
@@ -422,7 +412,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
                         try {
                             method.get(method.buildUrl(CREATE_EGRESS_RULE, new Param("protocol", "All"), new Param("cidrlist", "0.0.0.0/0"), new Param("networkid", network.getProviderVlanId())), CREATE_EGRESS_RULE);
                         }
-                        catch (Throwable ignore) {
+                        catch( Throwable ignore ) {
                             logger.warn("Unable to create default egress rule");
                         }
                         return network;
@@ -436,7 +426,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         }
     }
 
-    public @Nullable VLAN toNetwork(@Nullable Node node, @Nonnull ProviderContext ctx) {
+    public @Nullable VLAN toNetwork( @Nullable Node node, @Nonnull ProviderContext ctx ) {
         if( node == null ) {
             return null;
         }
@@ -449,14 +439,14 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         network.setProviderOwnerId(ctx.getAccountNumber());
         network.setProviderRegionId(ctx.getRegionId());
         network.setCurrentState(VLANState.AVAILABLE);
-        network.setSupportedTraffic(new IPVersion[] { IPVersion.IPV4 });
-        for( int i=0; i<attributes.getLength(); i++ ) {
+        network.setSupportedTraffic(new IPVersion[]{IPVersion.IPV4});
+        for( int i = 0; i < attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
             String value;
-            
+
             if( attribute.getChildNodes().getLength() > 0 ) {
-                value = attribute.getFirstChild().getNodeValue();                
+                value = attribute.getFirstChild().getNodeValue();
             }
             else {
                 value = null;
@@ -472,10 +462,10 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             else if( name.equalsIgnoreCase("displaytext") ) {
                 network.setName(value);
             }
-            else if( name.equalsIgnoreCase("displaynetwork")) {
+            else if( name.equalsIgnoreCase("displaynetwork") ) {
                 network.setTag("displaynetwork", value);
             }
-            else if( name.equalsIgnoreCase("isdefault")) {
+            else if( name.equalsIgnoreCase("isdefault") ) {
                 network.setTag("isdefault", value);
             }
             else if( name.equalsIgnoreCase("networkdomain") ) {
@@ -486,16 +476,16 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             }
             else if( name.startsWith("dns") && value != null && !value.trim().equals("") ) {
                 String[] dns;
-                
+
                 if( network.getDnsServers() != null ) {
-                    dns = new String[network.getDnsServers().length+1];
-                    for( int idx=0; idx<network.getDnsServers().length; idx++ ) {
+                    dns = new String[network.getDnsServers().length + 1];
+                    for( int idx = 0; idx < network.getDnsServers().length; idx++ ) {
                         dns[idx] = network.getDnsServers()[idx];
                     }
-                    dns[dns.length-1] = value;
+                    dns[dns.length - 1] = value;
                 }
                 else {
-                    dns = new String[] { value };
+                    dns = new String[]{value};
                 }
                 network.setDnsServers(dns);
             }
@@ -532,28 +522,27 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     }
 
     @Override
-    public @Nonnull String getProviderTermForNetworkInterface(@Nonnull Locale locale) {
+    public @Nonnull String getProviderTermForNetworkInterface( @Nonnull Locale locale ) {
         return "NIC";
     }
 
     @Override
-    public @Nonnull String getProviderTermForSubnet(@Nonnull Locale locale) {
+    public @Nonnull String getProviderTermForSubnet( @Nonnull Locale locale ) {
         return "network";
     }
 
     @Override
-    public @Nonnull String getProviderTermForVlan(@Nonnull Locale locale) {
+    public @Nonnull String getProviderTermForVlan( @Nonnull Locale locale ) {
         return "network";
     }
 
-    @Nonnull
-    @Override
-    public Collection<InternetGateway> listInternetGateways(@Nullable String vlanId) throws CloudException, InternalException {
+    @Nonnull @Override
+    public Collection<InternetGateway> listInternetGateways( @Nullable String vlanId ) throws CloudException, InternalException {
         return Collections.emptyList();
     }
 
     @Override
-    public @Nonnull Iterable<Networkable> listResources(@Nonnull String inVlanId) throws CloudException, InternalException {
+    public @Nonnull Iterable<Networkable> listResources( @Nonnull String inVlanId ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.listResources");
         try {
             ArrayList<Networkable> resources = new ArrayList<Networkable>();
@@ -614,24 +603,24 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
             Node n = nodes.item(0);
-            if (n != null) {
+            if( n != null ) {
                 String value = n.getFirstChild().getNodeValue().trim();
                 int count = Integer.parseInt(value);
-                numPages = count/500;
+                numPages = count / 500;
                 int remainder = count % 500;
-                if (remainder > 0) {
+                if( remainder > 0 ) {
                     numPages++;
                 }
             }
 
-            for (int page = 1; page <= numPages; page++) {
-                if (page > 1) {
+            for( int page = 1; page <= numPages; page++ ) {
+                if( page > 1 ) {
                     String nextPage = String.valueOf(page);
                     doc = method.get(method.buildUrl(LIST_NETWORKS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage), new Param("canusefordeploy", "true")), LIST_NETWORKS);
                 }
                 NodeList matches = doc.getElementsByTagName("network");
 
-                for( int i=0; i<matches.getLength(); i++ ) {
+                for( int i = 0; i < matches.getLength(); i++ ) {
                     Node node = matches.item(i);
 
                     if( node != null ) {
@@ -651,7 +640,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     }
 
     @Override
-    public void removeVlan(String vlanId) throws CloudException, InternalException {
+    public void removeVlan( String vlanId ) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "VLAN.removeVlan");
         try {
             CSMethod method = new CSMethod(getProvider());
@@ -664,14 +653,14 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         }
     }
 
-    public @Nullable ResourceStatus toVLANStatus(@Nullable Node node) {
+    public @Nullable ResourceStatus toVLANStatus( @Nullable Node node ) {
         if( node == null ) {
             return null;
         }
         NodeList attributes = node.getChildNodes();
         String networkId = null;
 
-        for( int i=0; i<attributes.getLength(); i++ ) {
+        for( int i = 0; i < attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
             String value;
