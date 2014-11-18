@@ -458,6 +458,10 @@ public class CSCloud extends AbstractCloud {
         return getUserAccountData().getAccountId();
     }
 
+    public boolean isAdminAccount() throws CloudException, InternalException {
+        return getUserAccountData().isAdmin();
+    }
+
     private @Nonnull AccountData getUserAccountData() throws CloudException, InternalException {
         AccountData data = null;
         Cache<AccountData> cache = Cache.getInstance(this, "account", AccountData.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
@@ -482,6 +486,8 @@ public class CSCloud extends AbstractCloud {
                 String accountForUser = null;
                 String domainIdForUser = null;
                 String accountIdForUser = null;
+                int accountType = 0;
+
                 NodeList attributes = matches.item(i).getChildNodes();
 
                 for( int j=0; j<attributes.getLength(); j++ ) {
@@ -510,9 +516,12 @@ public class CSCloud extends AbstractCloud {
                     else if( "accountid".equalsIgnoreCase(name) ) {
                         accountIdForUser = value;
                     }
+                    else if( "accounttype".equalsIgnoreCase(name) ) {
+                        accountType = Integer.parseInt(value); // 0-user, 1-domain admin, 2-root admin
+                    }
                 }
                 if (foundUser) {
-                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser);
+                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser, accountType > 0);
                     break;
                 }
             }
@@ -533,10 +542,13 @@ public class CSCloud extends AbstractCloud {
         private String accountId;
         private String parentAccount;
         private String domainId;
-        public AccountData(String accountId, String parentAccount, String domainId) {
+        private boolean admin;
+
+        public AccountData( String accountId, String parentAccount, String domainId, boolean admin ) {
             this.accountId = accountId;
             this.parentAccount = parentAccount;
             this.domainId = domainId;
+            this.admin = admin;
         }
 
         public String getAccountId() {
@@ -549,6 +561,10 @@ public class CSCloud extends AbstractCloud {
 
         public String getDomainId() {
             return domainId;
+        }
+
+        public boolean isAdmin() {
+            return admin;
         }
     }
 
