@@ -60,7 +60,6 @@ import org.w3c.dom.NodeList;
 import org.w3c.dom.bootstrap.DOMImplementationRegistry;
 import org.w3c.dom.ls.DOMImplementationLS;
 import org.w3c.dom.ls.LSSerializer;
-import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 public class CSMethod {
@@ -74,16 +73,14 @@ public class CSMethod {
     static public final String LIST_KEYPAIRS  = "listSSHKeyPairs";
 
     private CSCloud provider;
-
-    public CSMethod( @Nonnull CSCloud provider ) {
-        this.provider = provider;
-    }
-
+    
+    public CSMethod(@Nonnull CSCloud provider) { this.provider = provider; }
+    
     public String buildUrl( String command, List<Param> params ) throws CloudException, InternalException {
         return buildUrl(command, params.toArray(new Param[params.size()]));
     }
 
-    public String buildUrl( String command, Param... params ) throws CloudException, InternalException {
+    public String buildUrl(String command, Param ... params) throws CloudException, InternalException {
         ProviderContext ctx = provider.getContext();
 
 
@@ -128,18 +125,16 @@ public class CSMethod {
                 }
             }
             accessKey = newKey.toString();
-
             str.append(ctx.getCloud().getEndpoint());
 
             // Make sure the url ends up exactly as http://x.x.x.x:y/client/api?command=
             // otherwise the server may choke like we've found it does for uploadSslCert command.
-            while( str.lastIndexOf("/") == str.length() - 1 ) {
-                str.deleteCharAt(str.length() - 1);
+            while( str.lastIndexOf("/") == str.length()-1 ) {
+                str.deleteCharAt(str.length()-1);
             }
             if( !str.toString().endsWith("/api") ) {
                 str.append("/api");
             }
-
             str.append("?command=");
             str.append(command);
             for( Param param : params ) {
@@ -321,7 +316,7 @@ public class CSMethod {
         }
     }
 
-    private String getSignature( String command, String apiKey, String accessKey, Param... params ) throws UnsupportedEncodingException, SignatureException {
+    private String getSignature(String command, String apiKey, String accessKey, Param ... params) throws UnsupportedEncodingException, SignatureException {
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
 
         if( logger.isTraceEnabled() ) {
@@ -421,7 +416,7 @@ public class CSMethod {
         }
     }
 
-    private @Nonnull Document parseResponse( int code, String xml ) throws CloudException, InternalException {
+    private @Nonnull Document parseResponse(int code, String xml) throws CloudException, InternalException {
         Logger wire = CSCloud.getLogger(CSMethod.class, "wire");
         Logger logger = CSCloud.getLogger(CSMethod.class, "std");
 

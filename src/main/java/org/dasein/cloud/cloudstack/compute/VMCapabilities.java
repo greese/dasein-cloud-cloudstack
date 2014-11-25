@@ -243,6 +243,11 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
         return true;
     }
 
+    @Override
+    public boolean isUserDefinedPrivateIPSupported() throws CloudException, InternalException {
+        return false;
+    }
+
     private transient Collection<Architecture> architectures;
     @Nonnull
     @Override

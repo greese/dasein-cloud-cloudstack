@@ -22,7 +22,10 @@ import java.io.UnsupportedEncodingException;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Properties;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.AbstractCloud;
@@ -51,7 +54,7 @@ import javax.servlet.http.HttpServletResponse;
 
 public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
-    static private final String LIST_ACCOUNTS = "listAccounts";
+    static public final String LIST_ACCOUNTS = "listAccounts";
     static private final String LIST_HYPERVISORS = "listHypervisors";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
@@ -536,6 +539,10 @@ public class CSCloud extends AbstractCloud {
         return getUserAccountData().getAccountId();
     }
 
+    public boolean isAdminAccount() throws CloudException, InternalException {
+        return getUserAccountData().isAdmin();
+    }
+
     private @Nonnull AccountData getUserAccountData() throws CloudException, InternalException {
         AccountData data = null;
         Cache<AccountData> cache = Cache.getInstance(this, "account", AccountData.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
@@ -560,6 +567,8 @@ public class CSCloud extends AbstractCloud {
                 String accountForUser = null;
                 String domainIdForUser = null;
                 String accountIdForUser = null;
+                int accountType = 0;
+
                 NodeList attributes = matches.item(i).getChildNodes();
 
                 for( int j=0; j<attributes.getLength(); j++ ) {
@@ -588,9 +597,12 @@ public class CSCloud extends AbstractCloud {
                     else if( "accountid".equalsIgnoreCase(name) ) {
                         accountIdForUser = value;
                     }
+                    else if( "accounttype".equalsIgnoreCase(name) ) {
+                        accountType = Integer.parseInt(value); // 0-user, 1-domain admin, 2-root admin
+                    }
                 }
                 if (foundUser) {
-                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser);
+                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser, accountType > 0);
                     break;
                 }
             }
@@ -611,10 +623,13 @@ public class CSCloud extends AbstractCloud {
         private String accountId;
         private String parentAccount;
         private String domainId;
-        public AccountData(String accountId, String parentAccount, String domainId) {
+        private boolean admin;
+
+        public AccountData( String accountId, String parentAccount, String domainId, boolean admin ) {
             this.accountId = accountId;
             this.parentAccount = parentAccount;
             this.domainId = domainId;
+            this.admin = admin;
         }
 
         public String getAccountId() {
@@ -627,6 +642,10 @@ public class CSCloud extends AbstractCloud {
 
         public String getDomainId() {
             return domainId;
+        }
+
+        public boolean isAdmin() {
+            return admin;
         }
     }
 
@@ -641,6 +660,43 @@ public class CSCloud extends AbstractCloud {
             return null;
         }
         return node.getFirstChild().getNodeValue();
+    }
+
+    /**
+     * Returns the boolean value of the given node.
+     *
+     * @param node the node to extract the value from
+     * @return the boolean value of the node
+     */
+    static public boolean getBooleanValue( Node node ) {
+        return Boolean.valueOf(getTextValue(node));
+    }
+
+    public @Nonnull List<String> getZoneHypervisors(String regionId) throws CloudException, InternalException {
+        ProviderContext ctx = getContext();
+        if( ctx == null ) {
+            throw new CloudException("No context was set for this request");
+        }
+        String cacheName = "hypervisorCache";
+        Cache<String> hypervisorCache = Cache.getInstance(this, cacheName, String.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
+
+        List<String> zoneHypervisors = Iterables.toList(hypervisorCache.get(ctx));
+        if( zoneHypervisors != null ) {
+            return zoneHypervisors;
+        }
+        try {
+            CSMethod method = new CSMethod(this);
+            Document doc = method.get(method.buildUrl(LIST_HYPERVISORS, new Param("zoneid", ctx.getRegionId())), LIST_HYPERVISORS);
+            NodeList nodes = doc.getElementsByTagName("name");
+            zoneHypervisors = new ArrayList<String>();
+            for( int i=0; i< nodes.getLength(); i++ ) {
+                Node item = nodes.item(i);
+                zoneHypervisors.add(item.getFirstChild().getNodeValue().trim());
+            }
+            hypervisorCache.put(ctx, zoneHypervisors);
+            return zoneHypervisors;
+        } finally {
+        }
     }
 
     /**

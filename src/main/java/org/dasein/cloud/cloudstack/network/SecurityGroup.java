@@ -52,7 +52,7 @@ import javax.annotation.Nonnegative;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class SecurityGroup extends AbstractFirewallSupport {
+public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     static private final Logger logger = Logger.getLogger(SecurityGroup.class);
 
     static public final String AUTHORIZE_SECURITY_GROUP_EGRESS  = "authorizeSecurityGroupEgress";
@@ -63,11 +63,8 @@ public class SecurityGroup extends AbstractFirewallSupport {
     static public final String REVOKE_SECURITY_GROUP_EGRESS     = "revokeSecurityGroupEgress";
     static public final String REVOKE_SECURITY_GROUP_INGRESS    = "revokeSecurityGroupIngress";
 
-    private CSCloud cloudstack;
-    
-    SecurityGroup(CSCloud cloudstack) {
-        super(cloudstack);
-        this.cloudstack = cloudstack;
+    SecurityGroup(CSCloud provider) {
+        super(provider);
     }
 
     @Override
@@ -97,7 +94,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
                 sourceCidr = sourceCidr + "/32";
             }
             Param[] params;
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
 
             if( group ) {
                 throw new OperationNotSupportedException("Security group sources are not supported");
@@ -114,7 +111,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             }
             cloudstack.waitForJob(doc, "Authorize rule");
 
-            cloudstack.waitForJob(doc, "Authorize rule");
+            getProvider().waitForJob(doc, "Authorize rule");
             String id = getRuleId(firewallId, direction, permission, protocol, sourceEndpoint, destinationEndpoint, beginPort, endPort);
             if( id == null ) {
                 throw new CloudException("Unable to identify newly created firewall rule ID");
@@ -185,7 +182,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
         APITrace.begin(getProvider(), "Firewall.create");
         try {
             Param[] params = new Param[] { new Param("name", options.getName()), new Param("description", options.getDescription()) };
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(CREATE_SECURITY_GROUP, params), CREATE_SECURITY_GROUP);
             NodeList matches = doc.getElementsByTagName("id");
             String groupId = null;
@@ -216,7 +213,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             catch( Throwable ignore ) {
                 // ignore
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
 
             method.get(method.buildUrl(DELETE_SECURITY_GROUP, new Param("id", firewallId)), DELETE_SECURITY_GROUP);
         }
@@ -230,7 +227,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     @Override
     public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
         if( capabilities == null ) {
-            capabilities = new SecurityGroupCapabilities(cloudstack);
+            capabilities = new SecurityGroupCapabilities(getProvider());
         }
         return capabilities;
     }
@@ -239,12 +236,12 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nullable Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getFirewall");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
@@ -284,7 +281,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getRules");
         try {
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
             ArrayList<FirewallRule> rules = new ArrayList<FirewallRule>();
 
@@ -343,7 +340,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Firewall.isSubscribed");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
@@ -353,7 +350,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
             if( regionId == null ) {
                 throw new CloudException("No region was set for this request");
             }
-            return cloudstack.getDataCenterServices().supportsSecurityGroups(regionId, false);
+            return getProvider().getDataCenterServices().supportsSecurityGroups(regionId, false);
         }
         finally {
             APITrace.end();
@@ -364,12 +361,12 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nonnull Collection<Firewall> list() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.list");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
             ArrayList<Firewall> firewalls = new ArrayList<Firewall>();
 
@@ -416,12 +413,12 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nonnull Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.listFirewallStatus");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
             ArrayList<ResourceStatus> firewalls = new ArrayList<ResourceStatus>();
 
@@ -465,44 +462,6 @@ public class SecurityGroup extends AbstractFirewallSupport {
     }
 
     @Override
-    public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        else {
-            return Collections.singletonList(RuleTargetType.GLOBAL);
-        }
-    }
-
-    @Override
-    public @Nonnull Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        ArrayList<Direction> directions = new ArrayList<Direction>();
-
-        directions.add(Direction.INGRESS);
-        directions.add(Direction.EGRESS);
-        return directions;
-    }
-
-    @Override
-    public @Nonnull Iterable<Permission> listSupportedPermissions(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(Permission.ALLOW);
-    }
-
-    @Override
-    public @Nonnull Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(RuleTargetType.CIDR);
-    }
-
-    @Override
     public void revoke(@Nonnull String providerFirewallRuleId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.revoke");
         try {
@@ -524,7 +483,7 @@ public class SecurityGroup extends AbstractFirewallSupport {
                 return;
             }
             Param[] params = new Param[] { new Param("id", providerFirewallRuleId) };
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
 
             if( Direction.EGRESS.equals(target.getDirection()) ) {
                 method.get(method.buildUrl(REVOKE_SECURITY_GROUP_EGRESS, params), REVOKE_SECURITY_GROUP_EGRESS);
@@ -541,12 +500,12 @@ public class SecurityGroup extends AbstractFirewallSupport {
     public @Nonnull Iterable<String> listFirewallsForVM(@Nonnull String vmId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Firewall.listFirewallsForVM");
         try {
-            ProviderContext ctx = cloudstack.getContext();
+            ProviderContext ctx = getContext();
 
             if( ctx == null ) {
                 throw new CloudException("No context was set for this request");
             }
-            CSMethod method = new CSMethod(cloudstack);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId)), LIST_SECURITY_GROUPS);
             ArrayList<String> firewalls = new ArrayList<String>();
 

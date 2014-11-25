@@ -16,50 +16,35 @@
  * ====================================================================
  */
 
-package org.dasein.cloud.cloudstack;
+package org.dasein.cloud.cloudstack.identity;
 
 import org.dasein.cloud.AbstractCapabilities;
-import org.dasein.cloud.dc.DataCenterCapabilities;
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.InternalException;
+import org.dasein.cloud.Requirement;
+import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.identity.ShellKeyCapabilities;
 
 import javax.annotation.Nonnull;
 import java.util.Locale;
 
 /**
- * User: daniellemayne
- * Date: 01/08/2014
- * Time: 12:50
+ * Created by stas on 14/11/2014.
  */
-public class CSTopologyCapabilities extends AbstractCapabilities<CSCloud> implements DataCenterCapabilities {
-    public CSTopologyCapabilities(@Nonnull CSCloud provider) {
+public class KeypairCapabilities extends AbstractCapabilities<CSCloud> implements ShellKeyCapabilities {
+
+    public KeypairCapabilities( @Nonnull CSCloud provider ) {
         super(provider);
     }
+
     @Override
-    public String getProviderTermForDataCenter(Locale locale) {
-        return "zone";
+    public Requirement identifyKeyImportRequirement() throws CloudException, InternalException {
+        return Requirement.NONE;
     }
 
     @Override
-    public String getProviderTermForRegion(Locale locale) {
-        return "region";
+    public @Nonnull String getProviderTermForKeypair( @Nonnull Locale locale ) {
+        return "SSH keypair";
     }
 
-    @Override
-    public boolean supportsAffinityGroups() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsResourcePools() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsStoragePools() {
-        return false;
-    }
-
-    @Override
-    public boolean supportsFolders() {
-        return false;
-    }
 }

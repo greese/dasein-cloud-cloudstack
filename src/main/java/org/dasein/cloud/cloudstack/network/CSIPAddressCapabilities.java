@@ -41,15 +41,18 @@ import java.util.Locale;
 public class CSIPAddressCapabilities extends AbstractCapabilities<CSCloud> implements IPAddressCapabilities {
     public CSIPAddressCapabilities(CSCloud cloud) {super(cloud);}
 
-    @Nonnull
     @Override
-    public String getProviderTermForIpAddress(@Nonnull Locale locale) {
+    public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
         return "IP address";
     }
 
-    @Nonnull
     @Override
-    public Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
+    public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyVlanForIPRequirement() throws CloudException, InternalException {
         return Requirement.REQUIRED;
     }
 
@@ -78,9 +81,8 @@ public class CSIPAddressCapabilities extends AbstractCapabilities<CSCloud> imple
         return version.equals(IPVersion.IPV4);
     }
 
-    @Nonnull
     @Override
-    public Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
+    public @Nonnull Iterable<IPVersion> listSupportedIPVersions() throws CloudException, InternalException {
         return Collections.singletonList(IPVersion.IPV4);
     }
 

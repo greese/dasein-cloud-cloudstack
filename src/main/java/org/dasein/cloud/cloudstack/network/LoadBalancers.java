@@ -29,7 +29,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
-import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
@@ -56,17 +55,14 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     public static final String LIST_SSL_CERTIFICATES              = "listSslCerts";
     public static final String DELETE_SSL_CERTIFICATE             = "deleteSslCert";
     public static final String CREATE_LB_HEALTH_CHECK_POLICY      = "createLBHealthCheckPolicy";
-    
-    private CSCloud provider;
-    
+
     LoadBalancers(CSCloud provider) {
         super(provider);
-        this.provider = provider;
     }
 
     @Override
     public void addServers(@Nonnull String toLoadBalancerId, @Nonnull String ... serverIds) throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.addServers");
+        APITrace.begin(getProvider(), "LB.addServers");
         try {
             try {
                 LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
@@ -78,7 +74,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                     return;
                 }
                 for( LbListener listener : lb.getListeners() ) {
-                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
+                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort(), lb.getProviderVlanId());
                     StringBuilder str = new StringBuilder();
 
                     for( int i=0; i<serverIds.length; i++ ) {
@@ -87,10 +83,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                             str.append(",");
                         }
                     }
-                    CSMethod method = new CSMethod(provider);
+                    CSMethod method = new CSMethod(getProvider());
                     Document doc = method.get(method.buildUrl(ASSIGN_TO_LOAD_BALANCER_RULE, new Param("id", ruleId), new Param("virtualMachineIds", str.toString())), ASSIGN_TO_LOAD_BALANCER_RULE);
 
-                    provider.waitForJob(doc, "Add Server");
+                    getProvider().waitForJob(doc, "Add Server");
                 }
             }
             catch( RuntimeException e ) {
@@ -107,16 +103,16 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public @Nonnull String createLoadBalancer(@Nonnull LoadBalancerCreateOptions options) throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.create");
+        APITrace.begin(getProvider(), "LB.create");
         try {
-            @SuppressWarnings("ConstantConditions") org.dasein.cloud.network.IpAddress publicAddress = provider.getNetworkServices().getIpAddressSupport().getIpAddress(options.getProviderIpAddressId());
+            @SuppressWarnings("ConstantConditions") org.dasein.cloud.network.IpAddress publicAddress = getProvider().getNetworkServices().getIpAddressSupport().getIpAddress(options.getProviderIpAddressId());
 
             if( publicAddress == null ) {
                 throw new CloudException("You must specify the IP address for your load balancer.");
             }
             for( LbListener listener : options.getListeners() ) {
                 if( !isId(options.getProviderIpAddressId()) ) {
-                    createVmOpsRule(options.getName(), listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
+                    createVmOpsRule(options.getName(), listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort(), options.getProviderVlanId());
                 }
                 else {
                     createCloudstack22Rule(options.getName(), listener.getAlgorithm(), options.getProviderIpAddressId(), listener.getPublicPort(), listener.getPrivatePort());
@@ -148,7 +144,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         params.add(new Param("responsetimeout", String.valueOf(options.getTimeout())));
         params.add(new Param("pingpath", options.getHost() + ":" + options.getPort() + "/" + options.getPath()));
 
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(CREATE_LB_HEALTH_CHECK_POLICY,
                 params.toArray(new Param[params.size()])
         ), CREATE_LB_HEALTH_CHECK_POLICY);
@@ -231,8 +227,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return createLoadBalancer(options);
     }
 
-    private void createVmOpsRule(String lbName, LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
-        String id = getVmOpsRuleId(algorithm, publicIp, publicPort, privatePort);
+    private void createVmOpsRule( String lbName, LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort, String providerVlanId ) throws CloudException, InternalException {
+        String id = getVmOpsRuleId(algorithm, publicIp, publicPort, privatePort, providerVlanId);
         
         if( id != null ) {
             return;
@@ -250,6 +246,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         params.add(new Param("publicPort", String.valueOf(publicPort)));
         params.add(new Param("privatePort", String.valueOf(privatePort)));
         params.add(new Param("algorithm", algor));
+        if( providerVlanId != null ) {
+//            params.add(new Param("networkid", providerVlanId));
+        }
         if (lbName != null && !lbName.equals("")) {
             params.add(new Param("name", lbName));
         }
@@ -258,7 +257,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         params.add(new Param("description", "dsnlb_" + publicIp + "_" + publicPort + "_" + privatePort));
         
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params.toArray(new Param[params.size()])), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
@@ -289,7 +288,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
     
     private void createCloudstack22Rule(String lbName, LbAlgorithm algorithm, String publicIpId, int publicPort, int privatePort) throws CloudException, InternalException {
-        String id = getVmOpsRuleId(algorithm, publicIpId, publicPort, privatePort);
+        String id = getVmOpsRuleId(algorithm, publicIpId, publicPort, privatePort, null);
         
         if( id != null ) {
             return;
@@ -316,7 +315,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         params.add(new Param("description", "dsnlb_" + publicIpId + "_" + publicPort + "_" + privatePort));
 
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(CREATE_LOAD_BALANCER_RULE, params.toArray(new Param[params.size()])), CREATE_LOAD_BALANCER_RULE);
         NodeList matches = doc.getElementsByTagName("loadbalancerrule"); // v2.1
         
@@ -346,7 +345,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         
         matches = doc.getElementsByTagName("jobid"); // v2.2.11 - v2.2.13
         if (matches.getLength() > 0) {
-        	provider.waitForJob(doc, "Create Load Balancer Rule");
+        	getProvider().waitForJob(doc, "Create Load Balancer Rule");
         	return;
         }
         
@@ -363,7 +362,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     @Override
     public LoadBalancerCapabilities getCapabilities() throws CloudException, InternalException {
         if( capabilities == null ) {
-            capabilities = new LBCapabilities(provider);
+            capabilities = new LBCapabilities(getProvider());
         }
         return capabilities;
     }
@@ -376,14 +375,14 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     
     @Override
     public @Nullable LoadBalancer getLoadBalancer(@Nonnull String loadBalancerId) throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.getLoadBalancer");
+        APITrace.begin(getProvider(), "LB.getLoadBalancer");
         try {
             try {
                 Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
                 boolean isId = isId(loadBalancerId);
                 String key = (isId ? "publicIpId" : "publicIp");
 
-                CSMethod method = new CSMethod(provider);
+                CSMethod method = new CSMethod(getProvider());
                 Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, loadBalancerId)), LIST_LOAD_BALANCER_RULES);
                 NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
@@ -413,10 +412,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listLoadBalancerStatus() throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.listLoadBalancerStatus");
+        APITrace.begin(getProvider(), "LB.listLoadBalancerStatus");
         try {
             Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
@@ -473,7 +472,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     
     private @Nonnull Collection<String> getServersAt(String ruleId) throws InternalException, CloudException {
         List<String> ids = new ArrayList<String>();
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULE_INSTANCES, new Param("id", ruleId)), LIST_LOAD_BALANCER_RULE_INSTANCES);
 
         int numPages = 1;
@@ -512,7 +511,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return ids;
     }
     
-    private @Nullable String getVmOpsRuleId(@Nonnull LbAlgorithm lbAlgorithm, @Nonnull String publicIp, int publicPort, int privatePort) throws CloudException, InternalException {
+    private @Nullable String getVmOpsRuleId(@Nonnull LbAlgorithm lbAlgorithm, @Nonnull String publicIp, int publicPort, int privatePort, @Nullable String networkId) throws CloudException, InternalException {
         String ruleId = null;
         String algorithm;
 
@@ -524,8 +523,13 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         }
         boolean isId = isId(publicIp);
         String key = (isId ? "publicIpId" : "publicIp");
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, publicIp)), LIST_LOAD_BALANCER_RULES);
+        CSMethod method = new CSMethod(getProvider());
+        List<Param> parameters = new ArrayList<Param>();
+        parameters.add(new Param(key, publicIp));
+        if( networkId != null ) {
+            parameters.add(new Param("networkid", networkId));
+        }
+        Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, parameters), LIST_LOAD_BALANCER_RULES);
         NodeList rules = doc.getElementsByTagName("loadbalancerrule");
         
         for( int i=0; i<rules.getLength(); i++ ) {
@@ -588,9 +592,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.isSubscribed");
+        APITrace.begin(getProvider(), "LB.isSubscribed");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
@@ -636,10 +640,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public @Nonnull Iterable<LoadBalancer> listLoadBalancers() throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.listLoadBalancers");
+        APITrace.begin(getProvider(), "LB.listLoadBalancers");
         try {
             Map<String,LoadBalancer> matches = new HashMap<String,LoadBalancer>();
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             try {
                 Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES), LIST_LOAD_BALANCER_RULES);
@@ -683,7 +687,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                 if( e.getHttpCode() == HttpServletResponse.SC_NOT_FOUND ) {
                     return Collections.emptyList();
                 }
-                e.printStackTrace();
+//                e.printStackTrace();
                 throw e;
             }
         }
@@ -693,7 +697,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     boolean matchesRegion(@Nonnull String addressId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl("listPublicIpAddresses", new Param(isId(addressId) ? "ipAddressId" : "ipAddress", addressId)), "listPublicIpAddresses");
 
         NodeList matches = doc.getElementsByTagName("publicipaddress");
@@ -729,7 +733,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public void removeLoadBalancer(@Nonnull String loadBalancerId) throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.remove");
+        APITrace.begin(getProvider(), "LB.remove");
         try {
             LoadBalancer lb = getLoadBalancer(loadBalancerId);
 
@@ -737,7 +741,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                 return;
             }
             for( LbListener listener : lb.getListeners() ) {
-                String ruleId = getVmOpsRuleId(listener.getAlgorithm(), lb.getAddress(), listener.getPublicPort(), listener.getPrivatePort());
+                String ruleId = getVmOpsRuleId(listener.getAlgorithm(), lb.getAddress(), listener.getPublicPort(), listener.getPrivatePort(), lb.getProviderVlanId());
 
                 if( ruleId != null ) {
                     removeVmOpsRule(ruleId);
@@ -751,7 +755,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public void removeServers(@Nonnull String toLoadBalancerId, @Nonnull String ... serverIds) throws CloudException, InternalException {
-        APITrace.begin(provider, "LB.removeServers");
+        APITrace.begin(getProvider(), "LB.removeServers");
         try {
             try {
                 LoadBalancer lb = getLoadBalancer(toLoadBalancerId);
@@ -768,11 +772,11 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                     }
                 }
                 for( LbListener listener : lb.getListeners() ) {
-                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort());
-                    CSMethod method = new CSMethod(provider);
+                    String ruleId = getVmOpsRuleId(listener.getAlgorithm(), toLoadBalancerId, listener.getPublicPort(), listener.getPrivatePort(), lb.getProviderVlanId());
+                    CSMethod method = new CSMethod(getProvider());
                     Document doc = method.get(method.buildUrl(REMOVE_FROM_LOAD_BALANCER_RULE, new Param("id", ruleId), new Param("virtualMachineIds", ids.toString())), REMOVE_FROM_LOAD_BALANCER_RULE);
 
-                    provider.waitForJob(doc, "Remove Server");
+                    getProvider().waitForJob(doc, "Remove Server");
                 }
             }
             catch( RuntimeException e ) {
@@ -839,7 +843,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
      * @return Document
      */
     private Document uploadSslCertificate(SSLCertificateCreateOptions opts, boolean cs44hack) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         List<Param> params = new ArrayList<Param>();
         try {
             params.add(new Param("certificate",
@@ -860,8 +864,8 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public @Nonnull Iterable<SSLCertificate> listSSLCertificates() throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_SSL_CERTIFICATES, new Param("accountid", provider.getAccountId())), LIST_SSL_CERTIFICATES);
+        CSMethod method = new CSMethod(getProvider());
+        Document doc = method.get(method.buildUrl(LIST_SSL_CERTIFICATES, new Param("accountid", getProvider().getAccountId())), LIST_SSL_CERTIFICATES);
         List<SSLCertificate> results = new ArrayList<SSLCertificate>();
 
         NodeList matches = doc.getElementsByTagName("sslcert");
@@ -901,7 +905,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public @Nullable SSLCertificate getSSLCertificate( @Nonnull String certificateName ) throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = null;
         try {
             doc = method.get(method.buildUrl(LIST_SSL_CERTIFICATES, new Param("certid", certificateName)), LIST_SSL_CERTIFICATES);
@@ -947,7 +951,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     @Override public void removeSSLCertificate( @Nonnull String certificateName ) throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(DELETE_SSL_CERTIFICATE, new Param("id", certificateName)), DELETE_SSL_CERTIFICATE);
         NodeList matches = doc.getElementsByTagName("success");
         if( matches.getLength() > 0 ) {
@@ -964,10 +968,10 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
     }
 
     private void removeVmOpsRule(@Nonnull String ruleId) throws CloudException, InternalException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(method.buildUrl(DELETE_LOAD_BALANCER_RULE, new Param("id", ruleId)), DELETE_LOAD_BALANCER_RULE);
 
-        provider.waitForJob(doc, "Remove Load Balancer Rule");
+        getProvider().waitForJob(doc, "Remove Load Balancer Rule");
     }
     
     private void toRule(@Nullable Node node, @Nonnull Map<String,LoadBalancer> current) throws InternalException, CloudException {
@@ -975,6 +979,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         int publicPort = -1, privatePort = -1;
         LbAlgorithm algorithm = null;
         String publicIp = null;
+        String vlanId = null;
         String ruleId = null;
         String lbName = null;
         String lbDesc = ""; // can't be null
@@ -992,6 +997,9 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             }
             if( name.equals("publicip") ) {
                 publicIp = value;
+            }
+            else if( name.equals("networkid") ) {
+                vlanId = value;
             }
             else if( name.equals("id") ) {
                 ruleId = value;
@@ -1033,7 +1041,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             LbListener[] listeners = lb.getListeners();
 
             // TODO: WTF?
-            TreeSet<Integer> ports = new TreeSet<Integer>();
+            Set<Integer> ports = new TreeSet<Integer>();
 
             for( int port : lb.getPublicPorts() ) {
                 ports.add(port);
@@ -1081,7 +1089,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             lb.setDescription(lbDesc);
         }
         else {
-            Collection<DataCenter> dcs = provider.getDataCenterServices().listDataCenters(provider.getContext().getRegionId());
+            Collection<DataCenter> dcs = getProvider().getDataCenterServices().listDataCenters(getProvider().getContext().getRegionId());
             String[] ids = new String[dcs.size()];
             int i =0;
             
@@ -1090,7 +1098,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             }
 
             LoadBalancer lb = LoadBalancer.getInstance(getContext().getAccountNumber(), getContext().getRegionId(), publicIp, LoadBalancerState.ACTIVE, lbName, lbDesc, LoadBalancerAddressType.IP, publicIp, publicPort).withListeners(listener).operatingIn(ids);
-
+            lb.forVlan(vlanId);
             //noinspection deprecation
             lb.setProviderServerIds(serverIds.toArray(new String[serverIds.size()]));
             current.put(publicIp, lb);
@@ -1099,11 +1107,11 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     /*
     public @Nullable String getLoadBalancerForAddress(@Nonnull String address) throws InternalException, CloudException {
-        APITrace.begin(provider, "LB.getLoadBalancerForAddress");
+        APITrace.begin(getProvider(), "LB.getLoadBalancerForAddress");
         try {
             boolean isId = isId(address);
             String key = (isId ? "publicIpId" : "publicIp");
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
 
             Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param[] { new Param(key, address) }), LIST_LOAD_BALANCER_RULES);
             NodeList rules = doc.getElementsByTagName("loadbalancerrule");
@@ -1125,7 +1133,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             boolean isId = isId(loadBalancerId);
             String key = (isId ? "publicIpId" : "publicIp");
 
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(method.buildUrl(LIST_LOAD_BALANCER_RULES, new Param(key, loadBalancerId)), LIST_LOAD_BALANCER_RULES);
             NodeList rules = doc.getElementsByTagName("loadbalancerrule");
 
