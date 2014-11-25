@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2009-2014 Dell, Inc.
- * See annotations for authorship information
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,6 +15,7 @@
  * limitations under the License.
  * ====================================================================
  */
+
 package org.dasein.cloud.cloudstack.identity;
 
 import org.dasein.cloud.AbstractCapabilities;
