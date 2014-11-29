@@ -456,10 +456,15 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         }
         String regionId = ctx.getRegionId();
 
-        if( regionId == null ) {
+        if( inZoneId == null || inZoneId.isEmpty() ) {
+            inZoneId = regionId;
+        }
+
+        if( inZoneId == null || inZoneId.isEmpty() ) {
             throw new InternalException("No region is established for this request");
         }
-        String prdId = product.getProviderProductId();
+
+       String prdId = product.getProviderProductId();
 
         if( customNetworkMappings == null ) {
             load();
@@ -577,7 +582,8 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             */            
         }
         List<Param> params = new ArrayList<Param>();
-        params.add(new Param("zoneId", getContext().getRegionId()));
+
+        params.add(new Param("zoneId", inZoneId));
         params.add(new Param("serviceOfferingId", prdId));
         params.add(new Param("templateId", imageId));
         params.add(new Param("displayName", name));
