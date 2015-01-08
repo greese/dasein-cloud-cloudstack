@@ -74,15 +74,95 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
     }
 
     @Override
-    public VirtualMachine alterVirtualMachine(@Nonnull String vmId, @Nonnull VMScalingOptions options) throws InternalException, CloudException {
-        APITrace.begin(getProvider(), "VM.alterVM");
+    public VirtualMachine alterVirtualMachineSize( @Nonnull String vmId, @Nullable String cpuCount, @Nullable String ramInMB ) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "VM.alterVirtualMachineSize");
         try {
-            String productId = options.getProviderProductId();
+            CSMethod method = new CSMethod(getProvider());
 
-            if (vmId == null || options.getProviderProductId() == null) {
-                throw new CloudException("No vmid and/or product id set for this operation");
+            VirtualMachine vm = getVirtualMachine(vmId);
+
+            boolean restart = false;
+            if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                restart = true;
+                stop(vmId, true);
             }
 
+            long timeout = System.currentTimeMillis()+(CalendarWrapper.MINUTE*20L);
+            while (System.currentTimeMillis() < timeout) {
+                if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                    try {
+                        Thread.sleep(15000L);
+                        vm = getVirtualMachine(vmId);
+                    }
+                    catch (InterruptedException ignore) {}
+                }
+                else {
+                    break;
+                }
+            }
+            vm = getVirtualMachine(vmId);
+            if (!vm.getCurrentState().equals(VmState.STOPPED)) {
+                throw new CloudException("Unable to stop vm for scaling");
+            }
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("id", vmId));
+            params.add(new Param("serviceOfferingId", vm.getProductId()));
+            int index = 0;
+            if( cpuCount != null ) {
+                params.add(new Param("details["+index+"].cpunumber", cpuCount));
+                index++;
+            }
+            if( ramInMB != null ) {
+                params.add(new Param("details["+index+"].memory", ramInMB));
+            }
+            Document doc = method.get(method.buildUrl(RESIZE_VIRTUAL_MACHINE, params), RESIZE_VIRTUAL_MACHINE);
+
+            NodeList matches = doc.getElementsByTagName("scalevirtualmachineresponse");
+            String jobId = null;
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                NodeList attrs = matches.item(i).getChildNodes();
+
+                for( int j=0; j<attrs.getLength(); j++ ) {
+                    Node node = attrs.item(j);
+
+                    if (node != null && node.getNodeName().equalsIgnoreCase("jobid") ) {
+                        jobId = node.getFirstChild().getNodeValue();
+                    }
+                }
+            }
+            if( jobId == null ) {
+                throw new CloudException("Could not scale server");
+            }
+            Document responseDoc = getProvider().waitForJob(doc, "Scale Server");
+
+            if (responseDoc != null){
+                NodeList nodeList = responseDoc.getElementsByTagName("virtualmachine");
+                if (nodeList.getLength() > 0) {
+                    Node virtualMachine = nodeList.item(0);
+                    vm = toVirtualMachine(virtualMachine);
+                    if( vm != null ) {
+                        if (restart) {
+                            start(vmId);
+                        }
+                        return vm;
+                    }
+                }
+            }
+            if (restart) {
+                start(vmId);
+            }
+            return getVirtualMachine(vmId);
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    @Override
+    public VirtualMachine alterVirtualMachineProduct(@Nonnull String vmId, @Nonnull String productId) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "VM.alterVirtualMachineProduct");
+        try {
             CSMethod method = new CSMethod(getProvider());
 
             VirtualMachine vm = getVirtualMachine(vmId);
@@ -757,7 +837,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                     NodeList attributes;
                     int memory = 0;
                     int cpu = 0;
-
+                    Boolean customized = null;
                     attributes = node.getChildNodes();
                     for( int j=0; j<attributes.getLength(); j++ ) {
                         Node n = attributes.item(j);
@@ -781,11 +861,14 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                         else if( n.getNodeName().equals("memory") ) {
                             memory = Integer.parseInt(value);
                         }
-                        if( id != null && name != null && cpu > 0 && memory > 0 ) {
+                        else if( n.getNodeName().equals("iscustomized") ) {
+                            customized = Boolean.valueOf(value);
+                        }
+                        if( id != null && name != null && cpu > 0 && memory > 0 && customized != null) {
                             break;
                         }
                     }
-                    if( id != null  && name != null && cpu > 0 && memory > 0 ) {
+                    if( id != null  && name != null && cpu > 0 && memory > 0 && !customized) {
                         if( mapping == null || mapping.contains(id) ) {
                             VirtualMachineProduct product;
 
