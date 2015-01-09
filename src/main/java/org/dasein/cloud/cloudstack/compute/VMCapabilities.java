@@ -129,7 +129,7 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     @Nullable
     @Override
     public VMScalingCapabilities getVerticalScalingCapabilities() throws CloudException, InternalException {
-        return VMScalingCapabilities.getInstance(false,true,Requirement.NONE,Requirement.NONE);
+        return VMScalingCapabilities.getInstance(false, true, false);
     }
 
     @Nonnull
