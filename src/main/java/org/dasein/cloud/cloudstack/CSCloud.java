@@ -340,8 +340,8 @@ public class CSCloud extends AbstractCloud {
                     }
                     StorageServices services = getStorageServices();
 
-                    if( services != null && services.hasBlobStoreSupport() ) {
-                        BlobStoreSupport support = services.getBlobStoreSupport();
+                    if( services != null && services.hasOnlineStorageSupport() ) {
+                        BlobStoreSupport support = services.getOnlineStorageSupport();
 
                         if( support != null ) {
                             try {
@@ -349,7 +349,9 @@ public class CSCloud extends AbstractCloud {
                             }
                             catch( Throwable t ) {
                                 logger.warn("testContext(): Storage credentials failed: " + t.getMessage());
-                                t.printStackTrace();
+                                if( logger.isDebugEnabled() ) {
+                                    logger.debug("textContext(): Storage credentials failed: ", t);
+                                }
                                 return null;
                             }
                         }
