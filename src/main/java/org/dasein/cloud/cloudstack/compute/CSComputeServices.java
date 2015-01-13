@@ -23,28 +23,26 @@ import org.dasein.cloud.compute.AbstractComputeServices;
 
 import javax.annotation.Nonnull;
 
-public class CSComputeServices extends AbstractComputeServices {
-    private CSCloud cloud = null;
-    
-    public CSComputeServices(@Nonnull CSCloud cloud) { this.cloud = cloud; }
+public class CSComputeServices extends AbstractComputeServices<CSCloud> {
+    public CSComputeServices(@Nonnull CSCloud cloud) { super(cloud); }
     
     @Override
     public @Nonnull Templates getImageSupport() {
-        return new Templates(cloud);
+        return new Templates(getProvider());
     }
     
     @Override
     public @Nonnull Snapshots getSnapshotSupport() {
-        return new Snapshots(cloud);
+        return new Snapshots(getProvider());
     }
     
     @Override
     public @Nonnull VirtualMachines getVirtualMachineSupport() {
-        return new VirtualMachines(cloud);
+        return new VirtualMachines(getProvider());
     }
     
     @Override
     public @Nonnull Volumes getVolumeSupport() {
-        return new Volumes(cloud);
+        return new Volumes(getProvider());
     }
 }
