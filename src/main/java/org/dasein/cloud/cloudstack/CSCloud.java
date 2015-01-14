@@ -88,12 +88,12 @@ public class CSCloud extends AbstractCloud {
         ProviderContext ctx = getContext();
 
         if( ctx == null ) {
-            return "Citrix";
+            return "CloudStack";
         }
         String name = ctx.getCloudName();
         
         if( name == null ) {
-            return "Citrix";
+            return "CloudStack";
         }
         return name;
     }
