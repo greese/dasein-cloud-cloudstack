@@ -102,6 +102,11 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
     }
 
     @Override
+    public @Nonnull Requirement identifyHealthCheckOnCreateRequirement() throws CloudException, InternalException {
+        return Requirement.OPTIONAL;
+    }
+
+    @Override
     public boolean isAddressAssignedByProvider() throws CloudException, InternalException {
         return false;
     }
