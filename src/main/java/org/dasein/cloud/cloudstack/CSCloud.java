@@ -243,7 +243,7 @@ public class CSCloud extends AbstractCloud {
 
                 for( int i=0; i<matches.getLength(); i++ ) {
                     boolean found = false;
-                    String account = null;
+                    String username = null;
                     Node node = matches.item(i);
                     NodeList attributes = node.getChildNodes();
 
@@ -264,13 +264,16 @@ public class CSCloud extends AbstractCloud {
                                 continue;
                             }
                         }
-                        else  if (name.equals("account")) {
-                            account = value;
+                        // i think we should match with username, not account name since
+                        // the keys belong to user, not the account
+                        else if (name.equals("username")) {
+                            username = value;
                         }
                     }
                     if (found) {
-                        if (!getContext().getAccountNumber().equals(account)) {
-                            getContext().setAccountNumber(account);
+                        // not sure we need to match this
+                        if (!getContext().getAccountNumber().equals(username)) {
+                            getContext().setAccountNumber(username);
                         }
                         return true;
                     }
