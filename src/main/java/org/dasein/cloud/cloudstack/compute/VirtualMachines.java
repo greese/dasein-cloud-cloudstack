@@ -1346,8 +1346,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                     state = VmState.TERMINATED;
                 }
                 else if( value.equalsIgnoreCase("error") ) {
-                    logger.warn("VM is in an error state.");
-                	return null;
+                    state = VmState.ERROR;
                 }
                 else if( value.equalsIgnoreCase("expunging") ) {
                     state = VmState.TERMINATED;
