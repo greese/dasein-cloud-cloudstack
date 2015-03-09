@@ -317,7 +317,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
             params.add(new Param("canUseForDeploy", "true"));
         }
         if( !shared ) {
-            params.add(new Param("account", getProvider().getParentAccount()));
+            params.add(new Param("account", ctx.getAccountNumber()));
             // filtering by account only works with the domain now
             params.add(new Param("domainid", getProvider().getDomainId()));
         }
