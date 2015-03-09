@@ -238,12 +238,12 @@ public class CSCloud extends AbstractCloud {
                 }
                 catch( UnsupportedEncodingException e ) {
                     e.printStackTrace();
-                    throw new RuntimeException("This cannot happen: " + e.getMessage());
+                    throw new RuntimeException("This cannot happen: " + e.getMessage(), e);
                 }
 
                 for( int i=0; i<matches.getLength(); i++ ) {
                     boolean found = false;
-                    String username = null;
+                    String account = null;
                     Node node = matches.item(i);
                     NodeList attributes = node.getChildNodes();
 
@@ -266,14 +266,14 @@ public class CSCloud extends AbstractCloud {
                         }
                         // i think we should match with username, not account name since
                         // the keys belong to user, not the account
-                        else if (name.equals("username")) {
-                            username = value;
+                        else if (name.equals("account")) {
+                            account = value;
                         }
                     }
                     if (found) {
                         // not sure we need to match this
-                        if (!getContext().getAccountNumber().equals(username)) {
-                            getContext().setAccountNumber(username);
+                        if (!getContext().getAccountNumber().equals(account)) {
+                            getContext().setAccountNumber(account);
                         }
                         return true;
                     }
@@ -490,11 +490,22 @@ public class CSCloud extends AbstractCloud {
             Document doc = method.get(url, "listAccounts");
             NodeList matches = doc.getElementsByTagName("user");
 
+            String ctxKey = null;
+            List<ContextRequirements.Field> fields = getContextRequirements().getConfigurableValues();
+            for(ContextRequirements.Field f : fields ) {
+                if(f.type.equals(ContextRequirements.FieldType.KEYPAIR)){
+                    byte[][] keyPair = (byte[][])getContext().getConfigurationValue(f);
+                    ctxKey = new String(keyPair[0], "utf-8");
+                }
+            }
+
+
             for (int i = 0; i<matches.getLength(); i++) {
-                boolean foundUser = false;
-                String accountForUser = null;
-                String domainIdForUser = null;
-                String accountIdForUser = null;
+                boolean userAccountFound = false;
+                String accountName = null;
+                String domainId = null;
+                String accountId = null;
+                String username = null;
                 int accountType = 0;
 
                 NodeList attributes = matches.item(i).getChildNodes();
@@ -511,29 +522,33 @@ public class CSCloud extends AbstractCloud {
                         value = null;
                     }
 
-                    if (name.equalsIgnoreCase("username")) {
-                        if (getContext().getAccountNumber().equalsIgnoreCase(value)) {
-                            foundUser = true;
-                        }
+                    if( name.equalsIgnoreCase("username") ) {
+                        username = value;
+                    }
+                    else if (name.equalsIgnoreCase("apikey") && ctxKey.equals(value)) {
+                        userAccountFound = true; // user record matched by the context api key
                     }
                     else if (name.equalsIgnoreCase("account")) {
-                        accountForUser = value;
+                        accountName = value;
                     }
                     else if (name.equalsIgnoreCase("domainid")) {
-                        domainIdForUser = value;
+                        domainId = value;
                     }
                     else if( "accountid".equalsIgnoreCase(name) ) {
-                        accountIdForUser = value;
+                        accountId = value;
                     }
                     else if( "accounttype".equalsIgnoreCase(name) ) {
                         accountType = Integer.parseInt(value); // 0-user, 1-domain admin, 2-root admin
                     }
                 }
-                if (foundUser) {
-                    data = new AccountData(accountIdForUser, accountForUser, domainIdForUser, accountType > 0);
+                if (userAccountFound) {
+                    data = new AccountData(username, accountId, accountName, domainId, accountType > 0);
                     break;
                 }
             }
+        }
+        catch( UnsupportedEncodingException e ) {
+            throw new RuntimeException("This cannot happen: " + e.getMessage(), e);
         }
         finally {
             APITrace.end();
@@ -550,10 +565,12 @@ public class CSCloud extends AbstractCloud {
     class AccountData {
         private String accountId;
         private String parentAccount;
+        private String username;
         private String domainId;
         private boolean admin;
 
-        public AccountData( String accountId, String parentAccount, String domainId, boolean admin ) {
+        public AccountData( String username, String accountId, String parentAccount, String domainId, boolean admin ) {
+            this.username = username;
             this.accountId = accountId;
             this.parentAccount = parentAccount;
             this.domainId = domainId;
@@ -574,6 +591,10 @@ public class CSCloud extends AbstractCloud {
 
         public boolean isAdmin() {
             return admin;
+        }
+
+        public String getUsername() {
+            return username;
         }
     }
 
