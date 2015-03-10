@@ -265,6 +265,11 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     }
 
     @Override
+    public boolean supportsClientRequestToken() throws InternalException, CloudException {
+        return false;
+    }
+
+    @Override
     public boolean supportsAlterVM() {
         if (!getProvider().getProviderName().contains("Datapipe")) {
             return true;
