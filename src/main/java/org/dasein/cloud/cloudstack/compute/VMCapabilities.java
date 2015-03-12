@@ -77,7 +77,7 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean canReboot(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return true;
+        return !VmState.ERROR.equals(fromState);
     }
 
     @Override
@@ -87,12 +87,12 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean canStart(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return !fromState.equals(VmState.RUNNING);
+        return !VmState.RUNNING.equals(fromState) && !VmState.ERROR.equals(fromState);
     }
 
     @Override
     public boolean canStop(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return !fromState.equals(VmState.STOPPED);
+        return !fromState.equals(VmState.STOPPED) && !VmState.ERROR.equals(fromState);
     }
 
     @Override
@@ -102,7 +102,7 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean canTerminate(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return !fromState.equals(VmState.TERMINATED);
+        return !fromState.equals(VmState.TERMINATED) && !VmState.ERROR.equals(fromState);
     }
 
     @Override
