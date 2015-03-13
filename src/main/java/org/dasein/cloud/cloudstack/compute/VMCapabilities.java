@@ -270,6 +270,16 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     }
 
     @Override
+    public boolean isVMProductDCConstrained() throws InternalException, CloudException{
+        return false;
+    }
+
+    @Override
+    public boolean supportsCloudStoredShellKey() throws InternalException, CloudException{
+        return true;
+    }
+
+    @Override
     public boolean supportsAlterVM() {
         if (!getProvider().getProviderName().contains("Datapipe")) {
             return true;
