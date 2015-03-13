@@ -115,6 +115,11 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     }
 
     @Override
+    public boolean imageCaptureDestroysVM() throws InternalException, CloudException{
+        return false;
+    }
+
+    @Override
     public boolean supportsDirectImageUpload() throws CloudException, InternalException {
         return true;
     }
