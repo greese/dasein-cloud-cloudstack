@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2014 Dell, Inc.
+ * Copyright (C) 2009-2015 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -602,10 +602,15 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         }
         String regionId = ctx.getRegionId();
 
-        if( regionId == null ) {
+        if( inZoneId == null || inZoneId.isEmpty() ) {
+            inZoneId = regionId;
+        }
+
+        if( inZoneId == null || inZoneId.isEmpty() ) {
             throw new InternalException("No region is established for this request");
         }
-        String prdId = product.getProviderProductId();
+
+       String prdId = product.getProviderProductId();
 
         if( customNetworkMappings == null ) {
             load();
@@ -723,7 +728,8 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             */            
         }
         List<Param> params = new ArrayList<Param>();
-        params.add(new Param("zoneId", getContext().getRegionId()));
+
+        params.add(new Param("zoneId", inZoneId));
         params.add(new Param("serviceOfferingId", prdId));
         params.add(new Param("templateId", imageId));
         params.add(new Param("displayName", name));
@@ -1415,8 +1421,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                     state = VmState.TERMINATED;
                 }
                 else if( value.equalsIgnoreCase("error") ) {
-                    logger.warn("VM is in an error state.");
-                	return null;
+                    state = VmState.ERROR;
                 }
                 else if( value.equalsIgnoreCase("expunging") ) {
                     state = VmState.TERMINATED;

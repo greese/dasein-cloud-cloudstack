@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2014 Dell, Inc.
+ * Copyright (C) 2009-2015 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -653,7 +653,9 @@ public class Templates extends AbstractImageSupport<CSCloud> {
             CSMethod method = new CSMethod(getProvider());
             String accountNumber = (options == null ? null : options.getAccountNumber());
             List<Param> params = new ArrayList<Param>();
-            params.add(new Param("zoneId", getContext().getRegionId()));
+            if( getContext().getRegionId() != null && !getContext().getRegionId().isEmpty() ) {
+                params.add(new Param("zoneId", getContext().getRegionId()));
+            }
             params.add(new Param("pagesize", "500"));
 
             // if only single hypervisor is supported by zone, let's limit to that
@@ -1025,7 +1027,9 @@ public class Templates extends AbstractImageSupport<CSCloud> {
         if( hypervisors != null && hypervisors.size() == 1) {
             params.add(new Param("hypervisor", hypervisors.get(0)));
         }
-        params.add(new Param("zoneId", getContext().getRegionId()));
+        if( getContext().getRegionId() != null && !getContext().getRegionId().isEmpty() ) {
+            params.add(new Param("zoneId", getContext().getRegionId()));
+        }
 
         //todo add public isos when we can support launching vms from them
         //todo refactor to make smaller methods
@@ -1180,12 +1184,13 @@ public class Templates extends AbstractImageSupport<CSCloud> {
 
         String providerOwnerId = getContext().getAccountNumber();
         MachineImageState state = MachineImageState.PENDING;
-        String regionId = getContext().getRegionId();
+        String regionId = null;
         ImageClass imageClass = ImageClass.MACHINE;
         String imageId = null, imgName = null, description = null;
         Platform platform = null;
         Architecture architecture = null;
         long creationTimestamp = 0l;
+        boolean crossZones = false;
         
         for( int i=0; i<attributes.getLength(); i++ ) {
             Node attribute = attributes.item(i);
@@ -1197,10 +1202,11 @@ public class Templates extends AbstractImageSupport<CSCloud> {
             if( name.equals("id") ) {
                 imageId = value;
             }
+            else if( name.equals("crosszones") ) {
+                crossZones = Boolean.valueOf(value);
+            }
             else if( name.equals("zoneid") ) {
-                if( value == null || !value.equals(getContext().getRegionId()) ) {
-                    return null;
-                }
+                regionId = value;
             }
             else if( name.equals("hypervisor") ) {
                 // check if the image hypervisor is not in the desired list
@@ -1281,14 +1287,18 @@ public class Templates extends AbstractImageSupport<CSCloud> {
         if( architecture == null ) {
             architecture = bestArchitectureGuess;
         }
+        MachineImage image = null;
         if( !onlyIfPublic || isPublic ) {
-            MachineImage img = MachineImage.getImageInstance(providerOwnerId, regionId, imageId, imageClass, state, imgName, description, architecture, platform);
-            guessSoftware(img);
-            img.setTags(properties);
-            img.createdAt(creationTimestamp);
-            return img;
+            image = MachineImage.getImageInstance(providerOwnerId, regionId, imageId, imageClass, state, imgName, description, architecture, platform);
+            guessSoftware(image);
+            image.setTags(properties);
+            image.createdAt(creationTimestamp);
         }
-        return null;
+        // if image is not available in all zones and image zone is not matching requested - bail out
+        if( !crossZones && !regionId.equalsIgnoreCase(getContext().getRegionId()) ) {
+            return null;
+        }
+        return image;
     }
 
     private @Nullable ResourceStatus toStatus(@Nullable Node node, boolean onlyIfPublic) throws CloudException, InternalException {

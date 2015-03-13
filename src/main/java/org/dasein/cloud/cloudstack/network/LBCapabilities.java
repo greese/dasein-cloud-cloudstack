@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2014 Dell, Inc.
+ * Copyright (C) 2009-2015 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -99,6 +99,11 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
     @Override
     public @Nonnull Requirement identifyVlanOnCreateRequirement() throws CloudException, InternalException {
         return Requirement.REQUIRED;
+    }
+
+    @Override
+    public @Nonnull Requirement identifyHealthCheckOnCreateRequirement() throws CloudException, InternalException {
+        return Requirement.OPTIONAL;
     }
 
     @Override

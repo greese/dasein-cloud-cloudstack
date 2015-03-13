@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2009-2014 Dell, Inc.
+ * Copyright (C) 2009-2015 Dell, Inc.
  *
  * ====================================================================
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,28 +23,26 @@ import org.dasein.cloud.compute.AbstractComputeServices;
 
 import javax.annotation.Nonnull;
 
-public class CSComputeServices extends AbstractComputeServices {
-    private CSCloud cloud = null;
-    
-    public CSComputeServices(@Nonnull CSCloud cloud) { this.cloud = cloud; }
+public class CSComputeServices extends AbstractComputeServices<CSCloud> {
+    public CSComputeServices(@Nonnull CSCloud cloud) { super(cloud); }
     
     @Override
     public @Nonnull Templates getImageSupport() {
-        return new Templates(cloud);
+        return new Templates(getProvider());
     }
     
     @Override
     public @Nonnull Snapshots getSnapshotSupport() {
-        return new Snapshots(cloud);
+        return new Snapshots(getProvider());
     }
     
     @Override
     public @Nonnull VirtualMachines getVirtualMachineSupport() {
-        return new VirtualMachines(cloud);
+        return new VirtualMachines(getProvider());
     }
     
     @Override
     public @Nonnull Volumes getVolumeSupport() {
-        return new Volumes(cloud);
+        return new Volumes(getProvider());
     }
 }
