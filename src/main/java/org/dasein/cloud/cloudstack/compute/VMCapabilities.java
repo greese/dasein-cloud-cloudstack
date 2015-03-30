@@ -177,7 +177,10 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     @Nonnull
     @Override
     public Requirement identifyShellKeyRequirement(Platform platform) throws CloudException, InternalException {
-        return Requirement.NONE;
+        if( Platform.WINDOWS.equals(platform) ) {
+            return Requirement.NONE;
+        }
+        return Requirement.OPTIONAL;
     }
 
     @Nonnull
