@@ -29,6 +29,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -543,4 +544,54 @@ public class Snapshots extends AbstractSnapshotSupport {
             APITrace.end();
         }
     }
+    
+	@Override
+	public void setTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { snapshotId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Snapshot.setTags");
+		try {
+			removeTags(snapshotIds);
+			provider.createTags(snapshotIds, "Snapshot", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { snapshotId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Snapshot.updateTags");
+		try {
+			provider.updateTags(snapshotIds, "Snapshot", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String snapshotId, @Nonnull Tag... tags)
+			throws CloudException, InternalException {
+		removeTags(new String[] { snapshotId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Snapshot.removeTags");
+		try {
+			provider.removeTags(snapshotIds, "Snapshot", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
 }

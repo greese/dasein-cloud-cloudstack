@@ -29,6 +29,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -1172,4 +1173,53 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return null;
     }
 
+	@Override
+	public void setTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { loadBalancerId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "LB.setTags");
+		try {
+			removeTags(loadBalancerIds);
+			getProvider().createTags(loadBalancerIds, "LoadBalancer", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { loadBalancerId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "LB.updateTags");
+		try {
+			getProvider().updateTags(loadBalancerIds, "LoadBalancer", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags)
+			throws CloudException, InternalException {
+		removeTags(new String[] { loadBalancerId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "LB.removeTags");
+		try {
+			getProvider().removeTags(loadBalancerIds, "LoadBalancer", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
 }

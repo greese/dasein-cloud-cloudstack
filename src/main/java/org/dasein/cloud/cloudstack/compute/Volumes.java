@@ -36,6 +36,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -935,4 +936,53 @@ public class Volumes extends AbstractVolumeSupport {
         }
         return volume;
     }
+    
+	@Override
+	public void setTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { volumeId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Volume.setTags");
+		try {
+			removeTags(volumeIds);
+			provider.createTags(volumeIds, "Volume", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { volumeId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Volume.updateTags");
+		try {
+			provider.updateTags(volumeIds, "Volume", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		removeTags(new String[] { volumeId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Volume.removeTags");
+		try {
+			provider.removeTags(volumeIds, "Volume", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
 }

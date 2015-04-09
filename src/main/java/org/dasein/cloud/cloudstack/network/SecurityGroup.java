@@ -20,7 +20,6 @@ package org.dasein.cloud.cloudstack.network;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Locale;
 
 import org.apache.log4j.Logger;
@@ -29,6 +28,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -725,4 +725,53 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         }
         return null;
     }
+    
+	@Override
+	public void setTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.setTags");
+		try {
+			removeTags(firewallIds);
+			getProvider().createTags(firewallIds, "SecurityGroup", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.updateTags");
+		try {
+			getProvider().updateTags(firewallIds, "SecurityGroup", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		removeTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.removeTags");
+		try {
+			getProvider().removeTags(firewallIds, "SecurityGroup", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
 }

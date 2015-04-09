@@ -1405,4 +1405,53 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         server.setTags(properties);
         return server;
     }
+    
+	@Override
+	public void setTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { vmId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Server.setTags");
+		try {
+			removeTags(vmIds);
+			getProvider().createTags(vmIds, "UserVm", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { vmId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Server.updateTags");
+		try {
+			getProvider().updateTags(vmIds, "UserVm", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		removeTags(new String[] { vmId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Server.removeTags");
+		try {
+			getProvider().removeTags(vmIds, "UserVm", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
 }
