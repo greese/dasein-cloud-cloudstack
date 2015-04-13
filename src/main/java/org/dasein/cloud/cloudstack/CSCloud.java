@@ -668,9 +668,11 @@ public class CSCloud extends AbstractCloud {
     			params.add(new Param("resourceids", resourceIds));
     			params.add(new Param("resourcetype", resourceType));
     			for (int i = 0; i < keyValuePairs.length; i++) {
-    				params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
     				// Tag value can't be null or ""
-    				params.add(new Param("tags[" + i + "].value", (keyValuePairs[i].getValue() == null || keyValuePairs[i].getValue().equals(""))? " " : keyValuePairs[i].getValue()));
+    				if (keyValuePairs[i].getValue() != null && !keyValuePairs[i].getValue().equals("")) {
+    					params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
+    					params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
+    				}
     			}
     			Document doc = method.get(method.buildUrl(CREATE_TAGS, params), CREATE_TAGS);
     			waitForJob(doc, "Create Tags");
@@ -697,7 +699,9 @@ public class CSCloud extends AbstractCloud {
     						// Existing tags
     						for (int k = 0; k < tagList.length; k++) {
     							if (keyValuePairs[i].getKey().equals(tagList[k].getKey())) {
-    								tags.add(new Tag(tagList[k].getKey(), tagList[k].getValue()));
+    								if (tagList[k].getValue() != null) {
+    									tags.add(new Tag(tagList[k].getKey(), tagList[k].getValue()));
+    								}
     							}
     						}
     					}
@@ -733,9 +737,11 @@ public class CSCloud extends AbstractCloud {
     			params.add(new Param("resourceids", resourceIds));
     			params.add(new Param("resourcetype", resourceType));
     			for (int i = 0; i < keyValuePairs.length; i++) {
-    				params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
     				// Tag value can't be null or ""
-    				params.add(new Param("tags[" + i + "].value", (keyValuePairs[i].getValue() == null || keyValuePairs[i].getValue().equals("")) ? " " : keyValuePairs[i].getValue()));
+    				if (keyValuePairs[i].getValue() != null && !keyValuePairs[i].getValue().equals("")) {
+    				params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
+    				params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
+    				}
     			}
     			Document doc = method.get(method.buildUrl(DELETE_TAGS, params), DELETE_TAGS);
     			waitForJob(doc, "Delete Tags");
