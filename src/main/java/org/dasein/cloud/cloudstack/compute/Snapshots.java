@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
@@ -29,6 +31,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -225,6 +228,21 @@ public class Snapshots extends AbstractSnapshotSupport {
             if( snapshotId == null ) {
                 throw new CloudException("Failed to create a snapshot");
             }
+
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, String> meta = options.getMetaData();
+            for( Entry<String, String> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            provider.createTags(new String[] { snapshotId }, "Snapshot", tags.toArray(new Tag[tags.size()]));
             return snapshotId;
         }
         finally {
@@ -542,5 +560,55 @@ public class Snapshots extends AbstractSnapshotSupport {
         finally {
             APITrace.end();
         }
+    }
+    
+    @Override
+    public void setTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { snapshotId }, tags);
+    }
+
+    @Override
+    public void setTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.setTags");
+    	try {
+    		removeTags(snapshotIds);
+    		provider.createTags(snapshotIds, "Snapshot", tags);
+    	} 
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void updateTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { snapshotId }, tags);
+    }
+
+    @Override
+    public void updateTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.updateTags");
+    	try {
+    		provider.updateTags(snapshotIds, "Snapshot", tags);
+    	} 
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void removeTags(@Nonnull String snapshotId, @Nonnull Tag... tags)
+    		throws CloudException, InternalException {
+    	removeTags(new String[] { snapshotId }, tags);
+    }
+
+    @Override
+    public void removeTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.removeTags");
+    	try {
+    		provider.removeTags(snapshotIds, "Snapshot", tags);
+    	} 
+    	finally {
+    		APITrace.end();
+    	}
     }
 }

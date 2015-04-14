@@ -24,7 +24,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -36,6 +38,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -333,6 +336,21 @@ public class Volumes extends AbstractVolumeSupport {
                     }
                 }
             }
+            
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, Object> meta = options.getMetaData();
+            for( Map.Entry<String, Object> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            provider.createTags(new String[] { volumeId }, "Volume", tags.toArray(new Tag[tags.size()]));
             return volumeId;
         }
         finally {
@@ -934,5 +952,54 @@ public class Volumes extends AbstractVolumeSupport {
             volume.setGuestOperatingSystem(Platform.guess(volume.getName() + " " + volume.getDescription()));
         }
         return volume;
+    }
+    
+    @Override
+    public void setTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { volumeId }, tags);
+    }
+
+    @Override
+    public void setTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Volume.setTags");
+    	try {
+    		removeTags(volumeIds);
+    		provider.createTags(volumeIds, "Volume", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void updateTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { volumeId }, tags);
+    }
+
+    @Override
+    public void updateTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Volume.updateTags");
+    	try {
+    		provider.updateTags(volumeIds, "Volume", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void removeTags(@Nonnull String volumeId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	removeTags(new String[] { volumeId }, tags);
+    }
+
+    @Override
+    public void removeTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Volume.removeTags");
+    	try {
+    		provider.removeTags(volumeIds, "Volume", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
     }
 }

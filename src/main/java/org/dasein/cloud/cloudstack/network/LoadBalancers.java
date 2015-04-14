@@ -29,6 +29,7 @@ import javax.servlet.http.HttpServletResponse;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -122,6 +123,23 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
                     addServers(publicAddress.getRawAddress().getIpAddress(), endpoint.getEndpointValue());
                 }
             }
+            
+            String lbId = getRuleId(publicAddress.getRawAddress().getIpAddress());
+            
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, Object> meta = options.getMetaData();
+            for( Map.Entry<String, Object> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            getProvider().createTags(new String[] { lbId }, "LoadBalancer", tags.toArray(new Tag[tags.size()]));
             return publicAddress.getRawAddress().getIpAddress();
         }
         finally {
@@ -1172,4 +1190,53 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return null;
     }
 
+    @Override
+    public void setTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { loadBalancerId }, tags);
+    }
+
+    @Override
+    public void setTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "LB.setTags");
+    	try {
+    		removeTags(loadBalancerIds);
+    		getProvider().createTags(loadBalancerIds, "LoadBalancer", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void updateTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { loadBalancerId }, tags);
+    }
+
+    @Override
+    public void updateTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "LB.updateTags");
+    	try {
+    		getProvider().updateTags(loadBalancerIds, "LoadBalancer", tags);
+    	} 
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void removeTags(@Nonnull String loadBalancerId, @Nonnull Tag... tags)
+    		throws CloudException, InternalException {
+    	removeTags(new String[] { loadBalancerId }, tags);
+    }
+
+    @Override
+    public void removeTags(@Nonnull String[] loadBalancerIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "LB.removeTags");
+    	try {
+    		getProvider().removeTags(loadBalancerIds, "LoadBalancer", tags);
+    	} 
+    	finally {
+    		APITrace.end();
+    	}
+    }
 }

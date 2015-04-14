@@ -36,6 +36,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -415,6 +416,12 @@ public class Network extends AbstractVLANSupport<CSCloud> {
                         catch( Throwable ignore ) {
                             logger.warn("Unable to create default egress rule");
                         }
+                        
+                        // Set tags
+                        List<Tag> tags = new ArrayList<Tag>();
+                        tags.add(new Tag("Name", name));
+                        tags.add(new Tag("Description", name));
+                        getProvider().createTags(new String[] { network.getProviderVlanId() }, "Network", tags.toArray(new Tag[tags.size()]));
                         return network;
                     }
                 }
@@ -682,4 +689,35 @@ public class Network extends AbstractVLANSupport<CSCloud> {
         return new ResourceStatus(networkId, VLANState.AVAILABLE);
     }
 
+    @Override
+    public void updateVLANTags(@Nonnull String vlanId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateVLANTags(new String[] { vlanId }, tags);
+    }
+
+    @Override
+    public void updateVLANTags(@Nonnull String[] vlanIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "VLAN.updateTags");
+    	try {
+    		getProvider().updateTags(vlanIds, "Network", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void removeVLANTags(@Nonnull String vlanId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	removeVLANTags(new String[] { vlanId }, tags);
+    }
+
+    @Override
+    public void removeVLANTags(@Nonnull String[] vlanIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "VLAN.removeTags");
+    	try {
+    		getProvider().removeTags(vlanIds, "Network", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
 }
