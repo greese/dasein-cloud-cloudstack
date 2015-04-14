@@ -42,6 +42,7 @@ import org.w3c.dom.NodeList;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -403,12 +404,32 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             if( product == null ) {
                 throw new CloudException("Invalid product ID: " + id);
             }
+            VirtualMachine vm ;
             if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
-                return launch22(withLaunchOptions.getMachineImageId(), product,  withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName(), withLaunchOptions.getBootstrapKey(), withLaunchOptions.getVlanId(), withLaunchOptions.getFirewallIds(), withLaunchOptions.getUserData());
+                vm = launch22(withLaunchOptions.getMachineImageId(), product,  withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName(), withLaunchOptions.getBootstrapKey(), withLaunchOptions.getVlanId(), withLaunchOptions.getFirewallIds(), withLaunchOptions.getUserData());
             }
             else {
-                return launch21(withLaunchOptions.getMachineImageId(), product, withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName());
+                vm = launch21(withLaunchOptions.getMachineImageId(), product, withLaunchOptions.getDataCenterId(), withLaunchOptions.getFriendlyName());
             }
+
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, Object> meta = withLaunchOptions.getMetaData();
+            for( Map.Entry<String, Object> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", withLaunchOptions.getFriendlyName()));
+            tags.add(new Tag("Description", withLaunchOptions.getDescription()));
+            if( withLaunchOptions.getVirtualMachineGroup() != null ) {
+            	tags.add(new Tag("dsnVMGroup", withLaunchOptions.getVirtualMachineGroup()));
+            }
+            getProvider().createTags(new String[] { vm.getProviderVirtualMachineId() }, "UserVm", tags.toArray(new Tag[tags.size()]));
+            return vm;
         }
         finally {
             APITrace.end();
@@ -1404,5 +1425,54 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         );  */
         server.setTags(properties);
         return server;
+    }
+    
+    @Override
+    public void setTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { vmId }, tags);
+    }
+    
+    @Override
+    public void setTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Server.setTags");
+    	try {
+    		removeTags(vmIds);
+    		getProvider().createTags(vmIds, "UserVm", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { vmId }, tags);
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Server.updateTags");
+    	try {
+    		getProvider().updateTags(vmIds, "UserVm", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	removeTags(new String[] { vmId }, tags);
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Server.removeTags");
+    	try {
+    		getProvider().removeTags(vmIds, "UserVm", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
     }
 }

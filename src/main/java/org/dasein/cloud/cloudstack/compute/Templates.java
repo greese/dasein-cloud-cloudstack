@@ -32,6 +32,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -389,6 +390,21 @@ public class Templates extends AbstractImageSupport<CSCloud> {
             if (restart) {
                 getProvider().getComputeServices().getVirtualMachineSupport().start(vmId);
             }
+            
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, Object> meta = options.getMetaData();
+            for( Map.Entry<String, Object> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            getProvider().createTags(new String[] { img.getProviderMachineImageId() }, "Template", tags.toArray(new Tag[tags.size()]));
             return img;
         }
         finally {
@@ -1400,5 +1416,54 @@ public class Templates extends AbstractImageSupport<CSCloud> {
             }
         } while( found );
         return name;
+    }
+    
+    @Override
+    public void setTags(@Nonnull String imageId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { imageId }, tags);
+    }
+    
+    @Override
+    public void setTags(@Nonnull String[] imageIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Image.setTags");
+    	try {
+    		removeTags(imageIds);
+    		getProvider().createTags(imageIds, "Template", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String imageId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { imageId }, tags);
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String[] imageIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Server.updateTags");
+    	try {
+    		getProvider().updateTags(imageIds, "Template", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String imageId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	removeTags(new String[] { imageId }, tags);
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String[] imageIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Image.removeTags");
+    	try {
+    		getProvider().removeTags(imageIds, "Template", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
     }
 }
