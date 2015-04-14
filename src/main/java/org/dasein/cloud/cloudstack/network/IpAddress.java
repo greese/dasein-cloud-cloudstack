@@ -37,6 +37,7 @@ import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -791,5 +792,55 @@ public class IpAddress implements IpAddressSupport {
             available = true;
         }
         return new ResourceStatus(addressId, available);
+    }
+
+    @Override
+    public void setTags(@Nonnull String addressId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { addressId }, tags);
+    }
+
+    @Override
+    public void setTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(provider, "IpAddress.setTags");
+    	try {
+    		removeTags(addressIds);
+    		provider.createTags(addressIds, "PublicIpAddress", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void updateTags(@Nonnull String addressId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { addressId }, tags);
+    }
+
+    @Override
+    public void updateTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(provider, "IpAddress.updateTags");
+    	try {
+    		provider.updateTags(addressIds, "PublicIpAddress", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void removeTags(@Nonnull String addressId, @Nonnull Tag... tags)
+    		throws CloudException, InternalException {
+    	removeTags(new String[] { addressId }, tags);
+    }
+
+    @Override
+    public void removeTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(provider, "IpAddress.removeTags");
+    	try {
+    		provider.removeTags(addressIds, "PublicIpAddress", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
     }
 }

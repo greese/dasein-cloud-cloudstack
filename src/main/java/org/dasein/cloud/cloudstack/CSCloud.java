@@ -739,8 +739,8 @@ public class CSCloud extends AbstractCloud {
     			for (int i = 0; i < keyValuePairs.length; i++) {
     				// Tag value can't be null or ""
     				if (keyValuePairs[i].getValue() != null && !keyValuePairs[i].getValue().equals("")) {
-    				params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
-    				params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
+    					params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
+    					params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
     				}
     			}
     			Document doc = method.get(method.buildUrl(DELETE_TAGS, params), DELETE_TAGS);
