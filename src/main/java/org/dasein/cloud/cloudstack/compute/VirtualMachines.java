@@ -906,6 +906,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                             product.setRamSize(new Storage<Megabyte>(memory, Storage.MEGABYTE));
                             product.setCpuCount(cpu);
                             product.setRootVolumeSize(new Storage<Gigabyte>(1, Storage.GIGABYTE));
+                            product.setArchitectures(Architecture.I32, Architecture.I64);
                             if (options != null) {
                                 if (options.matches(product)) {
                                     products.add(product);
@@ -1392,6 +1393,9 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             }
             else if( name.equals("serviceofferingid") ) {
                 productId = value;
+            }
+            else if( name.equals("keypair") ) {
+                server.setProviderKeypairId(value);
             }
             else if( value != null ) {
                 properties.put(name, value);
