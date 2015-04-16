@@ -24,17 +24,26 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSException;
+import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.ImageCapabilities;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.util.APITrace;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Describes the capabilities of Cloudstack with respect to Dasein image operations.
@@ -141,7 +150,21 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
 
     @Override
     public boolean supportsImageSharingWithPublic() throws CloudException, InternalException {
-        return true;
+        APITrace.begin(getProvider(), "ImageCapabilities.supportsImageSharingWihtPublic");
+        try {
+            CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(method.buildUrl("listCapabilities"), "listCapabilities");
+            NodeList matches = doc.getElementsByTagName("userpublictemplateenabled");
+
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
+                return Boolean.parseBoolean(node.getFirstChild().getNodeValue());
+            }
+            return false;
+        }
+        finally {
+            APITrace.end();
+        }
     }
 
     @Override
