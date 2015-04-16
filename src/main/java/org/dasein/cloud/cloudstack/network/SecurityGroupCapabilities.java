@@ -132,4 +132,23 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
         return true;
     }
+
+    @Override
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(
+    		boolean inVlan, Direction direction) throws InternalException,
+    		CloudException {
+        if( inVlan ) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(RuleTargetType.GLOBAL);
+    }
+
+    @Override
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan,
+    		Direction direction) throws InternalException, CloudException {
+        if( inVlan ) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(RuleTargetType.CIDR);
+    }
 }

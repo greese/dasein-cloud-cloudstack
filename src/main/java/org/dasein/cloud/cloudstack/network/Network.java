@@ -421,7 +421,7 @@ public class Network extends AbstractVLANSupport<CSCloud> {
                         // Set tags
                         List<Tag> tags = new ArrayList<Tag>();
                         tags.add(new Tag("Name", name));
-                        tags.add(new Tag("Description", name));
+                        tags.add(new Tag("Description", description));
                         getProvider().createTags(new String[] { network.getProviderVlanId() }, "Network", tags.toArray(new Tag[tags.size()]));
                         return network;
                     }
@@ -716,6 +716,23 @@ public class Network extends AbstractVLANSupport<CSCloud> {
     	APITrace.begin(getProvider(), "VLAN.removeTags");
     	try {
     		getProvider().removeTags(vlanIds, "Network", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+
+    @Override
+    public void setVLANTags(@Nonnull String vlanId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setVLANTags(new String[] { vlanId }, tags);
+    }
+
+    @Override
+    public void setVLANTags(@Nonnull String[] vlanIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "VLAN.setTags");
+    	try {
+    		removeVLANTags(vlanIds);
+    		getProvider().createTags(vlanIds, "Network", tags);
     	}
     	finally {
     		APITrace.end();
