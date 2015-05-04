@@ -18,34 +18,54 @@
 
 package org.dasein.cloud.cloudstack.network;
 
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.InternalException;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.AbstractNetworkServices;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class CSNetworkServices extends AbstractNetworkServices {
-    private CSCloud cloud;
-    
-    public CSNetworkServices(@Nonnull CSCloud cloud) { this.cloud = cloud; }
-    
+public class CSNetworkServices extends AbstractNetworkServices<CSCloud> {
+    public CSNetworkServices(@Nonnull CSCloud provider) {
+        super(provider);
+    }
+
     @Override 
     public @Nullable SecurityGroup getFirewallSupport() {
-        return new SecurityGroup(cloud);
+        return new SecurityGroup(getProvider());
     }
     
     @Override
     public @Nullable IpAddress getIpAddressSupport() {
-        return new IpAddress(cloud);
+        try {
+            if( getProvider().hasApi(IpAddress.ASSOCIATE_IP_ADDRESS) ) {
+                return new IpAddress(getProvider());
+            }
+        }
+        catch( CloudException e ) {
+        }
+        catch( InternalException e ) {
+        }
+        return null;
     }
     
     @Override
     public @Nullable LoadBalancers getLoadBalancerSupport() {
-        return new LoadBalancers(cloud);
+        try {
+            if( getProvider().hasApi("createLoadBalancer") ) {
+                return new LoadBalancers(getProvider());
+            }
+        }
+        catch( CloudException e ) {
+        }
+        catch( InternalException e ) {
+        }
+        return null;
     }
     
     @Override
     public @Nullable Network getVlanSupport() {
-        return new Network(cloud);
+        return new Network(getProvider());
     }
 }

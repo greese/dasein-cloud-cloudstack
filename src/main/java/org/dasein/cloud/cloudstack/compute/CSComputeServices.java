@@ -18,6 +18,8 @@
 
 package org.dasein.cloud.cloudstack.compute;
 
+import org.dasein.cloud.CloudException;
+import org.dasein.cloud.InternalException;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.compute.AbstractComputeServices;
 
@@ -33,7 +35,16 @@ public class CSComputeServices extends AbstractComputeServices<CSCloud> {
     
     @Override
     public @Nonnull Snapshots getSnapshotSupport() {
-        return new Snapshots(getProvider());
+        try {
+            if( getProvider().hasApi("createSnapshot") ) {
+                return new Snapshots(getProvider());
+            }
+        }
+        catch( CloudException ignore ) {
+        }
+        catch( InternalException ignore ) {
+        }
+        return null;
     }
     
     @Override
@@ -43,6 +54,15 @@ public class CSComputeServices extends AbstractComputeServices<CSCloud> {
     
     @Override
     public @Nonnull Volumes getVolumeSupport() {
-        return new Volumes(getProvider());
+        try {
+            if( getProvider().hasApi("createVolume") ) {
+                return new Volumes(getProvider());
+            }
+        }
+        catch( CloudException ignore ) {
+        }
+        catch( InternalException ignore ) {
+        }
+        return null;
     }
 }

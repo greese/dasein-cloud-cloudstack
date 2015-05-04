@@ -21,12 +21,14 @@ package org.dasein.cloud.cloudstack;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.dc.AbstractDataCenterServices;
 import org.dasein.cloud.dc.DataCenter;
 import org.dasein.cloud.dc.DataCenterCapabilities;
 import org.dasein.cloud.dc.DataCenterServices;
@@ -37,6 +39,7 @@ import org.dasein.cloud.dc.StoragePool;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
+import org.dasein.util.uom.time.Day;
 import org.dasein.util.uom.time.Minute;
 import org.dasein.util.uom.time.TimePeriod;
 import org.w3c.dom.Document;
@@ -46,27 +49,26 @@ import org.w3c.dom.NodeList;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
-public class CSTopology implements DataCenterServices {
+public class CSTopology extends AbstractDataCenterServices<CSCloud> {
     static public final String LIST_ZONES = "listZones";
-    
-    private CSCloud provider;
-    
-    public CSTopology(@Nonnull CSCloud provider) {
-        this.provider = provider;
-    }
 
     private transient volatile CSTopologyCapabilities capabilities;
+
+    CSTopology(CSCloud provider) {
+        super(provider);
+    }
+
     @Nonnull
     @Override
     public DataCenterCapabilities getCapabilities() throws InternalException, CloudException {
         if( capabilities == null ) {
-            capabilities = new CSTopologyCapabilities(provider);
+            capabilities = new CSTopologyCapabilities(getProvider());
         }
         return capabilities;
     }
 
     public @Nullable DataCenter getDataCenter(@Nonnull String zoneId) throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.getDataCenter");
+        APITrace.begin(getProvider(), "DC.getDataCenter");
         try {
             for( Region region : listRegions() ) {
                 for( DataCenter dc : listDataCenters(region.getProviderRegionId()) ) {
@@ -82,16 +84,8 @@ public class CSTopology implements DataCenterServices {
         }
     }
 
-    public @Nonnull String getProviderTermForDataCenter(@Nonnull Locale locale) {
-        return "zone";
-    }
-
-    public @Nonnull String getProviderTermForRegion(@Nonnull Locale locale) {
-        return "region";
-    }
-
     public @Nullable Region getRegion(@Nonnull String regionId) throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.getRegion");
+        APITrace.begin(getProvider(), "DC.getRegion");
         try {
             for( Region region : listRegions() ) {
                 if( region.getProviderRegionId().equals(regionId) ) {
@@ -105,12 +99,18 @@ public class CSTopology implements DataCenterServices {
         }
     }
 
-    public boolean requiresNetwork(@Nonnull String zoneId) throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.requiresNetwork");
+    public boolean zoneSupportsVlans(@Nonnull String zoneId) throws InternalException, CloudException {
+        Cache<Boolean> cache = Cache.getInstance(getProvider(), "advanced.vlan."+zoneId, Boolean.class, CacheLevel.CLOUD_ACCOUNT,
+                new TimePeriod<Day>(1,
+                TimePeriod.DAY));
+        Iterable<Boolean> cachedValues = cache.get(getContext());
+        if( cachedValues != null && cachedValues.iterator().hasNext() ) {
+            return cachedValues.iterator().next();
+        }
+
+        APITrace.begin(getProvider(), "DC.zoneSupportsVlans");
         try {
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-            Document doc = method.get(url, LIST_ZONES);
+            Document doc = new CSMethod(getProvider()).get(LIST_ZONES, new Param("available", "true"));
 
             NodeList matches = doc.getElementsByTagName("zone");
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -132,11 +132,13 @@ public class CSTopology implements DataCenterServices {
                         }
                     }
                     if( zoneId.equals(id) ) {
-                        return !("basic".equalsIgnoreCase(networkType));
+                        boolean advancedZone = !"basic".equalsIgnoreCase(networkType);
+                        cache.put(getContext(), Collections.singleton(advancedZone));
+                        return advancedZone;
                     }
                 }
             }
-            return true;
+            return false;
         }
         finally {
             APITrace.end();
@@ -144,11 +146,9 @@ public class CSTopology implements DataCenterServices {
     }
     
     public boolean supportsSecurityGroups(@Nonnull String zoneId, boolean basicOnly) throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.supportsSecurityGroups");
+        APITrace.begin(getProvider(), "DC.supportsSecurityGroups");
         try {
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-            Document doc = method.get(url, LIST_ZONES);
+            Document doc = new CSMethod(getProvider()).get(LIST_ZONES, new Param("available", "true"));
             boolean sg = false;
             boolean basic = false;
 
@@ -189,16 +189,11 @@ public class CSTopology implements DataCenterServices {
         }
     }
     
-    public @Nonnull Collection<DataCenter> listDataCenters(@Nonnull String regionId) throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.listDataCenters");
+    public @Nonnull Iterable<DataCenter> listDataCenters(@Nonnull String regionId) throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "DC.listDataCenters");
         try {
-            Cache<DataCenter> cache = Cache.getInstance(provider, "dataCenters", DataCenter.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            Collection<DataCenter> dcs = (Collection<DataCenter>)cache.get(ctx);
+            Cache<DataCenter> cache = Cache.getInstance(getProvider(), "dataCenters", DataCenter.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
+            Iterable<DataCenter> dcs = cache.get(getContext());
 
             if( dcs == null ) {
                 Region region = getRegion(regionId);
@@ -214,7 +209,7 @@ public class CSTopology implements DataCenterServices {
                 zone.setProviderDataCenterId(regionId);
                 zone.setRegionId(regionId);
                 dcs = Collections.singletonList(zone);
-                cache.put(ctx, dcs);
+                cache.put(getContext(), dcs);
             }
             return dcs;
         }
@@ -223,21 +218,14 @@ public class CSTopology implements DataCenterServices {
         }
     }
 
-    public @Nonnull Collection<Region> listRegions() throws InternalException, CloudException {
-        APITrace.begin(provider, "DC.listRegions");
+    public @Nonnull Iterable<Region> listRegions() throws InternalException, CloudException {
+        APITrace.begin(getProvider(), "DC.listRegions");
         try {
-            Cache<Region> cache = Cache.getInstance(provider, "regions", Region.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            Collection<Region> regions = (Collection<Region>)cache.get(ctx);
+            Cache<Region> cache = Cache.getInstance(getProvider(), "regions", Region.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Minute>(15, TimePeriod.MINUTE));
+            Iterable<Region> regions = cache.get(getContext());
 
             if( regions == null ) {
-                CSMethod method = new CSMethod(provider);
-                String url = method.buildUrl(LIST_ZONES, new Param("available", "true"));
-                Document doc = method.get(url, LIST_ZONES);
+                Document doc = new CSMethod(getProvider()).get(LIST_ZONES, new Param("available", "true"));
 
                 regions = new ArrayList<Region>();
                 NodeList matches = doc.getElementsByTagName("zone");
@@ -245,37 +233,22 @@ public class CSTopology implements DataCenterServices {
                     Region r = toRegion(matches.item(i));
 
                     if( r != null ) {
-                        if (provider.getProviderName().contains("Datapipe")) {
+                        if (getProvider().getProviderName().contains("Datapipe")) {
                             // don't return Shanghai region as there are Chinese license concerns
                             if (r.getName().contains("Shanghai")) {
                                 continue;
                             }
                         }
-                        regions.add(r);
+                        ((List)regions).add(r);
                     }
                 }
-                cache.put(ctx, regions);
+                cache.put(getContext(), regions);
             }
             return regions;
         }
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public Collection<ResourcePool> listResourcePools(String providerDataCenterId) throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    public ResourcePool getResourcePool(String providerResourcePoolId) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Override
-    public Collection<StoragePool> listStoragePools() throws InternalException, CloudException {
-        return Collections.emptyList();
     }
 
     private @Nullable Region toRegion(@Nullable Node node) {
@@ -328,28 +301,10 @@ public class CSTopology implements DataCenterServices {
         else if( name.contains("London") ) {
             return "EU";
         }
-        ProviderContext ctx = provider.getContext();
+        ProviderContext ctx = getProvider().getContext();
 
         Properties p = (ctx == null ? null : ctx.getCustomProperties());
 
         return (p == null ? "US" : p.getProperty("locale." + name, "US"));
-    }
-
-    @Nonnull
-    @Override
-    public StoragePool getStoragePool(String providerStoragePoolId) throws InternalException, CloudException {
-        return null;
-    }
-
-    @Nonnull
-    @Override
-    public Collection<Folder> listVMFolders() throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
-
-    @Nonnull
-    @Override
-    public Folder getVMFolder(String providerVMFolderId) throws InternalException, CloudException {
-        return null;
     }
 }
