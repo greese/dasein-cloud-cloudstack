@@ -1224,7 +1224,7 @@ public class Templates extends AbstractImageSupport<CSCloud> {
                 else if( value != null && value.contains("32") ) {
                     bestArchitectureGuess = Architecture.I32;
                 }
-                if( value != null ) {
+                if( value != null && platform == null ) {
                     platform = Platform.guess(value);
                 }
             }
@@ -1256,10 +1256,13 @@ public class Templates extends AbstractImageSupport<CSCloud> {
                 }
             }
         }
-        if( platform == null && imgName != null ) {
-            platform = (Platform.guess(imgName));
+        if( platform == null || Platform.UNKNOWN.equals(platform) ) {
+            platform = Platform.guess(imgName);
         }
-        if (platform == null) {
+        if( platform == null || Platform.UNKNOWN.equals(platform) ) {
+            platform = Platform.guess(description);
+        }
+        if( platform == null ) {
             platform = Platform.UNKNOWN;
         }
         
@@ -1272,6 +1275,9 @@ public class Templates extends AbstractImageSupport<CSCloud> {
             guessSoftware(image);
             image.setTags(properties);
             image.createdAt(creationTimestamp);
+            if( isPublic ) {
+                image.sharedWithPublic();
+            }
         }
         // if image is not available in all zones and image zone is not matching requested - bail out
         if( !crossZones && !regionId.equalsIgnoreCase(getContext().getRegionId()) ) {
