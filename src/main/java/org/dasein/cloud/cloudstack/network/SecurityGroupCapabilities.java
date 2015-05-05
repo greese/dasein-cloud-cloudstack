@@ -110,6 +110,7 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Nonnull
     public Requirement requiresVLAN() throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -130,6 +131,7 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Nonnull
     public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
@@ -145,6 +147,7 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Nonnull
     public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();

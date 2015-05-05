@@ -207,7 +207,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             		continue;
             	}
             	if (entry.getValue() != null && !entry.getValue().equals("")) {
-            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            		tags.add(new Tag(entry.getKey(), entry.getValue()));
             	}
             }
             tags.add(new Tag("Name", options.getName()));
@@ -574,11 +574,6 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         revoke(ruleId);
     }
 
-    @Override
-    public boolean supportsFirewallSources() throws CloudException, InternalException {
-        return false;
-    }
-
     private @Nullable Firewall toFirewall(@Nullable Node node) throws CloudException, InternalException {
         if( node == null ) {
             return null;
@@ -690,7 +685,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         }
     }
 
-    private @Nullable ResourceStatus toStatus(@Nullable Node node) throws CloudException, InternalException {
+    private @Nullable ResourceStatus toStatus(@Nullable Node node) {
         if( node == null ) {
             return null;
         }
