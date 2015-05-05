@@ -96,7 +96,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             }
             // TODO should be communicated via capabilities
             if( group ) {
-                throw new OperationNotSupportedException("Security group sources are not supported");
+                throw new OperationNotSupportedException("Security group sources & destinations are not supported");
             }
             if( sourceCidr != null && sourceCidr.indexOf('/') == -1 ) {
                 sourceCidr = sourceCidr + "/32";

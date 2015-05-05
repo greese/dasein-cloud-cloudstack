@@ -31,6 +31,7 @@ import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -70,16 +71,13 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        else {
-            return Collections.singletonList(RuleTargetType.GLOBAL);
-        }
+        return listSupportedDestinationTypes(inVlan, Direction.INGRESS);
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
@@ -101,11 +99,9 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(RuleTargetType.CIDR);
+        return listSupportedSourceTypes(inVlan, Direction.INGRESS);
     }
 
     @Override
@@ -134,21 +130,32 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
-    public Iterable<RuleTargetType> listSupportedDestinationTypes(
-    		boolean inVlan, Direction direction) throws InternalException,
-    		CloudException {
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
-        return Collections.singletonList(RuleTargetType.GLOBAL);
+        List<RuleTargetType> supportedDestinationTypes = new ArrayList<RuleTargetType>();
+        if (direction.equals(Direction.INGRESS)) {
+            supportedDestinationTypes = Collections.singletonList(RuleTargetType.GLOBAL);
+        }
+        else if (direction.equals(Direction.EGRESS)){
+            supportedDestinationTypes = Collections.singletonList(RuleTargetType.CIDR);
+        }
+        return supportedDestinationTypes;
     }
 
     @Override
-    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan,
-    		Direction direction) throws InternalException, CloudException {
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
         }
-        return Collections.singletonList(RuleTargetType.CIDR);
+        List<RuleTargetType> supportedSourceTypes = new ArrayList<RuleTargetType>();
+        if (direction.equals(Direction.INGRESS)) {
+            supportedSourceTypes = Collections.singletonList(RuleTargetType.CIDR);
+        }
+        else if (direction.equals(Direction.EGRESS)){
+            supportedSourceTypes = Collections.singletonList(RuleTargetType.GLOBAL);
+        }
+        return supportedSourceTypes;
     }
 }
