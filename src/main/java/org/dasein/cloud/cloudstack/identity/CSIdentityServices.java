@@ -30,12 +30,13 @@ import javax.annotation.Nullable;
  * @since 2012.02
  * @version 2012.02
  */
-public class CSIdentityServices extends AbstractIdentityServices {
-    private CSCloud provider;
-    
-    public CSIdentityServices(@Nonnull CSCloud provider) { this.provider = provider; }
-    
+public class CSIdentityServices extends AbstractIdentityServices<CSCloud> {
+
+    public CSIdentityServices(CSCloud provider) {
+        super(provider);
+    }
+
     public @Nullable Keypair getShellKeySupport() {
-        return new Keypair(provider);
+        return new Keypair(getProvider());
     }
 }

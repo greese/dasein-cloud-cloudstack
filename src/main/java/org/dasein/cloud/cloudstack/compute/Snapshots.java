@@ -102,12 +102,10 @@ public class Snapshots extends AbstractSnapshotSupport {
                 }
             }
 
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
             Document doc;
 
             try {
-                doc = method.get(url, CREATE_SNAPSHOT);
+                doc = new CSMethod(provider).get(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
             }
             catch( CSException e ) {
                 int code = e.getHttpCode();
@@ -265,11 +263,7 @@ public class Snapshots extends AbstractSnapshotSupport {
         APITrace.begin(getProvider(), "Snapshot.remove");
 
         try {
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
-            Document doc;
-
-            doc = method.get(url, DELETE_SNAPSHOT);
+            Document doc = new CSMethod(provider).get(DELETE_SNAPSHOT, new Param("id", snapshotId));
             provider.waitForJob(doc, "Delete Snapshot");
         }
         finally {
@@ -286,17 +280,9 @@ public class Snapshots extends AbstractSnapshotSupport {
     public @Nonnull Iterable<ResourceStatus> listSnapshotStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Snapshot.listSnapshotStatus");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-            Document doc;
-
-            doc = method.get(url, LIST_SNAPSHOTS);
-            ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
+            Document doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()));
+            List<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -314,7 +300,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                    doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -345,17 +331,9 @@ public class Snapshots extends AbstractSnapshotSupport {
     public @Nonnull Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Snapshot.listSnapshots");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             Iterable<Volume> volumes = provider.getComputeServices().getVolumeSupport().listVolumes();
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-            Document doc;
-
-            doc = method.get(url, LIST_SNAPSHOTS);
+            Document doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()));
             ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
 
             int numPages = 1;
@@ -374,14 +352,14 @@ public class Snapshots extends AbstractSnapshotSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                    doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");
                 for( int i=0; i<matches.getLength(); i++ ) {
                     Node s = matches.item(i);
 
                     if( s != null ) {
-                        Snapshot snapshot = toSnapshot(s, ctx, volumes);
+                        Snapshot snapshot = toSnapshot(s, getContext(), volumes);
 
                         if( snapshot != null ) {
                             snapshots.add(snapshot);
@@ -397,24 +375,15 @@ public class Snapshots extends AbstractSnapshotSupport {
     }
 
     private Snapshot getLatestSnapshot(String forVolumeId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("volumeId", forVolumeId));
         Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(forVolumeId);
         List<Volume> volumes;
-        Document doc;
-
         if( volume == null ) {
             volumes = Collections.emptyList();
         }
         else {
             volumes = Collections.singletonList(volume);
         }
-        doc = method.get(url, LIST_SNAPSHOTS);
+        Document doc = new CSMethod(provider).get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("volumeId", forVolumeId));
         Snapshot latest = null;
         
         NodeList matches = doc.getElementsByTagName("snapshot");
@@ -422,7 +391,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s, ctx, volumes);
+                Snapshot snapshot = toSnapshot(s, getContext(), volumes);
                 
                 if( snapshot != null && snapshot.getVolumeId() != null && snapshot.getVolumeId().equals(forVolumeId) ) {
                     if( latest == null || snapshot.getSnapshotTimestamp() > latest.getSnapshotTimestamp() ) {

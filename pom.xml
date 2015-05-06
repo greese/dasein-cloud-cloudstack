@@ -76,6 +76,11 @@
           <artifactId>httpclient</artifactId>
           <version>4.2.1</version>
       </dependency>
+      <dependency>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-lang3</artifactId>
+          <version>3.2.1</version>
+      </dependency>
     <dependency>
         <groupId>log4j</groupId>
         <artifactId>log4j</artifactId>
@@ -226,9 +231,9 @@
                     <value>${cloudstack.version}</value>
                 </property>
             </systemProperties>
-          <excludes>
-            <exclude>**/TestSuite.java</exclude>
-          </excludes>
+          <includes>
+            <include>**/TestSuite.java</include>
+          </includes>
         </configuration>
       </plugin>
       <plugin>

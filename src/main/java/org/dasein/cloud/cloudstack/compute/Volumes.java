@@ -98,8 +98,6 @@ public class Volumes extends AbstractVolumeSupport {
     public void attach(@Nonnull String volumeId, @Nonnull String serverId, @Nullable String deviceId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.attach");
         try {
-            Param[] params;
-
             if( logger.isInfoEnabled() ) {
                 logger.info("attaching " + volumeId + " to " + serverId + " as " + deviceId);
             }
@@ -122,18 +120,18 @@ public class Volumes extends AbstractVolumeSupport {
                     throw new CloudException("Virtual machine " + serverId + " disappeared waiting for it to enter an attachable state");
                 }
             }
-            if( deviceId == null ) {
-                params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId) };
-            }
-            else {
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("id", volumeId));
+            params.add(new Param("virtualMachineId", serverId));
+
+            if( deviceId != null ) {
                 deviceId = toDeviceNumber(deviceId);
                 if( logger.isDebugEnabled() ) {
                     logger.debug("Device mapping is: " + deviceId);
                 }
-                params = new Param[] { new Param("id", volumeId), new Param("virtualMachineId", serverId), new Param("deviceId", deviceId) };
+                params.add(new Param("deviceId", deviceId));
             }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(ATTACH_VOLUME, params), ATTACH_VOLUME);
+            Document doc = new CSMethod(provider).get(ATTACH_VOLUME, params);
 
             if( doc == null ) {
                 throw new CloudException("No such volume or server");
@@ -149,12 +147,7 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.createVolume");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was provided for this request");
-            }
-            if( options.getFormat().equals(VolumeFormat.NFS) ) {
+            if( options.getFormat().equals(VolumeFormat.NFS) || !provider.hasApi("createVolume")) {
                 throw new OperationNotSupportedException("NFS volumes are not currently supported in " + getProvider().getCloudName());
             }
             String snapshotId = options.getSnapshotId();
@@ -251,7 +244,9 @@ public class Volumes extends AbstractVolumeSupport {
                     size = new Storage<Gigabyte>(s, Storage.GIGABYTE);
                 }
             }
-            Param[] params;
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("name", options.getName()));
+            params.add(new Param("zoneId", getContext().getRegionId()));
 
             if( product == null && snapshotId == null ) {
                 /*params = new Param[] {
@@ -262,35 +257,19 @@ public class Volumes extends AbstractVolumeSupport {
                 throw new CloudException("A suitable snapshot or disk offering could not be found to pass to CloudStack createVolume request");
             }
             else if( snapshotId != null ) {
-                params = new Param[] {
-                        new Param("name", options.getName()),
-                        new Param("zoneId", ctx.getRegionId()),
-                        new Param("snapshotId", snapshotId),
-                        new Param("size", String.valueOf(size.longValue()))
-                };
+                params.add(new Param("snapshotId", snapshotId));
+                params.add(new Param("size", String.valueOf(size.longValue())));
             }
             else {
                 Storage<Gigabyte> s = product.getVolumeSize();
+                params.add(new Param("diskOfferingId", product.getProviderProductId()));
 
                 if( s == null || s.intValue() < 1 ) {
-                    params = new Param[] {
-                            new Param("name", options.getName()),
-                            new Param("zoneId", ctx.getRegionId()),
-                            new Param("diskOfferingId", product.getProviderProductId()),
-                            new Param("size", String.valueOf(size.longValue()))
-                    };
-                }
-                else {
-                    params = new Param[] {
-                            new Param("name", options.getName()),
-                            new Param("zoneId", ctx.getRegionId()),
-                            new Param("diskOfferingId", product.getProviderProductId())
-                    };
+                    params.add(new Param("size", String.valueOf(size.longValue())));
                 }
             }
 
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CREATE_VOLUME, params), CREATE_VOLUME);
+            Document doc = new CSMethod(provider).get(CREATE_VOLUME, params);
             NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
             String volumeId = null;
 
@@ -363,7 +342,7 @@ public class Volumes extends AbstractVolumeSupport {
         APITrace.begin(getProvider(), "Volume.detach");
         try {
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(DETACH_VOLUME, new Param("id", volumeId)), DETACH_VOLUME);
+            Document doc = method.get(DETACH_VOLUME, new Param("id", volumeId));
 
             provider.waitForJob(doc, "Detach Volume");
         }
@@ -397,9 +376,8 @@ public class Volumes extends AbstractVolumeSupport {
     }
 
     @Nonnull Collection<DiskOffering> getDiskOfferings() throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_DISK_OFFERINGS), LIST_DISK_OFFERINGS);
-        ArrayList<DiskOffering> offerings = new ArrayList<DiskOffering>();
+        final Document doc = new CSMethod(provider).get(LIST_DISK_OFFERINGS);
+        List<DiskOffering> offerings = new ArrayList<DiskOffering>();
         NodeList matches = doc.getElementsByTagName("diskoffering");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -457,15 +435,15 @@ public class Volumes extends AbstractVolumeSupport {
         return "volume";
     }
 
-    @Nullable String getRootVolumeId(@Nonnull String serverId) throws InternalException, CloudException {
-        Volume volume = getRootVolume(serverId);
+    @Nullable
+    String getRootVolumeId(@Nonnull String serverId) throws InternalException, CloudException {
+        final Volume volume = getRootVolume(serverId);
         
         return (volume == null ? null : volume.getProviderVolumeId());
     }
 
     private @Nullable Volume getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("virtualMachineId", serverId)), LIST_VOLUMES);
+        final Document doc = new CSMethod(provider).get(LIST_VOLUMES, new Param("virtualMachineId", serverId));
         NodeList matches = doc.getElementsByTagName("volume");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -486,26 +464,23 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nullable Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.getVolume");
         try {
-            try {
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId())), LIST_VOLUMES);
-                NodeList matches = doc.getElementsByTagName("volume");
+            final Document doc = new CSMethod(provider).get(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId()));
+            NodeList matches = doc.getElementsByTagName("volume");
 
-                for( int i=0; i<matches.getLength(); i++ ) {
-                    Node v = matches.item(i);
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node v = matches.item(i);
 
-                    if( v != null ) {
-                        return toVolume(v, false);
-                    }
+                if( v != null ) {
+                    return toVolume(v, false);
                 }
+            }
+            return null;
+        }
+        catch( CSException e ) {
+            if( e.getHttpCode() == 431 ) {
                 return null;
             }
-            catch( CSException e ) {
-                if( e.getHttpCode() == 431 ) {
-                    return null;
-                }
-                throw e;
-            }
+            throw e;
         }
         finally {
             APITrace.end();
@@ -607,14 +582,9 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nonnull Iterable<ResourceStatus> listVolumeStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.listVolumeStatus");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was specified for this request");
-            }
             CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
-            ArrayList<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
+            Document doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()));
+            List<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -632,7 +602,7 @@ public class Volumes extends AbstractVolumeSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
+                    doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("volume");
 
@@ -667,13 +637,8 @@ public class Volumes extends AbstractVolumeSupport {
     }
      
     private @Nonnull Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was specified for this request");
-        }
         CSMethod method = new CSMethod(provider);
-        Document doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId())), LIST_VOLUMES);
+        Document doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()));
         ArrayList<Volume> volumes = new ArrayList<Volume>();
         int numPages = 1;
         NodeList nodes = doc.getElementsByTagName("count");
@@ -691,7 +656,7 @@ public class Volumes extends AbstractVolumeSupport {
         for (int page = 1; page <= numPages; page++) {
             if (page > 1) {
                 String nextPage = String.valueOf(page);
-                doc = method.get(method.buildUrl(LIST_VOLUMES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_VOLUMES);
+                doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
             }
             NodeList matches = doc.getElementsByTagName("volume");
 
@@ -714,8 +679,7 @@ public class Volumes extends AbstractVolumeSupport {
     public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.remove");
         try {
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(DELETE_VOLUME, new Param("id", volumeId)), DELETE_VOLUME);
+            Document doc = new CSMethod(provider).get(DELETE_VOLUME, new Param("id", volumeId));
 
             provider.waitForJob(doc, "Delete Volume");
         }

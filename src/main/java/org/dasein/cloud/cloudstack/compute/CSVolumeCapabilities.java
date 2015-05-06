@@ -106,6 +106,7 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
     @Nonnull
     @Override
     public NamingConstraints getVolumeNamingConstraints() throws CloudException, InternalException {
+        // TODO
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 

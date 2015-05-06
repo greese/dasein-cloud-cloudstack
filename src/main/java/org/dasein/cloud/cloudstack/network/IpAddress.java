@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Future;
@@ -38,6 +39,7 @@ import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.ResourceStatus;
 import org.dasein.cloud.Tag;
+import org.dasein.cloud.Taggable;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -45,6 +47,7 @@ import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.identity.ServiceAction;
+import org.dasein.cloud.network.AbstractIpAddressSupport;
 import org.dasein.cloud.network.AddressType;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.IPAddressCapabilities;
@@ -59,22 +62,20 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class IpAddress implements IpAddressSupport {
+public class IpAddress extends AbstractIpAddressSupport<CSCloud> {
     static private final Logger logger = CSCloud.getLogger(IpAddress.class, "std");
 
-    static private final String ASSOCIATE_IP_ADDRESS                 = "associateIpAddress";
-    static private final String CREATE_PORT_FORWARDING_RULE          = "createPortForwardingRule";
-    static private final String DISASSOCIATE_IP_ADDRESS              = "disassociateIpAddress";
-    static private final String LIST_PORT_FORWARDING_RULES           = "listPortForwardingRules";
-    static private final String LIST_PUBLIC_IP_ADDRESSES             = "listPublicIpAddresses";
-    static private final String STOP_FORWARD                         = "deletePortForwardingRule";
-    
-    private CSCloud provider;
-    
+    static final         String ASSOCIATE_IP_ADDRESS        = "associateIpAddress";
+    static private final String CREATE_PORT_FORWARDING_RULE = "createPortForwardingRule";
+    static private final String DISASSOCIATE_IP_ADDRESS     = "disassociateIpAddress";
+    static private final String LIST_PORT_FORWARDING_RULES  = "listPortForwardingRules";
+    static private final String LIST_PUBLIC_IP_ADDRESSES    = "listPublicIpAddresses";
+    static private final String STOP_FORWARD                = "deletePortForwardingRule";
+
     public IpAddress(CSCloud provider) {
-        this.provider = provider;
+        super(provider);
     }
-    
+
     public void assign(@Nonnull String addressId, @Nonnull String toServerId) throws InternalException, CloudException {
         throw new OperationNotSupportedException("Address assignment is not supported");
     }
@@ -86,11 +87,11 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public @Nonnull String forward(@Nonnull String addressId, int publicPort, @Nonnull Protocol protocol, int privatePort, @Nonnull String onServerId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.forward");
+        APITrace.begin(getProvider(), "IpAddress.forward");
         try {
-            VirtualMachine server = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(onServerId);
+            VirtualMachine server = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(onServerId);
             RawAddress privateIpAddress = null;
-                
+
             if( server == null ) {
                 throw new CloudException("No such server: " + onServerId);
             }
@@ -102,18 +103,16 @@ public class IpAddress implements IpAddressSupport {
             if( privateIpAddress == null ) {
                 throw new CloudException("Could not determine a private IP address for " + onServerId);
             }
-            Param[] params;
-                
-            if( isId() ) {
-                params = new Param[] { new Param("ipAddressId", addressId), new Param("publicPort", String.valueOf(publicPort)), new Param("privatePort", String.valueOf(privatePort)), new Param("protocol", protocol.name()), new Param("virtualMachineId", onServerId)};
-            }
-            else {
-                params = new Param[] { new Param("ipAddress", addressId), new Param("publicPort", String.valueOf(publicPort)), new Param("privatePort", String.valueOf(privatePort)), new Param("protocol", protocol.name()), new Param("virtualMachineId", onServerId)};
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CREATE_PORT_FORWARDING_RULE, params), CREATE_PORT_FORWARDING_RULE);
-    
-            provider.waitForJob(doc, "Assigning forwarding rule");
+            List<Param> params = new ArrayList<Param>();
+            params.add(new Param("publicPort", String.valueOf(publicPort)));
+            params.add(new Param("privatePort", String.valueOf(privatePort)));
+            params.add(new Param("protocol", protocol.name()));
+            params.add(new Param("virtualMachineId", onServerId));
+            params.add(new Param("ipAddressId", addressId));
+
+            Document doc = new CSMethod(getProvider()).get(CREATE_PORT_FORWARDING_RULE, params);
+
+            getProvider().waitForJob(doc, "Assigning forwarding rule");
             for( IpForwardingRule rule : listRules(addressId) ) {
                 if( rule.getPublicPort() == publicPort && rule.getPrivatePort() == privatePort && onServerId.equals(rule.getServerId()) && protocol.equals(rule.getProtocol()) && addressId.equals(rule.getAddressId()) ) {
                     return rule.getProviderRuleId();
@@ -131,37 +130,31 @@ public class IpAddress implements IpAddressSupport {
     @Override
     public IPAddressCapabilities getCapabilities() throws CloudException, InternalException {
         if( capabilities == null ) {
-            capabilities = new CSIPAddressCapabilities(provider);
+            capabilities = new CSIPAddressCapabilities(getProvider());
         }
         return capabilities;
     }
 
     private boolean isId() {
-        return provider.getVersion().greaterThan(CSVersion.CS21);
+        return getProvider().getVersion().greaterThan(CSVersion.CS21);
     }
 
     @Override
     public @Nullable org.dasein.cloud.network.IpAddress getIpAddress(@Nonnull String addressId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.getIpAddress");
+        APITrace.begin(getProvider(), "IpAddress.getIpAddress");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             try {
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param(isId() ? "ipAddressId" : "ipAddress", addressId)), LIST_PUBLIC_IP_ADDRESSES);
+                CSMethod method = new CSMethod(getProvider());
+                Document doc = method.get(LIST_PUBLIC_IP_ADDRESSES, new Param(isId() ? "id" : "ipAddress", addressId));
                 HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
-                LoadBalancerSupport support = provider.getNetworkServices().getLoadBalancerSupport();
+                LoadBalancerSupport support = getProvider().getNetworkServices().getLoadBalancerSupport();
                 LoadBalancer lb = (support == null ? null : support.getLoadBalancer(addressId));
                 if( lb != null ) {
                     loadBalancers.put(addressId, lb);
                 }
                 NodeList matches = doc.getElementsByTagName("publicipaddress");
                 for( int i = 0; i < matches.getLength(); i++ ) {
-                    org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), ctx, loadBalancers);
-
+                    org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), loadBalancers);
                     if( addr != null ) {
                         if( addr.getProviderIpAddressId().equals(addressId) ) {
                             return addr;
@@ -183,69 +176,18 @@ public class IpAddress implements IpAddressSupport {
     }
 
     @Override
-    public @Nonnull String getProviderTermForIpAddress(@Nonnull Locale locale) {
-        return "IP address";
-    }
-
-    @Override
-    public @Nonnull Requirement identifyVlanForVlanIPRequirement() throws CloudException, InternalException {
-        return Requirement.REQUIRED;
-    }
-
-    @Override
-    public boolean isAssigned(@Nonnull AddressType type) {
-        return false;
-    }
-
-    @Override
-    public boolean isAssigned(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isAssignablePostLaunch(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return false;
-    }
-
-    @Override
-    public boolean isForwarding() {
-        return true;
-    }
-
-    @Override
-    public boolean isForwarding(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return version.equals(IPVersion.IPV4);
-    }
-
-    @Override
-    public boolean isRequestable(@Nonnull AddressType type) {
-        return type.equals(AddressType.PUBLIC);
-    }
-
-    @Override
-    public boolean isRequestable(@Nonnull IPVersion version) throws CloudException, InternalException {
-        return version.equals(IPVersion.IPV4);
-    }
-
-    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
-        APITrace.begin(provider, "IpAddress.isSubscribed");
+        APITrace.begin(getProvider(), "IpAddress.isSubscribed");
         try {
-            CSMethod method = new CSMethod(provider);
-            ProviderContext ctx = provider.getContext();
-
-            try {
-                method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
-                return true;
+            new CSMethod(getProvider()).get(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", getContext().getRegionId()));
+            return true;
+        }
+        catch( CSException e ) {
+            int code = e.getHttpCode();
+            if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
+                return false;
             }
-            catch( CSException e ) {
-                int code = e.getHttpCode();
-
-                if( code == HttpServletResponse.SC_FORBIDDEN || code == 401 || code == 531 ) {
-                    return false;
-                }
-                throw e;
-            }
+            throw e;
         }
         finally {
             APITrace.end();
@@ -253,37 +195,20 @@ public class IpAddress implements IpAddressSupport {
     }
 
     @Override
-    @Deprecated
-    public @Nonnull Iterable<org.dasein.cloud.network.IpAddress> listPrivateIpPool(boolean unassignedOnly) throws InternalException, CloudException {
-        return Collections.emptyList();
-    }
-
-    @Override
-    @Deprecated
-    public @Nonnull Iterable<org.dasein.cloud.network.IpAddress> listPublicIpPool(boolean unassignedOnly) throws InternalException, CloudException {
-        return listIpPool(IPVersion.IPV4, unassignedOnly);
-    }
-
-    @Override
     public @Nonnull Iterable<org.dasein.cloud.network.IpAddress> listIpPool(@Nonnull IPVersion version, boolean unassignedOnly) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.listIpPool");
+        APITrace.begin(getProvider(), "IpAddress.listIpPool");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             if( version.equals(IPVersion.IPV4) ) {
                 HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
-                LoadBalancerSupport support = provider.getNetworkServices().getLoadBalancerSupport();
+                LoadBalancerSupport support = getProvider().getNetworkServices().getLoadBalancerSupport();
 
                 if( support != null ) {
                     for( LoadBalancer lb : support.listLoadBalancers() ) {
                         loadBalancers.put(lb.getProviderLoadBalancerId(), lb);
                     }
                 }
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
+                CSMethod method = new CSMethod(getProvider());
+                Document doc = method.get(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", getContext().getRegionId()));
                 ArrayList<org.dasein.cloud.network.IpAddress> addresses = new ArrayList<org.dasein.cloud.network.IpAddress>();
 
                 int numPages = 1;
@@ -302,12 +227,16 @@ public class IpAddress implements IpAddressSupport {
                 for (int page = 1; page <= numPages; page++) {
                     if (page > 1) {
                         String nextPage = String.valueOf(page);
-                        doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                        doc = method.get(LIST_PUBLIC_IP_ADDRESSES,
+                                new Param("zoneId", getContext().getRegionId()),
+                                new Param("pagesize", "500"),
+                                new Param("page", nextPage)
+                        );
                     }
                     NodeList matches = doc.getElementsByTagName("publicipaddress");
 
                     for( int i=0; i<matches.getLength(); i++ ) {
-                        org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), ctx, loadBalancers);
+                        org.dasein.cloud.network.IpAddress addr = toAddress(matches.item(i), loadBalancers);
 
                         if( addr != null && (!unassignedOnly || !addr.isAssigned()) ) {
                             addresses.add(addr);
@@ -331,27 +260,22 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public @Nonnull Iterable<ResourceStatus> listIpPoolStatus(@Nonnull IPVersion version) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.listIpPoolStatus");
+        APITrace.begin(getProvider(), "IpAddress.listIpPoolStatus");
         try {
             if( !IPVersion.IPV4.equals(version) ) {
                 return Collections.emptyList();
             }
-            HashMap<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
-            LoadBalancerSupport support = provider.getNetworkServices().getLoadBalancerSupport();
+            final Map<String,LoadBalancer> loadBalancers = new HashMap<String,LoadBalancer>();
+            final LoadBalancerSupport support = getProvider().getNetworkServices().getLoadBalancerSupport();
 
             if( support != null ) {
                 for( LoadBalancer lb : support.listLoadBalancers() ) {
                     loadBalancers.put(lb.getProviderLoadBalancerId(), lb);
                 }
             }
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId())), LIST_PUBLIC_IP_ADDRESSES);
-            ArrayList<ResourceStatus> addresses = new ArrayList<ResourceStatus>();
+            final CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", getContext().getRegionId()));
+            List<ResourceStatus> addresses = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -369,7 +293,10 @@ public class IpAddress implements IpAddressSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_PUBLIC_IP_ADDRESSES, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_PUBLIC_IP_ADDRESSES);
+                    doc = method.get(LIST_PUBLIC_IP_ADDRESSES,
+                            new Param("zoneId", getContext().getRegionId()),
+                            new Param("pagesize", "500"),
+                            new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("publicipaddress");
 
@@ -390,19 +317,18 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public @Nonnull Collection<IpForwardingRule> listRules(@Nonnull String addressId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.listRules");
+        APITrace.begin(getProvider(), "IpAddress.listRules");
         try {
             ArrayList<IpForwardingRule> rules = new ArrayList<IpForwardingRule>();
             Param[] params;
             
-            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+            if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
                 params = new Param[] { new Param("ipaddressid", addressId) };                    
             }
             else {
                 params = new Param[] { new Param("ipAddress", addressId) };
             }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(LIST_PORT_FORWARDING_RULES, params), LIST_PORT_FORWARDING_RULES);
+            Document doc = new CSMethod(getProvider()).get(LIST_PORT_FORWARDING_RULES, params);
             
             if( doc == null ) {
                 throw new CloudException("No such IP address: " + addressId);
@@ -471,11 +397,11 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public void releaseFromPool(@Nonnull String addressId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.releaseFromPool");
+        APITrace.begin(getProvider(), "IpAddress.releaseFromPool");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
         
-            method.get(method.buildUrl(DISASSOCIATE_IP_ADDRESS, new Param(isId() ? "id" : "ipaddress", addressId)), DISASSOCIATE_IP_ADDRESS);
+            method.get(DISASSOCIATE_IP_ADDRESS, new Param(isId() ? "id" : "ipaddress", addressId));
         }
         finally {
             APITrace.end();
@@ -497,29 +423,22 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public @Nonnull String request(@Nonnull IPVersion version) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.request");
+        APITrace.begin(getProvider(), "IpAddress.request");
         try {
+            // TODO: review capabilities
             if( !version.equals(IPVersion.IPV4) ) {
                 throw new OperationNotSupportedException("Only IPv4 is currently supported");
             }
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc;
-
             //if( isBasic() ) {
-            doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId())), ASSOCIATE_IP_ADDRESS);
+            Document doc = new CSMethod(getProvider()).get(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", getContext().getRegionId()));
             // }
             //else {
             //  throw new
-            //doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param[] { new Param("zoneId", provider.getContext().getRegionId())  }))
+            //doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param[] { new Param("zoneId", getProvider().getContext().getRegionId())  }))
             //}
             NodeList matches;
 
-            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+            if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
                 if (matches.getLength() == 0) {
                     matches = doc.getElementsByTagName("jobid"); //4.1
@@ -535,7 +454,7 @@ public class IpAddress implements IpAddressSupport {
             if( id == null ) {
                 throw new CloudException("Failed to request an IP address without error");
             }
-            Document responseDoc = provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            Document responseDoc = getProvider().waitForJob(doc, ASSOCIATE_IP_ADDRESS);
             if (responseDoc != null) {
                 NodeList nodeList = responseDoc.getElementsByTagName("ipaddress");
                 if (nodeList.getLength() > 0) {
@@ -573,21 +492,20 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public @Nonnull String requestForVLAN(@Nonnull IPVersion version, @Nonnull String vlanId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.requestForVLAN");
+        APITrace.begin(getProvider(), "IpAddress.requestForVLAN");
         try {
+            // TODO review capabilities
             if( !version.equals(IPVersion.IPV4) ) {
                 throw new OperationNotSupportedException("Only IPv4 is currently supported");
             }
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(ASSOCIATE_IP_ADDRESS,  new Param("zoneId", ctx.getRegionId()), new Param("networkId", vlanId)), ASSOCIATE_IP_ADDRESS);
+            CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(ASSOCIATE_IP_ADDRESS,
+                    new Param("zoneId", getContext().getRegionId()),
+                    new Param("networkId", vlanId)
+            );
             NodeList matches;
 
-            if( provider.getVersion().greaterThan(CSVersion.CS21) ) {
+            if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
                 matches = doc.getElementsByTagName("id");
                 if (matches.getLength() == 0) {
                     matches = doc.getElementsByTagName("jobid"); //4.1
@@ -603,7 +521,7 @@ public class IpAddress implements IpAddressSupport {
             if( id == null ) {
                 throw new CloudException("Failed to request an IP address without error");
             }
-            Document responseDoc = provider.waitForJob(doc, ASSOCIATE_IP_ADDRESS);
+            Document responseDoc = getProvider().waitForJob(doc, ASSOCIATE_IP_ADDRESS);
             if (responseDoc != null) {
                 NodeList nodeList = responseDoc.getElementsByTagName("ipaddress");
                 if (nodeList.getLength() > 0) {
@@ -636,26 +554,20 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public void stopForward(@Nonnull String ruleId) throws InternalException, CloudException {
-        APITrace.begin(provider, "IpAddress.stopForward");
+        APITrace.begin(getProvider(), "IpAddress.stopForward");
+        Logger logger = CSCloud.getLogger(IpAddress.class, "std");
+
+        if( logger.isTraceEnabled() ) {
+            logger.trace("enter - " + IpAddress.class.getName() + ".stopForward(" + ruleId + ")");
+        }
         try {
-            Logger logger = CSCloud.getLogger(IpAddress.class, "std");
-
-            if( logger.isTraceEnabled() ) {
-                logger.trace("enter - " + IpAddress.class.getName() + ".stopForward(" + ruleId + ")");
-            }
-            try {
-                CSMethod method = new CSMethod(provider);
-                Document doc = method.get(method.buildUrl(STOP_FORWARD, new Param("id", ruleId)), STOP_FORWARD);
-
-                provider.waitForJob(doc, STOP_FORWARD);
-            }
-            finally {
-                if( logger.isTraceEnabled() ) {
-                    logger.trace("exit - " + IpAddress.class.getName() + ".stopForward()");
-                }
-            }
+            Document doc = new CSMethod(getProvider()).get(STOP_FORWARD, new Param("id", ruleId));
+            getProvider().waitForJob(doc, STOP_FORWARD);
         }
         finally {
+            if( logger.isTraceEnabled() ) {
+                logger.trace("exit - " + IpAddress.class.getName() + ".stopForward()");
+            }
             APITrace.end();
         }
     }
@@ -665,11 +577,11 @@ public class IpAddress implements IpAddressSupport {
         return IPVersion.IPV4.equals(ofVersion);
     }
 
-    private @Nullable org.dasein.cloud.network.IpAddress toAddress(@Nullable Node node, @Nonnull ProviderContext ctx, @Nonnull Map<String,LoadBalancer> loadBalancers) throws InternalException, CloudException {
+    private @Nullable org.dasein.cloud.network.IpAddress toAddress(@Nullable Node node, @Nonnull Map<String,LoadBalancer> loadBalancers) throws InternalException, CloudException {
         if( node == null ) {
             return null;
         }
-        String regionId = ctx.getRegionId();
+        String regionId = getContext().getRegionId();
 
         if( regionId == null ) {
             throw new CloudException("No region was set for this request");
@@ -726,7 +638,7 @@ public class IpAddress implements IpAddressSupport {
             address.setProviderLoadBalancerId(lb.getProviderLoadBalancerId());
         }
         if( address.getServerId() == null ) {
-            for( VirtualMachine vm : provider.getComputeServices().getVirtualMachineSupport().listVirtualMachines() ) {
+            for( VirtualMachine vm : getProvider().getComputeServices().getVirtualMachineSupport().listVirtualMachines() ) {
                 RawAddress[] addrs = vm.getPublicAddresses();
                 
                 for( RawAddress addr : addrs ) {
@@ -801,10 +713,10 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public void setTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(provider, "IpAddress.setTags");
+    	APITrace.begin(getProvider(), "IpAddress.setTags");
     	try {
     		removeTags(addressIds);
-    		provider.createTags(addressIds, "PublicIpAddress", tags);
+    		getProvider().createTags(addressIds, "PublicIpAddress", tags);
     	}
     	finally {
     		APITrace.end();
@@ -818,9 +730,9 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public void updateTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(provider, "IpAddress.updateTags");
+    	APITrace.begin(getProvider(), "IpAddress.updateTags");
     	try {
-    		provider.updateTags(addressIds, "PublicIpAddress", tags);
+    		getProvider().updateTags(addressIds, "PublicIpAddress", tags);
     	}
     	finally {
     		APITrace.end();
@@ -835,9 +747,9 @@ public class IpAddress implements IpAddressSupport {
 
     @Override
     public void removeTags(@Nonnull String[] addressIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(provider, "IpAddress.removeTags");
+    	APITrace.begin(getProvider(), "IpAddress.removeTags");
     	try {
-    		provider.removeTags(addressIds, "PublicIpAddress", tags);
+    		getProvider().removeTags(addressIds, "PublicIpAddress", tags);
     	}
     	finally {
     		APITrace.end();

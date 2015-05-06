@@ -50,7 +50,7 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
 
     @Override
     public boolean allowsNewVlanCreation() throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi("createNetwork");
     }
 
     @Override
