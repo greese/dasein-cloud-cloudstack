@@ -33,6 +33,7 @@ import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.CSVersion;
 import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.VirtualMachine;
 import org.dasein.cloud.compute.VmState;
@@ -788,17 +789,7 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
 
     @Override
     public SSLCertificate createSSLCertificate( @Nonnull SSLCertificateCreateOptions options ) throws CloudException, InternalException {
-        // TODO: add trace
-        Document doc;
-        try {
-            doc = uploadSslCertificate(options, false);
-        } catch (CloudException e) {
-            if( e.getHttpCode() == 530 ) {
-                doc = uploadSslCertificate(options, true);
-            } else {
-                throw e;
-            }
-        }
+        final Document doc = uploadSslCertificate(options, getProvider().getVersionString().startsWith("4.4"));
         String certId = null;
         String certBody = null;
         String certChain = null;
