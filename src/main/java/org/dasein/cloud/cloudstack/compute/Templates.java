@@ -791,13 +791,15 @@ public class Templates extends AbstractImageSupport<CSCloud> {
                     throw e;
                 }
             }
-            Set<String> accounts = new TreeSet<String>();
+            List<String> accounts = new ArrayList<String>();
             NodeList matches = doc.getElementsByTagName("account");
 
             for( int i=0; i<matches.getLength(); i++ ) {
-                Node node = matches.item(i);
-
-                accounts.add(node.getFirstChild().getNodeValue());
+                String account = matches.item(i).getFirstChild().getNodeValue();
+                // private image is always "shared" with the owner, which doesn't make sense in our case
+                if( !getContext().getAccountNumber().equalsIgnoreCase(account) ) {
+                    accounts.add(account);
+                }
             }
             return accounts;
         }
