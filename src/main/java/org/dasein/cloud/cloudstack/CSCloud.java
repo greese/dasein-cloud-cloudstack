@@ -173,10 +173,36 @@ public class CSCloud extends AbstractCloud {
         return serviceProvider;
     }
 
+    private transient String versionString;
+
+    public @Nonnull String getVersionString() throws CloudException {
+        APITrace.begin(this, "CSCloud.getVersionString");
+        if( versionString == null ) {
+            //run list zone query to check whether this might be v4
+            try {
+                CSMethod method = new CSMethod(this);
+                Document doc = method.get("listZones", new Param("available", "true"));
+                NodeList meta = doc.getElementsByTagName("listzonesresponse");
+                for (int item = 0; item<meta.getLength(); item++) {
+                    Node node = meta.item(item);
+                    versionString = node.getAttributes().getNamedItem("cloud-stack-version").getNodeValue();
+                }
+            }
+            catch (Throwable e) {
+                throw new CloudException("Unable to get CloudStack version for "+getCloudName(), e);
+            }
+            finally {
+                APITrace.end();
+            }
+        }
+        return versionString;
+    }
+
     private transient CSVersion version;
 
     public @Nonnull
     CSVersion getVersion() {
+        APITrace.begin(this, "CSCloud.getVersion");
         if( version == null ) {
             ProviderContext ctx = getContext();
             Properties properties = (ctx == null ? null : ctx.getCustomProperties());

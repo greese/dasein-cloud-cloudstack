@@ -33,7 +33,16 @@ public class CSNetworkServices extends AbstractNetworkServices<CSCloud> {
 
     @Override 
     public @Nullable SecurityGroup getFirewallSupport() {
-        return new SecurityGroup(getProvider());
+        try {
+            if( getProvider().getDataCenterServices().supportsSecurityGroups(getContext().getRegionId(), false) ) {
+                return new SecurityGroup(getProvider());
+            }
+        }
+        catch( InternalException e ) {
+        }
+        catch( CloudException e ) {
+        }
+        return null;
     }
     
     @Override
