@@ -25,6 +25,7 @@ import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.compute.SnapshotCapabilities;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -77,5 +78,12 @@ public class CSSnapshotCapabilities extends AbstractCapabilities<CSCloud> implem
     @Override
     public boolean supportsSnapshotSharingWithPublic() throws InternalException, CloudException {
         return false;
+    }
+
+    @Override
+    public @Nonnull NamingConstraints getSnapshotNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
     }
 }

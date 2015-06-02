@@ -33,6 +33,7 @@ import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.VmState;
 import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.NamingConstraints;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -119,6 +120,13 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     @Override
     public boolean imageCaptureDestroysVM() throws InternalException, CloudException{
         return false;
+    }
+
+    @Override
+    public @Nonnull NamingConstraints getImageNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
     }
 
     @Override

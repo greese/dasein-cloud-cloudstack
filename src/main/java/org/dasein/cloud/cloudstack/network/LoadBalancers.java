@@ -215,34 +215,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         return null;
     }
 
-    @SuppressWarnings("deprecation")
-    @Override
-    @Deprecated
-    public @Nonnull String create(@Nonnull String name, @Nonnull String description, @Nullable String addressId, @Nullable String[] zoneIds, @Nullable LbListener[] listeners, @Nullable String[] serverIds, @Nullable String[] subnetIds, LbType type) throws CloudException, InternalException {
-        // TODO: this should be declared via capabilities
-        if( addressId == null ) {
-            throw new CloudException("You must specify an IP address for load balancer creation");
-        }
-        LoadBalancerCreateOptions options = LoadBalancerCreateOptions.getInstance(name, description, addressId);
-
-        if( zoneIds != null && zoneIds.length > 0 ) {
-            options.limitedTo(zoneIds);
-        }
-        if( listeners != null && listeners.length > 0 ) {
-            options.havingListeners(listeners);
-        }
-        if( serverIds != null && serverIds.length > 0 ) {
-            options.withVirtualMachines(serverIds);
-        }
-        if( subnetIds != null && subnetIds.length > 0 ) {
-            options.withProviderSubnetIds(subnetIds);
-        }
-        if (type != null) {
-            options.asType(type);
-        }
-        return createLoadBalancer(options);
-    }
-
     private void createVmOpsRule( String lbName, LbAlgorithm algorithm, String publicIp, int publicPort, int privatePort, String providerVlanId ) throws CloudException, InternalException {
         // TODO: add trace
         String id = getVmOpsRuleId(algorithm, publicIp, publicPort, privatePort, providerVlanId);
@@ -362,11 +334,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         throw new CloudException("Failed to add load balancer rule (2).");
     }
     
-    @Override
-    public @Nonnull LoadBalancerAddressType getAddressType() throws CloudException, InternalException {
-        return LoadBalancerAddressType.IP;
-    }
-
     private transient volatile LBCapabilities capabilities;
     @Nonnull
     @Override
@@ -411,11 +378,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public int getMaxPublicPorts() throws CloudException, InternalException {
-        return 0;
     }
 
     @Override
@@ -716,13 +678,6 @@ public class LoadBalancers extends AbstractLoadBalancerSupport<CSCloud> {
             }
         }
         return false;
-    }
-    
-    @SuppressWarnings("deprecation")
-    @Override
-    @Deprecated
-    public void remove(@Nonnull String loadBalancerId) throws CloudException, InternalException {
-        removeLoadBalancer(loadBalancerId);
     }
 
     @Override
