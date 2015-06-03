@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
@@ -29,6 +31,7 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
 import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -99,12 +102,10 @@ public class Snapshots extends AbstractSnapshotSupport {
                 }
             }
 
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
             Document doc;
 
             try {
-                doc = method.get(url, CREATE_SNAPSHOT);
+                doc = new CSMethod(provider).get(CREATE_SNAPSHOT, new Param("volumeId", volumeId));
             }
             catch( CSException e ) {
                 int code = e.getHttpCode();
@@ -225,6 +226,21 @@ public class Snapshots extends AbstractSnapshotSupport {
             if( snapshotId == null ) {
                 throw new CloudException("Failed to create a snapshot");
             }
+            
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, String> meta = options.getMetaData();
+            for( Entry<String, String> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            provider.createTags(new String[] { snapshotId }, "Snapshot", tags.toArray(new Tag[tags.size()]));
             return snapshotId;
         }
         finally {
@@ -247,11 +263,7 @@ public class Snapshots extends AbstractSnapshotSupport {
         APITrace.begin(getProvider(), "Snapshot.remove");
 
         try {
-            CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(DELETE_SNAPSHOT, new Param("id", snapshotId));
-            Document doc;
-
-            doc = method.get(url, DELETE_SNAPSHOT);
+            Document doc = new CSMethod(provider).get(DELETE_SNAPSHOT, new Param("id", snapshotId));
             provider.waitForJob(doc, "Delete Snapshot");
         }
         finally {
@@ -268,17 +280,9 @@ public class Snapshots extends AbstractSnapshotSupport {
     public @Nonnull Iterable<ResourceStatus> listSnapshotStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Snapshot.listSnapshotStatus");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-            Document doc;
-
-            doc = method.get(url, LIST_SNAPSHOTS);
-            ArrayList<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
+            Document doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()));
+            List<ResourceStatus> snapshots = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -296,7 +300,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                    doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -327,17 +331,9 @@ public class Snapshots extends AbstractSnapshotSupport {
     public @Nonnull Iterable<Snapshot> listSnapshots() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Snapshot.listSnapshots");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             Iterable<Volume> volumes = provider.getComputeServices().getVolumeSupport().listVolumes();
             CSMethod method = new CSMethod(provider);
-            String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()));
-            Document doc;
-
-            doc = method.get(url, LIST_SNAPSHOTS);
+            Document doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()));
             ArrayList<Snapshot> snapshots = new ArrayList<Snapshot>();
 
             int numPages = 1;
@@ -356,14 +352,14 @@ public class Snapshots extends AbstractSnapshotSupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SNAPSHOTS);
+                    doc = method.get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("snapshot");
                 for( int i=0; i<matches.getLength(); i++ ) {
                     Node s = matches.item(i);
 
                     if( s != null ) {
-                        Snapshot snapshot = toSnapshot(s, ctx, volumes);
+                        Snapshot snapshot = toSnapshot(s, getContext(), volumes);
 
                         if( snapshot != null ) {
                             snapshots.add(snapshot);
@@ -379,24 +375,15 @@ public class Snapshots extends AbstractSnapshotSupport {
     }
 
     private Snapshot getLatestSnapshot(String forVolumeId) throws InternalException, CloudException {
-        ProviderContext ctx = provider.getContext();
-
-        if( ctx == null ) {
-            throw new CloudException("No context was set for this request");
-        }
-        CSMethod method = new CSMethod(provider);
-        String url = method.buildUrl(LIST_SNAPSHOTS, new Param("zoneId", ctx.getRegionId()), new Param("volumeId", forVolumeId));
         Volume volume = provider.getComputeServices().getVolumeSupport().getVolume(forVolumeId);
         List<Volume> volumes;
-        Document doc;
-
         if( volume == null ) {
             volumes = Collections.emptyList();
         }
         else {
             volumes = Collections.singletonList(volume);
         }
-        doc = method.get(url, LIST_SNAPSHOTS);
+        Document doc = new CSMethod(provider).get(LIST_SNAPSHOTS, new Param("zoneId", getContext().getRegionId()), new Param("volumeId", forVolumeId));
         Snapshot latest = null;
         
         NodeList matches = doc.getElementsByTagName("snapshot");
@@ -404,7 +391,7 @@ public class Snapshots extends AbstractSnapshotSupport {
             Node s = matches.item(i);
 
             if( s != null ) {
-                Snapshot snapshot = toSnapshot(s, ctx, volumes);
+                Snapshot snapshot = toSnapshot(s, getContext(), volumes);
                 
                 if( snapshot != null && snapshot.getVolumeId() != null && snapshot.getVolumeId().equals(forVolumeId) ) {
                     if( latest == null || snapshot.getSnapshotTimestamp() > latest.getSnapshotTimestamp() ) {
@@ -542,5 +529,55 @@ public class Snapshots extends AbstractSnapshotSupport {
         finally {
             APITrace.end();
         }
+    }
+    
+    @Override
+    public void setTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	setTags(new String[] { snapshotId }, tags);
+    }
+    
+    @Override
+    public void setTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.setTags");
+    	try {
+    		removeTags(snapshotIds);
+    		provider.createTags(snapshotIds, "Snapshot", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String snapshotId, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	updateTags(new String[] { snapshotId }, tags);
+    }
+    
+    @Override
+    public void updateTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.updateTags");
+    	try {
+    		provider.updateTags(snapshotIds, "Snapshot", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String snapshotId, @Nonnull Tag... tags)
+    		throws CloudException, InternalException {
+    	removeTags(new String[] { snapshotId }, tags);
+    }
+    
+    @Override
+    public void removeTags(@Nonnull String[] snapshotIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+    	APITrace.begin(getProvider(), "Snapshot.removeTags");
+    	try {
+    		provider.removeTags(snapshotIds, "Snapshot", tags);
+    	}
+    	finally {
+    		APITrace.end();
+    	}
     }
 }

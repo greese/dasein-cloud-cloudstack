@@ -24,6 +24,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
@@ -33,6 +34,7 @@ import org.dasein.cloud.CloudException;
 import org.dasein.cloud.ContextRequirements;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.ProviderContext;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.compute.CSComputeServices;
 import org.dasein.cloud.cloudstack.identity.CSIdentityServices;
 import org.dasein.cloud.cloudstack.network.CSNetworkServices;
@@ -43,6 +45,7 @@ import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
 import org.dasein.util.uom.time.Day;
 import org.dasein.util.uom.time.TimePeriod;
+import org.dasein.util.uom.time.TimePeriodUnit;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -56,6 +59,9 @@ public class CSCloud extends AbstractCloud {
     static private final Logger logger = getLogger(CSCloud.class, "std");
     static public final String LIST_ACCOUNTS = "listAccounts";
     static private final String LIST_HYPERVISORS = "listHypervisors";
+    static private final String LIST_TAGS = "listTags";
+    static private final String CREATE_TAGS = "createTags";
+    static private final String DELETE_TAGS = "deleteTags";
 
     static private @Nonnull String getLastItem(@Nonnull String name) {
         int idx = name.lastIndexOf('.');
@@ -167,9 +173,36 @@ public class CSCloud extends AbstractCloud {
         return serviceProvider;
     }
 
+    private transient String versionString;
+
+    public @Nonnull String getVersionString() throws CloudException {
+        APITrace.begin(this, "CSCloud.getVersionString");
+        if( versionString == null ) {
+            //run list zone query to check whether this might be v4
+            try {
+                CSMethod method = new CSMethod(this);
+                Document doc = method.get("listZones", new Param("available", "true"));
+                NodeList meta = doc.getElementsByTagName("listzonesresponse");
+                for (int item = 0; item<meta.getLength(); item++) {
+                    Node node = meta.item(item);
+                    versionString = node.getAttributes().getNamedItem("cloud-stack-version").getNodeValue();
+                }
+            }
+            catch (Throwable e) {
+                throw new CloudException("Unable to get CloudStack version for "+getCloudName(), e);
+            }
+            finally {
+                APITrace.end();
+            }
+        }
+        return versionString;
+    }
+
     private transient CSVersion version;
 
-    public @Nonnull CSVersion getVersion() {
+    public @Nonnull
+    CSVersion getVersion() {
+        APITrace.begin(this, "CSCloud.getVersion");
         if( version == null ) {
             ProviderContext ctx = getContext();
             Properties properties = (ctx == null ? null : ctx.getCustomProperties());
@@ -179,8 +212,7 @@ public class CSCloud extends AbstractCloud {
                //run list zone query to check whether this might be v4
                 try {
                     CSMethod method = new CSMethod(this);
-                    String url = method.buildUrl("listZones", new Param("available", "true"));
-                    Document doc = method.get(url, "listZones");
+                    Document doc = method.get("listZones", new Param("available", "true"));
                     NodeList meta = doc.getElementsByTagName("listzonesresponse");
                     for (int item = 0; item<meta.getLength(); item++) {
                         Node node = meta.item(item);
@@ -219,7 +251,7 @@ public class CSCloud extends AbstractCloud {
             CSMethod method = new CSMethod(this);
 
             try {
-                Document doc = method.get(method.buildUrl(LIST_ACCOUNTS), LIST_ACCOUNTS);
+                Document doc = method.get(LIST_ACCOUNTS);
                 NodeList matches = doc.getElementsByTagName("user");
 
                 if( matches.getLength() < 1 ) {
@@ -466,12 +498,10 @@ public class CSCloud extends AbstractCloud {
         APITrace.begin(this, "waitForJob");
         try {
             CSMethod method = new CSMethod(this);
-            String url = method.buildUrl("queryAsyncJobResult", new Param("jobId", jobId));
-
             while( true ) {
                 try { Thread.sleep(5000L); }
                 catch( InterruptedException e ) { /* ignore */ }
-                Document doc = method.get(url, "queryAsyncJobResult");
+                Document doc = method.get("queryAsyncJobResult", new Param("jobId", jobId));
 
                 NodeList matches = doc.getElementsByTagName("jobstatus");
                 int status = 0;
@@ -548,11 +578,36 @@ public class CSCloud extends AbstractCloud {
         return getUserAccountData().isAdmin();
     }
 
+    public boolean hasApi(@Nullable String callName) throws CloudException, InternalException {
+        Cache<Boolean> cache = Cache.getInstance(this, "api."+callName, Boolean.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
+        Iterable<Boolean> cachedValues = cache.get(getContext());
+        if( cachedValues != null && cachedValues.iterator().hasNext() ) {
+            return cachedValues.iterator().next();
+        }
+        APITrace.begin(this, "getApis");
+
+        try {
+            new CSMethod(this).get("listApis", new Param("name", callName));
+            cache.put(getContext(), Collections.singleton(Boolean.TRUE));
+            return true;
+        } catch( CSException e ) {
+            if( e.getHttpCode() == 530 ) {
+                cache.put(getContext(), Collections.singleton(Boolean.FALSE));
+                return false;
+            }
+            throw e;
+        }
+        finally {
+            APITrace.end();
+        }
+
+    }
+
     private @Nonnull AccountData getUserAccountData() throws CloudException, InternalException {
         AccountData data = null;
         Cache<AccountData> cache = Cache.getInstance(this, "account", AccountData.class, CacheLevel.CLOUD_ACCOUNT, new TimePeriod<Day>(1, TimePeriod.DAY));
         Iterable<AccountData> cachedValues = cache.get(getContext());
-        if( cachedValues != null && cachedValues.iterator().hasNext()) {
+        if( cachedValues != null && cachedValues.iterator().hasNext() ) {
             data = cachedValues.iterator().next();
         }
         if( data != null ) {
@@ -561,23 +616,19 @@ public class CSCloud extends AbstractCloud {
         APITrace.begin(this, "getUserAccountData");
 
         try {
-            CSMethod method = new CSMethod(this);
-            String url = method.buildUrl("listAccounts");
-
-            Document doc = method.get(url, "listAccounts");
-            NodeList matches = doc.getElementsByTagName("user");
-
+            Document doc = new CSMethod(this).get("listAccounts");
             String ctxKey = null;
             List<ContextRequirements.Field> fields = getContextRequirements().getConfigurableValues();
-            for(ContextRequirements.Field f : fields ) {
-                if(f.type.equals(ContextRequirements.FieldType.KEYPAIR)){
-                    byte[][] keyPair = (byte[][])getContext().getConfigurationValue(f);
+            for( ContextRequirements.Field f : fields ) {
+                if( f.type.equals(ContextRequirements.FieldType.KEYPAIR) ) {
+                    byte[][] keyPair = ( byte[][] ) getContext().getConfigurationValue(f);
                     ctxKey = new String(keyPair[0], "utf-8");
                 }
             }
 
+            NodeList matches = doc.getElementsByTagName("user");
 
-            for (int i = 0; i<matches.getLength(); i++) {
+            for( int i = 0; i < matches.getLength(); i++ ) {
                 boolean userAccountFound = false;
                 String accountName = null;
                 String domainId = null;
@@ -587,7 +638,7 @@ public class CSCloud extends AbstractCloud {
 
                 NodeList attributes = matches.item(i).getChildNodes();
 
-                for( int j=0; j<attributes.getLength(); j++ ) {
+                for( int j = 0; j < attributes.getLength(); j++ ) {
                     Node attribute = attributes.item(j);
                     String name = attribute.getNodeName().toLowerCase();
                     String value;
@@ -602,13 +653,13 @@ public class CSCloud extends AbstractCloud {
                     if( name.equalsIgnoreCase("username") ) {
                         username = value;
                     }
-                    else if (name.equalsIgnoreCase("apikey") && ctxKey.equals(value)) {
+                    else if( name.equalsIgnoreCase("apikey") && ctxKey.equals(value) ) {
                         userAccountFound = true; // user record matched by the context api key
                     }
-                    else if (name.equalsIgnoreCase("account")) {
+                    else if( name.equalsIgnoreCase("account") ) {
                         accountName = value;
                     }
-                    else if (name.equalsIgnoreCase("domainid")) {
+                    else if( name.equalsIgnoreCase("domainid") ) {
                         domainId = value;
                     }
                     else if( "accountid".equalsIgnoreCase(name) ) {
@@ -618,7 +669,7 @@ public class CSCloud extends AbstractCloud {
                         accountType = Integer.parseInt(value); // 0-user, 1-domain admin, 2-root admin
                     }
                 }
-                if (userAccountFound) {
+                if( userAccountFound ) {
                     data = new AccountData(username, accountId, accountName, domainId, accountType > 0);
                     break;
                 }
@@ -639,14 +690,14 @@ public class CSCloud extends AbstractCloud {
         return data;
     }
 
-    class AccountData {
-        private String accountId;
-        private String parentAccount;
-        private String username;
-        private String domainId;
+    public class AccountData {
+        private String  accountId;
+        private String  parentAccount;
+        private String  username;
+        private String  domainId;
         private boolean admin;
 
-        public AccountData( String username, String accountId, String parentAccount, String domainId, boolean admin ) {
+        public AccountData(String username, String accountId, String parentAccount, String domainId, boolean admin) {
             this.username = username;
             this.accountId = accountId;
             this.parentAccount = parentAccount;
@@ -681,7 +732,7 @@ public class CSCloud extends AbstractCloud {
      * @param node the node to extract the value from
      * @return the text from the node
      */
-    static public String getTextValue( Node node ) {
+    static public String getTextValue(Node node) {
         if( node.getChildNodes().getLength() == 0 ) {
             return null;
         }
@@ -694,7 +745,7 @@ public class CSCloud extends AbstractCloud {
      * @param node the node to extract the value from
      * @return the boolean value of the node
      */
-    static public boolean getBooleanValue( Node node ) {
+    static public boolean getBooleanValue(Node node) {
         return Boolean.valueOf(getTextValue(node));
     }
 
@@ -711,17 +762,144 @@ public class CSCloud extends AbstractCloud {
             return zoneHypervisors;
         }
         try {
-            CSMethod method = new CSMethod(this);
-            Document doc = method.get(method.buildUrl(LIST_HYPERVISORS, new Param("zoneid", ctx.getRegionId())), LIST_HYPERVISORS);
+            Document doc = new CSMethod(this).get(LIST_HYPERVISORS, new Param("zoneid", ctx.getRegionId()));
             NodeList nodes = doc.getElementsByTagName("name");
             zoneHypervisors = new ArrayList<String>();
-            for( int i=0; i< nodes.getLength(); i++ ) {
+            for( int i = 0; i < nodes.getLength(); i++ ) {
                 Node item = nodes.item(i);
                 zoneHypervisors.add(item.getFirstChild().getNodeValue().trim());
             }
             hypervisorCache.put(ctx, zoneHypervisors);
             return zoneHypervisors;
-        } finally {
+        }
+        finally {
+        }
+    }
+
+    public @Nullable void createTags(@Nonnull String[] resIds, @Nonnull String resourceType, Tag... keyValuePairs) throws InternalException, CloudException {
+        APITrace.begin(this, "Cloud.createTags");
+        try {
+            try {
+                String resourceIds = "";
+                for( String resId : resIds ) {
+                    resourceIds += resId + ",";
+                }
+                if( resourceIds.endsWith(",") ) {
+                    resourceIds = resourceIds.substring(0, resourceIds.length() - 1);
+                }
+                List<Param> params = new ArrayList<Param>();
+                params.add(new Param("resourceids", resourceIds));
+                params.add(new Param("resourcetype", resourceType));
+                for( int i = 0; i < keyValuePairs.length; i++ ) {
+                    // Tag value can't be null or ""
+                    if( keyValuePairs[i].getValue() != null && !keyValuePairs[i].getValue().equals("") ) {
+                        params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
+                        params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
+                    }
+                }
+                Document doc = new CSMethod(this).get(CREATE_TAGS, params);
+                waitForJob(doc, "Create Tags");
+            }
+            catch( CloudException e ) {
+                logger.error("Error while creating tags for " + resourceType + " - ", e);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    public @Nullable void updateTags(@Nonnull String[] resIds, String resourceType, Tag... keyValuePairs) throws InternalException, CloudException {
+        APITrace.begin(this, "Cloud.updateTags");
+        try {
+            try {
+                // List and remove existing tags to update the values
+                for( String resId : resIds ) {
+                    Tag[] tagList = getTags(resId);
+                    if( tagList.length > 0 ) {
+                        List<Tag> tags = new ArrayList<Tag>();
+                        // New tags to update
+                        for( int i = 0; i < keyValuePairs.length; i++ ) {
+                            // Existing tags
+                            for( int k = 0; k < tagList.length; k++ ) {
+                                if( keyValuePairs[i].getKey().equals(tagList[k].getKey()) ) {
+                                    if( tagList[k].getValue() != null ) {
+                                        tags.add(new Tag(tagList[k].getKey(), tagList[k].getValue()));
+                                    }
+                                }
+                            }
+                        }
+                        if( tags.size() > 0 ) {
+                            removeTags(new String[]{ resId }, resourceType, tags.toArray(new Tag[tags.size()]));
+                        }
+                    }
+                }
+                // Update tags
+                createTags(resIds, resourceType, keyValuePairs);
+            }
+            catch( CloudException e ) {
+                logger.error("Error while updating tags for " + resourceType + " - ", e);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    public @Nullable void removeTags(@Nonnull String[] vmIds, String resourceType, Tag... keyValuePairs) throws InternalException, CloudException {
+        APITrace.begin(this, "Cloud.removeTags");
+        try {
+            String resourceIds = "";
+            try {
+                for( String vmId : vmIds ) {
+                    resourceIds += vmId + ",";
+                }
+                if( resourceIds.endsWith(",") ) {
+                    resourceIds = resourceIds.substring(0, resourceIds.length() - 1);
+                }
+                List<Param> params = new ArrayList<Param>();
+                params.add(new Param("resourceids", resourceIds));
+                params.add(new Param("resourcetype", resourceType));
+                for( int i = 0; i < keyValuePairs.length; i++ ) {
+                    // Tag value can't be null or ""
+                    if( keyValuePairs[i].getValue() != null && !keyValuePairs[i].getValue().equals("") ) {
+                        params.add(new Param("tags[" + i + "].key", keyValuePairs[i].getKey()));
+                        params.add(new Param("tags[" + i + "].value", keyValuePairs[i].getValue()));
+                    }
+                }
+                Document doc = new CSMethod(this).get(DELETE_TAGS, params);
+                waitForJob(doc, "Delete Tags");
+            }
+            catch( CloudException e ) {
+                logger.error("Error while removing tags for " + resourceType + " - ", e);
+            }
+        }
+        finally {
+            APITrace.end();
+        }
+    }
+
+    public @Nullable Tag[] getTags(@Nonnull String resourceId) throws InternalException, CloudException {
+        APITrace.begin(this, "Cloud.listTags");
+        try {
+            List<Tag> tags = new ArrayList<Tag>();
+            try {
+                Document doc = new CSMethod(this).get(LIST_TAGS, new Param("resourceid", resourceId));
+                NodeList matches = doc.getElementsByTagName("tag");
+                if( matches.getLength() > 0 ) {
+                    for( int i = 0; i < matches.getLength(); i++ ) {
+                        // Child 0 has the key, child 1 has the value
+                        tags.add(new Tag(matches.item(i).getChildNodes().item(0).getTextContent(), matches.item(i).getChildNodes().item(1).getTextContent()));
+                    }
+                }
+            }
+            catch( CloudException e ) {
+                logger.error("Error while listing the tags for - " + resourceId + ".", e);
+            }
+            return tags.toArray(new Tag[tags.size()]);
+        }
+        finally {
+            APITrace.end();
         }
     }
 

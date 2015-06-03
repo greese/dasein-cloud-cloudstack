@@ -103,10 +103,11 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
         return new Storage<Gigabyte>(1, Storage.GIGABYTE);
     }
 
-    @Nonnull
     @Override
-    public NamingConstraints getVolumeNamingConstraints() throws CloudException, InternalException {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public @Nonnull NamingConstraints getVolumeNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
     }
 
     @Nonnull
@@ -118,6 +119,11 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
     @Nonnull
     @Override
     public Requirement getVolumeProductRequirement() throws InternalException, CloudException {
+        return Requirement.OPTIONAL;
+    }
+
+    @Override
+    public @Nonnull Requirement getDeviceIdOnAttachRequirement() throws InternalException, CloudException {
         return Requirement.OPTIONAL;
     }
 

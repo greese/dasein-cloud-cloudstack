@@ -25,12 +25,14 @@ import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -70,16 +72,13 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        else {
-            return Collections.singletonList(RuleTargetType.GLOBAL);
-        }
+        return listSupportedDestinationTypes(inVlan, Direction.INGRESS);
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<Direction> listSupportedDirections(boolean inVlan) throws InternalException, CloudException {
         if( inVlan ) {
             return Collections.emptyList();
@@ -101,11 +100,9 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Deprecated
     public @Nonnull Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan) throws InternalException, CloudException {
-        if( inVlan ) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(RuleTargetType.CIDR);
+        return listSupportedSourceTypes(inVlan, Direction.INGRESS);
     }
 
     @Override
@@ -114,6 +111,7 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     }
 
     @Override
+    @Nonnull
     public Requirement requiresVLAN() throws CloudException, InternalException {
         return Requirement.NONE;
     }
@@ -131,5 +129,44 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     @Override
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
         return true;
+    }
+
+    @Override
+    public @Nonnull NamingConstraints getFirewallNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
+    }
+
+    @Override
+    @Nonnull
+    public Iterable<RuleTargetType> listSupportedDestinationTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
+        if( inVlan ) {
+            return Collections.emptyList();
+        }
+        List<RuleTargetType> supportedDestinationTypes = new ArrayList<RuleTargetType>();
+        if (direction.equals(Direction.INGRESS)) {
+            supportedDestinationTypes = Collections.singletonList(RuleTargetType.GLOBAL);
+        }
+        else if (direction.equals(Direction.EGRESS)){
+            supportedDestinationTypes = Collections.singletonList(RuleTargetType.CIDR);
+        }
+        return supportedDestinationTypes;
+    }
+
+    @Override
+    @Nonnull
+    public Iterable<RuleTargetType> listSupportedSourceTypes(boolean inVlan, Direction direction) throws InternalException, CloudException {
+        if( inVlan ) {
+            return Collections.emptyList();
+        }
+        List<RuleTargetType> supportedSourceTypes = new ArrayList<RuleTargetType>();
+        if (direction.equals(Direction.INGRESS)) {
+            supportedSourceTypes = Collections.singletonList(RuleTargetType.CIDR);
+        }
+        else if (direction.equals(Direction.EGRESS)){
+            supportedSourceTypes = Collections.singletonList(RuleTargetType.GLOBAL);
+        }
+        return supportedSourceTypes;
     }
 }

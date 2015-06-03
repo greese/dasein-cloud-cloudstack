@@ -20,15 +20,17 @@ package org.dasein.cloud.cloudstack.network;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import org.apache.log4j.Logger;
 import org.dasein.cloud.CloudException;
 import org.dasein.cloud.InternalException;
 import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
 import org.dasein.cloud.ResourceStatus;
+import org.dasein.cloud.Tag;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.cloudstack.CSException;
 import org.dasein.cloud.cloudstack.CSMethod;
@@ -39,6 +41,7 @@ import org.dasein.cloud.network.Firewall;
 import org.dasein.cloud.network.FirewallCapabilities;
 import org.dasein.cloud.network.FirewallCreateOptions;
 import org.dasein.cloud.network.FirewallRule;
+import org.dasein.cloud.network.FirewallRuleCreateOptions;
 import org.dasein.cloud.network.Permission;
 import org.dasein.cloud.network.Protocol;
 import org.dasein.cloud.network.RuleTarget;
@@ -76,8 +79,10 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             }
             String sourceCidr = null;
             boolean group;
+            String command = AUTHORIZE_SECURITY_GROUP_EGRESS;
 
             if( direction.equals(Direction.INGRESS) ) {
+                command = AUTHORIZE_SECURITY_GROUP_INGRESS;
                 group = sourceEndpoint.getRuleTargetType().equals(RuleTargetType.GLOBAL);
                 if( !group ) {
                     sourceCidr = sourceEndpoint.getCidr();
@@ -89,30 +94,23 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
                     sourceCidr = destinationEndpoint.getCidr();
                 }
             }
-
+            // TODO should be communicated via capabilities
+            if( group ) {
+                throw new OperationNotSupportedException("Security group sources & destinations are not supported");
+            }
             if( sourceCidr != null && sourceCidr.indexOf('/') == -1 ) {
                 sourceCidr = sourceCidr + "/32";
             }
-            Param[] params;
-            CSMethod method = new CSMethod(getProvider());
-
-            if( group ) {
-                throw new OperationNotSupportedException("Security group sources are not supported");
-            }
-            else {
-                params = new Param[] { new Param("securitygroupid", firewallId), new Param("cidrlist", sourceCidr), new Param("startport", String.valueOf(beginPort)), new Param("endport", String.valueOf(endPort)), new Param("protocol", protocol.name()) };
-            }
-            Document doc = null;
-            if( direction.equals(Direction.INGRESS) ) {
-                doc = method.get(method.buildUrl(AUTHORIZE_SECURITY_GROUP_INGRESS, params), AUTHORIZE_SECURITY_GROUP_INGRESS);
-            }
-            else {
-                doc = method.get(method.buildUrl(AUTHORIZE_SECURITY_GROUP_EGRESS, params), AUTHORIZE_SECURITY_GROUP_EGRESS);
-            }
-            cloudstack.waitForJob(doc, "Authorize rule");
-
+            Document doc = new CSMethod(getProvider()).get(
+                    command,
+                    new Param("securitygroupid", firewallId),
+                    new Param("cidrlist", sourceCidr),
+                    new Param(Protocol.ICMP.equals(protocol) ? "icmptype" : "startport", String.valueOf(beginPort)),
+                    new Param(Protocol.ICMP.equals(protocol) ? "icmpcode" : "endport", String.valueOf(endPort)),
+                    new Param("protocol", protocol.name())
+            );
             getProvider().waitForJob(doc, "Authorize rule");
-            String id = getRuleId(firewallId, direction, permission, protocol, sourceEndpoint, destinationEndpoint, beginPort, endPort);
+            final String id = getRuleId(firewallId, direction, permission, protocol, sourceEndpoint, destinationEndpoint, beginPort, endPort);
             if( id == null ) {
                 throw new CloudException("Unable to identify newly created firewall rule ID");
             }
@@ -181,10 +179,12 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         }
         APITrace.begin(getProvider(), "Firewall.create");
         try {
-            Param[] params = new Param[] { new Param("name", options.getName()), new Param("description", options.getDescription()) };
-            CSMethod method = new CSMethod(getProvider());
-            Document doc = method.get(method.buildUrl(CREATE_SECURITY_GROUP, params), CREATE_SECURITY_GROUP);
-            NodeList matches = doc.getElementsByTagName("id");
+            final Document doc = new CSMethod(getProvider()).get(
+                    CREATE_SECURITY_GROUP,
+                    new Param("name", options.getName()),
+                    new Param("description", options.getDescription())
+            );
+            final NodeList matches = doc.getElementsByTagName("id");
             String groupId = null;
 
             if( matches.getLength() > 0 ) {
@@ -193,6 +193,26 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             if( groupId == null ) {
                 throw new CloudException("Failed to create firewall");
             }
+
+            // create initial rules if requested
+            for( FirewallRuleCreateOptions ruleCreateOptions : options.getInitialRules() ) {
+                authorize(groupId, ruleCreateOptions);
+            }
+
+            // Set tags
+            List<Tag> tags = new ArrayList<Tag>();
+            Map<String, String> meta = options.getMetaData();
+            for( Entry<String, String> entry : meta.entrySet() ) {
+            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+            		continue;
+            	}
+            	if (entry.getValue() != null && !entry.getValue().equals("")) {
+            		tags.add(new Tag(entry.getKey(), entry.getValue()));
+            	}
+            }
+            tags.add(new Tag("Name", options.getName()));
+            tags.add(new Tag("Description", options.getDescription()));
+            getProvider().createTags(new String[] { groupId }, "SecurityGroup", tags.toArray(new Tag[tags.size()]));
             return groupId;
         }
         finally {
@@ -213,9 +233,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             catch( Throwable ignore ) {
                 // ignore
             }
-            CSMethod method = new CSMethod(getProvider());
-
-            method.get(method.buildUrl(DELETE_SECURITY_GROUP, new Param("id", firewallId)), DELETE_SECURITY_GROUP);
+            new CSMethod(getProvider()).get(DELETE_SECURITY_GROUP, new Param("id", firewallId));
         }
         finally {
             APITrace.end();
@@ -223,6 +241,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     }
 
     private transient volatile SecurityGroupCapabilities capabilities;
+
     @Nonnull
     @Override
     public FirewallCapabilities getCapabilities() throws CloudException, InternalException {
@@ -236,36 +255,27 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public @Nullable Firewall getFirewall(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getFirewall");
         try {
-            ProviderContext ctx = getContext();
+            final Document doc = new CSMethod(getProvider()).get(LIST_SECURITY_GROUPS, new Param("id", firewallId));
+            final NodeList matches = doc.getElementsByTagName("securitygroup");
 
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(getProvider());
+            for( int i=0; i<matches.getLength(); i++ ) {
+                Node node = matches.item(i);
 
-            try {
-                Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
-                NodeList matches = doc.getElementsByTagName("securitygroup");
+                if( node != null ) {
+                    Firewall fw = toFirewall(node);
 
-                for( int i=0; i<matches.getLength(); i++ ) {
-                    Node node = matches.item(i);
-
-                    if( node != null ) {
-                        Firewall fw = toFirewall(node, ctx);
-
-                        if( fw != null ) {
-                            return fw;
-                        }
+                    if( fw != null ) {
+                        return fw;
                     }
                 }
+            }
+            return null;
+        }
+        catch( CSException e ) {
+            if( e.getHttpCode() == 431 ) {
                 return null;
             }
-            catch( CSException e ) {
-                if( e.getHttpCode() == 431 ) {
-                    return null;
-                }
-                throw e;
-            }
+            throw e;
         }
         finally {
             APITrace.end();
@@ -281,10 +291,9 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public @Nonnull Collection<FirewallRule> getRules(@Nonnull String firewallId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.getRules");
         try {
-            CSMethod method = new CSMethod(getProvider());
-            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId)), LIST_SECURITY_GROUPS);
-            ArrayList<FirewallRule> rules = new ArrayList<FirewallRule>();
-
+            final CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(LIST_SECURITY_GROUPS, new Param("id", firewallId));
+            final List<FirewallRule> rules = new ArrayList<FirewallRule>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -302,7 +311,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("id", firewallId), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    doc = method.get(LIST_SECURITY_GROUPS, new Param("id", firewallId), new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("ingressrule");
                 for( int i=0; i<matches.getLength(); i++ ) {
@@ -340,13 +349,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Firewall.isSubscribed");
         try {
-            ProviderContext ctx = getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            String regionId = ctx.getRegionId();
-
+            String regionId = getContext().getRegionId();
             if( regionId == null ) {
                 throw new CloudException("No region was set for this request");
             }
@@ -361,14 +364,9 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public @Nonnull Collection<Firewall> list() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.list");
         try {
-            ProviderContext ctx = getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
             CSMethod method = new CSMethod(getProvider());
-            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
-            ArrayList<Firewall> firewalls = new ArrayList<Firewall>();
+            Document doc = method.get(LIST_SECURITY_GROUPS);
+            final List<Firewall> firewalls = new ArrayList<Firewall>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -386,7 +384,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    doc = method.get(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
@@ -394,7 +392,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
                     Node node = matches.item(i);
 
                     if( node != null ) {
-                        Firewall fw = toFirewall(node, ctx);
+                        Firewall fw = toFirewall(node);
 
                         if( fw != null ) {
                             firewalls.add(fw);
@@ -413,14 +411,9 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public @Nonnull Iterable<ResourceStatus> listFirewallStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Firewall.listFirewallStatus");
         try {
-            ProviderContext ctx = getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(getProvider());
-            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS), LIST_SECURITY_GROUPS);
-            ArrayList<ResourceStatus> firewalls = new ArrayList<ResourceStatus>();
+            final CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(LIST_SECURITY_GROUPS);
+            final List<ResourceStatus> firewalls = new ArrayList<ResourceStatus>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -438,7 +431,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    doc = method.get(LIST_SECURITY_GROUPS, new Param("pagesize", "500"), new Param("page", nextPage));
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
@@ -447,7 +440,6 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
 
                     if( node != null ) {
                         ResourceStatus fw = toStatus(node);
-
                         if( fw != null ) {
                             firewalls.add(fw);
                         }
@@ -482,15 +474,11 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             if( target == null ) {
                 return;
             }
-            Param[] params = new Param[] { new Param("id", providerFirewallRuleId) };
-            CSMethod method = new CSMethod(getProvider());
-
+            String command = REVOKE_SECURITY_GROUP_INGRESS;
             if( Direction.EGRESS.equals(target.getDirection()) ) {
-                method.get(method.buildUrl(REVOKE_SECURITY_GROUP_EGRESS, params), REVOKE_SECURITY_GROUP_EGRESS);
+                command = REVOKE_SECURITY_GROUP_EGRESS;
             }
-            else {
-                method.get(method.buildUrl(REVOKE_SECURITY_GROUP_INGRESS, params), REVOKE_SECURITY_GROUP_INGRESS);
-            }
+            new CSMethod(getProvider()).get(command, new Param("id", providerFirewallRuleId));
         }
         finally {
             APITrace.end();
@@ -500,14 +488,9 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
     public @Nonnull Iterable<String> listFirewallsForVM(@Nonnull String vmId) throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Firewall.listFirewallsForVM");
         try {
-            ProviderContext ctx = getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(getProvider());
-            Document doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId)), LIST_SECURITY_GROUPS);
-            ArrayList<String> firewalls = new ArrayList<String>();
+            final CSMethod method = new CSMethod(getProvider());
+            Document doc = method.get(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId));
+            final List<String> firewalls = new ArrayList<String>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -525,7 +508,11 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(LIST_SECURITY_GROUPS, new Param("virtualmachineId", vmId), new Param("pagesize", "500"), new Param("page", nextPage)), LIST_SECURITY_GROUPS);
+                    doc = method.get(LIST_SECURITY_GROUPS,
+                            new Param("virtualmachineId", vmId),
+                            new Param("pagesize", "500"),
+                            new Param("page", nextPage)
+                    );
                 }
                 NodeList matches = doc.getElementsByTagName("securitygroup");
 
@@ -533,7 +520,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
                     Node node = matches.item(i);
 
                     if( node != null ) {
-                        Firewall fw = toFirewall(node, ctx);
+                        Firewall fw = toFirewall(node);
 
                         if( fw != null ) {
                             firewalls.add(fw.getProviderFirewallId());
@@ -587,16 +574,11 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         revoke(ruleId);
     }
 
-    @Override
-    public boolean supportsFirewallSources() throws CloudException, InternalException {
-        return false;
-    }
-
-    private @Nullable Firewall toFirewall(@Nullable Node node, @Nonnull ProviderContext ctx) throws CloudException, InternalException {
+    private @Nullable Firewall toFirewall(@Nullable Node node) throws CloudException, InternalException {
         if( node == null ) {
             return null;
         }
-        String regionId = ctx.getRegionId();
+        String regionId = getContext().getRegionId();
 
         if( regionId == null ) {
             throw new CloudException("No region was specified for this request");
@@ -703,7 +685,7 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         }
     }
 
-    private @Nullable ResourceStatus toStatus(@Nullable Node node) throws CloudException, InternalException {
+    private @Nullable ResourceStatus toStatus(@Nullable Node node) {
         if( node == null ) {
             return null;
         }
@@ -726,4 +708,53 @@ public class SecurityGroup extends AbstractFirewallSupport<CSCloud> {
         }
         return null;
     }
+    
+	@Override
+	public void setTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		setTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void setTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.setTags");
+		try {
+			removeTags(firewallIds);
+			getProvider().createTags(firewallIds, "SecurityGroup", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void updateTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		updateTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void updateTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.updateTags");
+		try {
+			getProvider().updateTags(firewallIds, "SecurityGroup", tags);
+		} 
+		finally {
+			APITrace.end();
+		}
+	}
+
+	@Override
+	public void removeTags(@Nonnull String firewallId, @Nonnull Tag... tags) throws CloudException, InternalException {
+		removeTags(new String[] { firewallId }, tags);
+	}
+
+	@Override
+	public void removeTags(@Nonnull String[] firewallIds, @Nonnull Tag... tags) throws CloudException, InternalException {
+		APITrace.begin(getProvider(), "Firewall.removeTags");
+		try {
+			getProvider().removeTags(firewallIds, "SecurityGroup", tags);
+		}
+		finally {
+			APITrace.end();
+		}
+	}
 }

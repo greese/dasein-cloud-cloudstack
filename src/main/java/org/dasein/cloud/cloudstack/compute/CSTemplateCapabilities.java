@@ -24,17 +24,29 @@ import org.dasein.cloud.InternalException;
 import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
+import org.dasein.cloud.cloudstack.CSException;
+import org.dasein.cloud.cloudstack.CSMethod;
+import org.dasein.cloud.cloudstack.Param;
 import org.dasein.cloud.compute.ImageCapabilities;
 import org.dasein.cloud.compute.ImageClass;
 import org.dasein.cloud.compute.MachineImageFormat;
 import org.dasein.cloud.compute.MachineImageType;
 import org.dasein.cloud.compute.VmState;
+import org.dasein.cloud.util.APITrace;
+import org.dasein.cloud.util.NamingConstraints;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Describes the capabilities of Cloudstack with respect to Dasein image operations.
@@ -57,9 +69,8 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
         return fromState.equals(VmState.STOPPED);
     }
 
-    @Nonnull
     @Override
-    public String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
+    public @Nonnull String getProviderTermForImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
         switch( cls ) {
             case KERNEL: return "kernel template";
             case RAMDISK: return "ramdisk template";
@@ -67,50 +78,42 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
         return "template";
     }
 
-    @Nonnull
     @Override
-    public String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
+    public @Nonnull String getProviderTermForCustomImage(@Nonnull Locale locale, @Nonnull ImageClass cls) {
         return getProviderTermForImage(locale, cls);
     }
 
-    @Nullable
     @Override
-    public VisibleScope getImageVisibleScope() {
+    public @Nullable VisibleScope getImageVisibleScope() {
         return null;  //To change body of implemented methods use File | Settings | File Templates.
     }
 
-    @Nonnull
     @Override
-    public Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
+    public @Nonnull Requirement identifyLocalBundlingRequirement() throws CloudException, InternalException {
         return Requirement.NONE;
     }
 
-    @Nonnull
     @Override
-    public Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
-        ArrayList<MachineImageFormat> formats = new ArrayList<MachineImageFormat>();
-
-        formats.add(MachineImageFormat.QCOW2);
-        formats.add(MachineImageFormat.VHD);
-        formats.add(MachineImageFormat.RAW);
-        return formats;
+    public @Nonnull Iterable<MachineImageFormat> listSupportedFormats() throws CloudException, InternalException {
+        return Arrays.asList(
+                MachineImageFormat.QCOW2,
+                MachineImageFormat.VHD,
+                MachineImageFormat.RAW
+        );
     }
 
-    @Nonnull
     @Override
-    public Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
+    public @Nonnull Iterable<MachineImageFormat> listSupportedFormatsForBundling() throws CloudException, InternalException {
         return Collections.emptyList();
     }
 
-    @Nonnull
     @Override
-    public Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
+    public @Nonnull Iterable<ImageClass> listSupportedImageClasses() throws CloudException, InternalException {
         return Collections.singletonList(ImageClass.MACHINE);
     }
 
-    @Nonnull
     @Override
-    public Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
+    public @Nonnull Iterable<MachineImageType> listSupportedImageTypes() throws CloudException, InternalException {
         return Collections.singletonList(MachineImageType.VOLUME);
     }
 
@@ -120,13 +123,20 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     }
 
     @Override
+    public @Nonnull NamingConstraints getImageNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
+    }
+
+    @Override
     public boolean supportsDirectImageUpload() throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi(Templates.REGISTER_TEMPLATE);
     }
 
     @Override
     public boolean supportsImageCapture(@Nonnull MachineImageType type) throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi(Templates.CREATE_TEMPLATE);
     }
 
     @Override
@@ -136,12 +146,12 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
 
     @Override
     public boolean supportsImageSharing() throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi(Templates.UPDATE_TEMPLATE_PERMISSIONS);
     }
 
     @Override
     public boolean supportsImageSharingWithPublic() throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi(Templates.UPDATE_TEMPLATE_PERMISSIONS);
     }
 
     @Override

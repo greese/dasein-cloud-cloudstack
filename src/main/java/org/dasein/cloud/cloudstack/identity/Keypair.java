@@ -40,6 +40,7 @@ import javax.annotation.Nullable;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 
 /**
@@ -58,18 +59,14 @@ public class Keypair implements ShellKeySupport {
     public @Nonnull SSHKeypair createKeypair(@Nonnull String name) throws InternalException, CloudException {
         APITrace.begin(provider, "Keypair.createKeypair");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CSMethod.CREATE_KEYPAIR, new Param("name", name)), CSMethod.CREATE_KEYPAIR);
+            final Document doc = new CSMethod(provider).get(
+                    CSMethod.CREATE_KEYPAIR,
+                    new Param("name", name)
+            );
             NodeList matches = doc.getElementsByTagName("keypair");
 
             for( int i=0; i<matches.getLength(); i++ ) {
-                SSHKeypair key = toKeypair(ctx, matches.item(i));
-
+                SSHKeypair key = toKeypair(provider.getContext(), matches.item(i));
                 if( key != null ) {
                     return key;
                 }
@@ -85,9 +82,10 @@ public class Keypair implements ShellKeySupport {
     public void deleteKeypair(@Nonnull String providerId) throws InternalException, CloudException {
         APITrace.begin(provider, "Keypair.deleteKeypair");
         try {
-            CSMethod method = new CSMethod(provider);
-
-            method.get(method.buildUrl(CSMethod.DELETE_KEYPAIR, new Param("name", providerId)), CSMethod.DELETE_KEYPAIR);
+            new CSMethod(provider).get(
+                    CSMethod.DELETE_KEYPAIR,
+                    new Param("name", providerId)
+            );
         }
         finally {
             APITrace.end();
@@ -99,7 +97,6 @@ public class Keypair implements ShellKeySupport {
         APITrace.begin(provider, "Keypair.getFingerprint");
         try {
             SSHKeypair keypair = getKeypair(providerId);
-
             return (keypair == null ? null : keypair.getFingerprint());
         }
         finally {
@@ -117,18 +114,13 @@ public class Keypair implements ShellKeySupport {
     public @Nullable SSHKeypair getKeypair(@Nonnull String providerId) throws InternalException, CloudException {
         APITrace.begin(provider, "Keypair.getKeypair");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("name", providerId)), CSMethod.LIST_KEYPAIRS);
+            final Document doc = new CSMethod(provider).get(
+                    CSMethod.LIST_KEYPAIRS,
+                    new Param("name", providerId)
+            );
             NodeList matches = doc.getElementsByTagName("sshkeypair");
-
             for( int i=0; i<matches.getLength(); i++ ) {
-                SSHKeypair key = toKeypair(ctx, matches.item(i));
-
+                final SSHKeypair key = toKeypair(provider.getContext(), matches.item(i));
                 if( key != null ) {
                     return key;
                 }
@@ -173,14 +165,9 @@ public class Keypair implements ShellKeySupport {
     public @Nonnull Collection<SSHKeypair> list() throws InternalException, CloudException {
         APITrace.begin(provider, "Keypair.list");
         try {
-            ProviderContext ctx = provider.getContext();
-
-            if( ctx == null ) {
-                throw new CloudException("No context was set for this request");
-            }
-            CSMethod method = new CSMethod(provider);
-            Document doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS), CSMethod.LIST_KEYPAIRS);
-            ArrayList<SSHKeypair> keys = new ArrayList<SSHKeypair>();
+            final CSMethod method = new CSMethod(provider);
+            Document doc = method.get(CSMethod.LIST_KEYPAIRS);
+            final List<SSHKeypair> keys = new ArrayList<SSHKeypair>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -198,12 +185,15 @@ public class Keypair implements ShellKeySupport {
             for (int page = 1; page <= numPages; page++) {
                 if (page > 1) {
                     String nextPage = String.valueOf(page);
-                    doc = method.get(method.buildUrl(CSMethod.LIST_KEYPAIRS, new Param("pagesize", "500"), new Param("page", nextPage)), CSMethod.LIST_KEYPAIRS);
+                    doc = method.get(
+                            CSMethod.LIST_KEYPAIRS,
+                            new Param("pagesize", "500"),
+                            new Param("page", nextPage)
+                    );
                 }
                 NodeList matches = doc.getElementsByTagName("sshkeypair");
-
                 for( int i=0; i<matches.getLength(); i++ ) {
-                    SSHKeypair key = toKeypair(ctx, matches.item(i));
+                    SSHKeypair key = toKeypair(provider.getContext(), matches.item(i));
 
                     if( key != null ) {
                         keys.add(key);

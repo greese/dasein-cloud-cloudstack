@@ -26,6 +26,7 @@ import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.IPVersion;
 import org.dasein.cloud.network.VLANCapabilities;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -50,7 +51,7 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
 
     @Override
     public boolean allowsNewVlanCreation() throws CloudException, InternalException {
-        return true;
+        return getProvider().hasApi("createNetwork");
     }
 
     @Override
@@ -173,5 +174,13 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
     @Override
     public boolean supportsRawAddressRouting() throws CloudException, InternalException {
         return false;
+    }
+
+    @Nonnull
+    @Override
+    public NamingConstraints getVlanNamingConstraints() {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
     }
 }
