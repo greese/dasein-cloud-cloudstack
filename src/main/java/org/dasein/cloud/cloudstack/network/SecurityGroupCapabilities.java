@@ -25,6 +25,7 @@ import org.dasein.cloud.Requirement;
 import org.dasein.cloud.VisibleScope;
 import org.dasein.cloud.cloudstack.CSCloud;
 import org.dasein.cloud.network.*;
+import org.dasein.cloud.util.NamingConstraints;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -128,6 +129,13 @@ public class SecurityGroupCapabilities extends AbstractCapabilities<CSCloud> imp
     @Override
     public boolean supportsFirewallDeletion() throws CloudException, InternalException {
         return true;
+    }
+
+    @Override
+    public @Nonnull NamingConstraints getFirewallNamingConstraints() throws CloudException, InternalException {
+        // not sure what these are from the api docs, but from the UI they don't seem
+        // to restrict on much of anything
+        return NamingConstraints.getAlphaNumeric(1, 255);
     }
 
     @Override
