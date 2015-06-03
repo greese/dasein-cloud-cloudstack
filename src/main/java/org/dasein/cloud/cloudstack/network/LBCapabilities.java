@@ -185,4 +185,9 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
         // to restrict on much of anything
         return NamingConstraints.getAlphaNumeric(1, 255);
     }
+
+    @Override
+    public boolean supportsSslCertificateStore(){
+        return false;
+    }
 }
