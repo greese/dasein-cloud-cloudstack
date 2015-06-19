@@ -102,7 +102,7 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean canTerminate(@Nonnull VmState fromState) throws CloudException, InternalException {
-        return !fromState.equals(VmState.TERMINATED) && !VmState.ERROR.equals(fromState);
+        return !fromState.equals(VmState.TERMINATED);
     }
 
     @Override
