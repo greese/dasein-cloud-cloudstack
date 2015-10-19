@@ -816,8 +816,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         return listProducts(options, Architecture.I64);
     }
 
-    @Override
-    public Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
+    protected Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
         try {
             Cache<VirtualMachineProduct> cache = Cache.getInstance(getProvider(), "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));

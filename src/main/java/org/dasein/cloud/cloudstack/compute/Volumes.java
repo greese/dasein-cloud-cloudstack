@@ -18,44 +18,10 @@
 
 package org.dasein.cloud.cloudstack.compute;
 
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
 import org.apache.log4j.Logger;
-import org.dasein.cloud.CloudException;
-import org.dasein.cloud.InternalException;
-import org.dasein.cloud.OperationNotSupportedException;
-import org.dasein.cloud.ProviderContext;
-import org.dasein.cloud.Requirement;
-import org.dasein.cloud.ResourceStatus;
-import org.dasein.cloud.Tag;
-import org.dasein.cloud.cloudstack.CSCloud;
-import org.dasein.cloud.cloudstack.CSException;
-import org.dasein.cloud.cloudstack.CSMethod;
-import org.dasein.cloud.cloudstack.CSServiceProvider;
-import org.dasein.cloud.cloudstack.Param;
-import org.dasein.cloud.compute.AbstractVolumeSupport;
-import org.dasein.cloud.compute.Platform;
-import org.dasein.cloud.compute.Snapshot;
-import org.dasein.cloud.compute.VirtualMachine;
-import org.dasein.cloud.compute.VmState;
-import org.dasein.cloud.compute.Volume;
-import org.dasein.cloud.compute.VolumeCapabilities;
-import org.dasein.cloud.compute.VolumeCreateOptions;
-import org.dasein.cloud.compute.VolumeFormat;
-import org.dasein.cloud.compute.VolumeProduct;
-import org.dasein.cloud.compute.VolumeState;
-import org.dasein.cloud.compute.VolumeType;
+import org.dasein.cloud.*;
+import org.dasein.cloud.cloudstack.*;
+import org.dasein.cloud.compute.*;
 import org.dasein.cloud.util.APITrace;
 import org.dasein.cloud.util.Cache;
 import org.dasein.cloud.util.CacheLevel;
@@ -66,7 +32,14 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-public class Volumes extends AbstractVolumeSupport {
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+public class Volumes extends AbstractVolumeSupport<CSCloud> {
     static private final Logger logger = Logger.getLogger(Volumes.class);
     
     static private final String ATTACH_VOLUME = "attachVolume";
@@ -87,11 +60,8 @@ public class Volumes extends AbstractVolumeSupport {
         public String toString() {return "DiskOffering ["+id+"] of size "+diskSize;}
     }
     
-    private CSCloud provider;
-    
     Volumes(CSCloud provider) {
         super(provider);
-        this.provider = provider;
     }
     
     @Override
@@ -101,7 +71,7 @@ public class Volumes extends AbstractVolumeSupport {
             if( logger.isInfoEnabled() ) {
                 logger.info("attaching " + volumeId + " to " + serverId + " as " + deviceId);
             }
-            VirtualMachine vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
+            VirtualMachine vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId);
 
             if( vm == null ) {
                 throw new CloudException("No such virtual machine: " + serverId);
@@ -114,7 +84,7 @@ public class Volumes extends AbstractVolumeSupport {
                 }
                 try { Thread.sleep(15000L); }
                 catch( InterruptedException ignore ) { }
-                try { vm = provider.getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId); }
+                try { vm = getProvider().getComputeServices().getVirtualMachineSupport().getVirtualMachine(serverId); }
                 catch( Throwable ignore ) { }
                 if( vm == null ) {
                     throw new CloudException("Virtual machine " + serverId + " disappeared waiting for it to enter an attachable state");
@@ -131,12 +101,12 @@ public class Volumes extends AbstractVolumeSupport {
                 }
                 params.add(new Param("deviceId", deviceId));
             }
-            Document doc = new CSMethod(provider).get(ATTACH_VOLUME, params);
+            Document doc = new CSMethod(getProvider()).get(ATTACH_VOLUME, params);
 
             if( doc == null ) {
                 throw new CloudException("No such volume or server");
             }
-            provider.waitForJob(doc, "Attach Volume");
+            getProvider().waitForJob(doc, "Attach Volume");
         }
         finally {
             APITrace.end();
@@ -147,7 +117,7 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nonnull String createVolume(@Nonnull VolumeCreateOptions options) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.createVolume");
         try {
-            if( options.getFormat().equals(VolumeFormat.NFS) || !provider.hasApi("createVolume")) {
+            if( options.getFormat().equals(VolumeFormat.NFS) || !getProvider().hasApi("createVolume")) {
                 throw new OperationNotSupportedException("NFS volumes are not currently supported in " + getProvider().getCloudName());
             }
             String snapshotId = options.getSnapshotId();
@@ -167,15 +137,15 @@ public class Volumes extends AbstractVolumeSupport {
             if( snapshotId == null ) {
                 if( product == null ) {
                     size = options.getVolumeSize();
-                    if( size.intValue() < getMinimumVolumeSize().intValue() ) {
-                        size = getMinimumVolumeSize();
+                    if( size.intValue() < getCapabilities().getMinimumVolumeSize().intValue() ) {
+                        size = getCapabilities().getMinimumVolumeSize();
                     }
                     Iterable<VolumeProduct> products = listVolumeProducts();
                     VolumeProduct best = null;
                     VolumeProduct custom = null;
 
                     for( VolumeProduct p : products ) {
-                        Storage<Gigabyte> s = p.getVolumeSize();
+                        Storage<Gigabyte> s = p.getMinVolumeSize();
 
                         if( s  == null || s.intValue() == 0 ) {
                             if (custom == null) {
@@ -185,7 +155,7 @@ public class Volumes extends AbstractVolumeSupport {
                         }
                         long currentSize = s.getQuantity().longValue();
 
-                        s = (best == null ? null : best.getVolumeSize());
+                        s = (best == null ? null : best.getMinVolumeSize());
 
                         long bestSize = (s == null ? 0L : s.getQuantity().longValue());
 
@@ -220,7 +190,7 @@ public class Volumes extends AbstractVolumeSupport {
                     }
                 }
                 else {
-                    size = product.getVolumeSize();
+                    size = product.getMinVolumeSize();
                     if( size == null || size.intValue() < 1 ) {
                         size = options.getVolumeSize();
                     }
@@ -230,21 +200,21 @@ public class Volumes extends AbstractVolumeSupport {
                 }
             }
             else {
-                Snapshot snapshot = provider.getComputeServices().getSnapshotSupport().getSnapshot(snapshotId);
+                Snapshot snapshot = getProvider().getComputeServices().getSnapshotSupport().getSnapshot(snapshotId);
 
                 if( snapshot == null ) {
                     throw new CloudException("No such snapshot: " + snapshotId);
                 }
                 int s = snapshot.getSizeInGb();
 
-                if( s < 1 || s < getMinimumVolumeSize().intValue() ) {
-                    size = getMinimumVolumeSize();
+                if( s < 1 || s < getCapabilities().getMinimumVolumeSize().intValue() ) {
+                    size = getCapabilities().getMinimumVolumeSize();
                 }
                 else {
-                    size = new Storage<Gigabyte>(s, Storage.GIGABYTE);
+                    size = new Storage<>(s, Storage.GIGABYTE);
                 }
             }
-            List<Param> params = new ArrayList<Param>();
+            List<Param> params = new ArrayList<>();
             params.add(new Param("name", options.getName()));
             params.add(new Param("zoneId", getContext().getRegionId()));
 
@@ -261,7 +231,7 @@ public class Volumes extends AbstractVolumeSupport {
                 params.add(new Param("size", String.valueOf(size.longValue())));
             }
             else {
-                Storage<Gigabyte> s = product.getVolumeSize();
+                Storage<Gigabyte> s = product.getMinVolumeSize();
                 params.add(new Param("diskOfferingId", product.getProviderProductId()));
 
                 if( s == null || s.intValue() < 1 ) {
@@ -269,7 +239,7 @@ public class Volumes extends AbstractVolumeSupport {
                 }
             }
 
-            Document doc = new CSMethod(provider).get(CREATE_VOLUME, params);
+            Document doc = new CSMethod(getProvider()).get(CREATE_VOLUME, params);
             NodeList matches = doc.getElementsByTagName("volumeid"); // v2.1
             String volumeId = null;
 
@@ -291,7 +261,7 @@ public class Volumes extends AbstractVolumeSupport {
             if( volumeId == null ) {
                 throw new CloudException("Failed to create volume");
             }
-            Document responseDoc = provider.waitForJob(doc, "Create Volume");
+            Document responseDoc = getProvider().waitForJob(doc, "Create Volume");
             if (responseDoc != null){
                 NodeList nodeList = responseDoc.getElementsByTagName("volume");
                 if (nodeList.getLength() > 0) {
@@ -317,7 +287,7 @@ public class Volumes extends AbstractVolumeSupport {
             }
             
             // Set tags
-            List<Tag> tags = new ArrayList<Tag>();
+            List<Tag> tags = new ArrayList<>();
             Map<String, Object> meta = options.getMetaData();
             for( Map.Entry<String, Object> entry : meta.entrySet() ) {
             	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
@@ -329,7 +299,7 @@ public class Volumes extends AbstractVolumeSupport {
             }
             tags.add(new Tag("Name", options.getName()));
             tags.add(new Tag("Description", options.getDescription()));
-            provider.createTags(new String[] { volumeId }, "Volume", tags.toArray(new Tag[tags.size()]));
+            getProvider().createTags(new String[]{volumeId}, "Volume", tags.toArray(new Tag[tags.size()]));
             return volumeId;
         }
         finally {
@@ -341,10 +311,10 @@ public class Volumes extends AbstractVolumeSupport {
     public void detach(@Nonnull String volumeId, boolean force) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.detach");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(DETACH_VOLUME, new Param("id", volumeId));
 
-            provider.waitForJob(doc, "Detach Volume");
+            getProvider().waitForJob(doc, "Detach Volume");
         }
         finally {
             APITrace.end();
@@ -355,29 +325,14 @@ public class Volumes extends AbstractVolumeSupport {
     @Override
     public VolumeCapabilities getCapabilities() throws CloudException, InternalException {
         if( capabilities == null ) {
-            capabilities = new CSVolumeCapabilities(provider);
+            capabilities = new CSVolumeCapabilities(getProvider());
         }
         return capabilities;
     }
 
-    @Override
-    public int getMaximumVolumeCount() throws InternalException, CloudException {
-        return -2;
-    }
-
-    @Override
-    public @Nonnull Storage<Gigabyte> getMaximumVolumeSize() throws InternalException, CloudException {
-        return new Storage<Gigabyte>(5000, Storage.GIGABYTE);
-    }
-
-    @Override
-    public @Nonnull Storage<Gigabyte> getMinimumVolumeSize() throws InternalException, CloudException {
-        return new Storage<Gigabyte>(1, Storage.GIGABYTE);
-    }
-
     @Nonnull Collection<DiskOffering> getDiskOfferings() throws InternalException, CloudException {
-        final Document doc = new CSMethod(provider).get(LIST_DISK_OFFERINGS);
-        List<DiskOffering> offerings = new ArrayList<DiskOffering>();
+        final Document doc = new CSMethod(getProvider()).get(LIST_DISK_OFFERINGS);
+        List<DiskOffering> offerings = new ArrayList<>();
         NodeList matches = doc.getElementsByTagName("diskoffering");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -430,11 +385,6 @@ public class Volumes extends AbstractVolumeSupport {
         return offerings;
     }
     
-    @Override
-    public @Nonnull String getProviderTermForVolume(@Nonnull Locale locale) {
-        return "volume";
-    }
-
     @Nullable
     String getRootVolumeId(@Nonnull String serverId) throws InternalException, CloudException {
         final Volume volume = getRootVolume(serverId);
@@ -443,7 +393,7 @@ public class Volumes extends AbstractVolumeSupport {
     }
 
     private @Nullable Volume getRootVolume(@Nonnull String serverId) throws InternalException, CloudException {
-        final Document doc = new CSMethod(provider).get(LIST_VOLUMES, new Param("virtualMachineId", serverId));
+        final Document doc = new CSMethod(getProvider()).get(LIST_VOLUMES, new Param("virtualMachineId", serverId));
         NodeList matches = doc.getElementsByTagName("volume");
         
         for( int i=0; i<matches.getLength(); i++ ) {
@@ -464,7 +414,7 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nullable Volume getVolume(@Nonnull String volumeId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.getVolume");
         try {
-            final Document doc = new CSMethod(provider).get(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId()));
+            final Document doc = new CSMethod(getProvider()).get(LIST_VOLUMES, new Param("id", volumeId), new Param("zoneId", getContext().getRegionId()));
             NodeList matches = doc.getElementsByTagName("volume");
 
             for( int i=0; i<matches.getLength(); i++ ) {
@@ -488,67 +438,14 @@ public class Volumes extends AbstractVolumeSupport {
     }
 
     @Override
-    public @Nonnull Requirement getVolumeProductRequirement() throws InternalException, CloudException {
-        return Requirement.OPTIONAL;
-    }
-
-    @Override
-    public boolean isVolumeSizeDeterminedByProduct() throws InternalException, CloudException {
-        return false;
-    }
-
-    @Override
     public boolean isSubscribed() throws CloudException, InternalException {
         APITrace.begin(getProvider(), "Volume.isSubscribed");
         try {
-            return provider.getComputeServices().getVirtualMachineSupport().isSubscribed();
+            return getProvider().getComputeServices().getVirtualMachineSupport().isSubscribed();
         }
         finally {
             APITrace.end();
         }
-    }
-
-    @Override
-    public @Nonnull Iterable<String> listPossibleDeviceIds(@Nonnull Platform platform) throws InternalException, CloudException {
-        Cache<String> cache;
-
-        if( platform.isWindows() ) {
-            cache = Cache.getInstance(getProvider(), "windowsDeviceIds", String.class, CacheLevel.CLOUD);
-        }
-        else {
-            cache = Cache.getInstance(getProvider(), "unixDeviceIds", String.class, CacheLevel.CLOUD);
-        }
-        Iterable<String> ids = cache.get(getContext());
-
-        if( ids == null ) {
-            ArrayList<String> list = new ArrayList<String>();
-
-            if( platform.isWindows() ) {
-                list.add("hde");
-                list.add("hdf");
-                list.add("hdg");
-                list.add("hdh");
-                list.add("hdi");
-                list.add("hdj");
-            }
-            else {
-                list.add("/dev/xvdc");
-                list.add("/dev/xvde");
-                list.add("/dev/xvdf");
-                list.add("/dev/xvdg");
-                list.add("/dev/xvdh");
-                list.add("/dev/xvdi");
-                list.add("/dev/xvdj");
-            }
-            ids = Collections.unmodifiableList(list);
-            cache.put(getContext(), ids);
-        }
-        return ids;
-    }
-
-    @Override
-    public @Nonnull Iterable<VolumeFormat> listSupportedFormats() throws InternalException, CloudException {
-        return Collections.singletonList(VolumeFormat.BLOCK);
     }
 
     @Override
@@ -564,7 +461,7 @@ public class Volumes extends AbstractVolumeSupport {
                 for( DiskOffering offering : getDiskOfferings() ) {
                     VolumeProduct p = toProduct(offering);
 
-                    if( p != null && (!provider.getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) || "local".equals(offering.type)) ) {
+                    if( p != null && (!getProvider().getServiceProvider().equals(CSServiceProvider.DEMOCLOUD) || "local".equals(offering.type)) ) {
                         list.add(p);
                     }
                 }
@@ -582,9 +479,9 @@ public class Volumes extends AbstractVolumeSupport {
     public @Nonnull Iterable<ResourceStatus> listVolumeStatus() throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.listVolumeStatus");
         try {
-            CSMethod method = new CSMethod(provider);
+            CSMethod method = new CSMethod(getProvider());
             Document doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()));
-            List<ResourceStatus> volumes = new ArrayList<ResourceStatus>();
+            List<ResourceStatus> volumes = new ArrayList<>();
 
             int numPages = 1;
             NodeList nodes = doc.getElementsByTagName("count");
@@ -637,9 +534,9 @@ public class Volumes extends AbstractVolumeSupport {
     }
      
     private @Nonnull Collection<Volume> listVolumes(boolean rootOnly) throws InternalException, CloudException {
-        CSMethod method = new CSMethod(provider);
+        CSMethod method = new CSMethod(getProvider());
         Document doc = method.get(LIST_VOLUMES, new Param("zoneId", getContext().getRegionId()));
-        ArrayList<Volume> volumes = new ArrayList<Volume>();
+        ArrayList<Volume> volumes = new ArrayList<>();
         int numPages = 1;
         NodeList nodes = doc.getElementsByTagName("count");
         Node n = nodes.item(0);
@@ -679,9 +576,9 @@ public class Volumes extends AbstractVolumeSupport {
     public void remove(@Nonnull String volumeId) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "Volume.remove");
         try {
-            Document doc = new CSMethod(provider).get(DELETE_VOLUME, new Param("id", volumeId));
+            Document doc = new CSMethod(getProvider()).get(DELETE_VOLUME, new Param("id", volumeId));
 
-            provider.waitForJob(doc, "Delete Volume");
+            getProvider().waitForJob(doc, "Delete Volume");
         }
         finally {
             APITrace.end();
@@ -753,7 +650,7 @@ public class Volumes extends AbstractVolumeSupport {
             return VolumeProduct.getInstance(offering.id, offering.name, offering.description, VolumeType.HDD);
         }
         else {
-            return VolumeProduct.getInstance(offering.id, offering.name, offering.description, VolumeType.HDD, new Storage<Gigabyte>(offering.diskSize, Storage.GIGABYTE));
+            return VolumeProduct.getInstance(offering.id, offering.name, offering.description, VolumeType.HDD, new Storage<>(offering.diskSize, Storage.GIGABYTE));
         }
     }
 
@@ -826,8 +723,8 @@ public class Volumes extends AbstractVolumeSupport {
                 }
                 if( name.equals("zoneid") ) {
                     String zid = attribute.getFirstChild().getNodeValue().trim();
-                    if( !provider.getContext().getRegionId().equals(zid) ) {
-                        System.out.println("Zone mismatch: " + provider.getContext().getRegionId());
+                    if( !getContext().getRegionId().equals(zid) ) {
+                        System.out.println("Zone mismatch: " + getContext().getRegionId());
                         System.out.println("               " + zid);
                         return null;
                     }
@@ -906,8 +803,8 @@ public class Volumes extends AbstractVolumeSupport {
         if( offeringId != null ) {
             volume.setProviderProductId(offeringId);
         }
-        volume.setProviderRegionId(provider.getContext().getRegionId());
-        volume.setProviderDataCenterId(provider.getContext().getRegionId());
+        volume.setProviderRegionId(getContext().getRegionId());
+        volume.setProviderDataCenterId(getContext().getRegionId());
 
         volume.setDeviceId(deviceNumber);
         volume.setRootVolume(root);
@@ -928,7 +825,7 @@ public class Volumes extends AbstractVolumeSupport {
     	APITrace.begin(getProvider(), "Volume.setTags");
     	try {
     		removeTags(volumeIds);
-    		provider.createTags(volumeIds, "Volume", tags);
+    		getProvider().createTags(volumeIds, "Volume", tags);
     	}
     	finally {
     		APITrace.end();
@@ -944,7 +841,7 @@ public class Volumes extends AbstractVolumeSupport {
     public void updateTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
     	APITrace.begin(getProvider(), "Volume.updateTags");
     	try {
-    		provider.updateTags(volumeIds, "Volume", tags);
+    		getProvider().updateTags(volumeIds, "Volume", tags);
     	}
     	finally {
     		APITrace.end();
@@ -960,7 +857,7 @@ public class Volumes extends AbstractVolumeSupport {
     public void removeTags(@Nonnull String[] volumeIds, @Nonnull Tag... tags) throws CloudException, InternalException {
     	APITrace.begin(getProvider(), "Volume.removeTags");
     	try {
-    		provider.removeTags(volumeIds, "Volume", tags);
+    		getProvider().removeTags(volumeIds, "Volume", tags);
     	}
     	finally {
     		APITrace.end();

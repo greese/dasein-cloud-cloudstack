@@ -94,6 +94,11 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
     }
 
     @Override
+    public boolean allowsDeletionOfReservedSubnets() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
     public int getMaxNetworkInterfaceCount() throws CloudException, InternalException {
         return 0;
     }

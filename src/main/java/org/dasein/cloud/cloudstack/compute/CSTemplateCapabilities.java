@@ -145,6 +145,11 @@ public class CSTemplateCapabilities extends AbstractCapabilities<CSCloud> implem
     }
 
     @Override
+    public boolean supportsImageRemoval() throws CloudException, InternalException {
+        return true;
+    }
+
+    @Override
     public boolean supportsImageSharing() throws CloudException, InternalException {
         return getProvider().hasApi(Templates.UPDATE_TEMPLATE_PERMISSIONS);
     }
