@@ -141,13 +141,19 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     @Nullable
     @Override
     public VisibleScope getVirtualMachineVisibleScope() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return VisibleScope.ACCOUNT_REGION;
     }
 
     @Nullable
     @Override
     public VisibleScope getVirtualMachineProductVisibleScope() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return VisibleScope.ACCOUNT_GLOBAL;
+    }
+
+    @Nonnull
+    @Override
+    public String[] getVirtualMachineReservedUserNames() {
+        return new String[0];
     }
 
     @Nonnull
@@ -160,6 +166,12 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
     @Override
     public Requirement identifyImageRequirement(@Nonnull ImageClass cls) throws CloudException, InternalException {
         return (cls.equals(ImageClass.MACHINE) ? Requirement.REQUIRED : Requirement.NONE);
+    }
+
+    @Nonnull
+    @Override
+    public Requirement identifyUsernameRequirement() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
     }
 
     @Nonnull
@@ -245,6 +257,11 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean isUserDefinedPrivateIPSupported() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
+    public boolean isRootPasswordSSHKeyEncrypted() throws CloudException, InternalException {
         return false;
     }
 

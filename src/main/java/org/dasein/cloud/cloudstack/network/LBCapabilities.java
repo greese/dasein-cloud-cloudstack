@@ -63,6 +63,26 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
         return 0;
     }
 
+    @Override
+    public int getMaxHealthCheckTimeout() throws CloudException, InternalException {
+        return 0;
+    }
+
+    @Override
+    public int getMinHealthCheckTimeout() throws CloudException, InternalException {
+        return 0;
+    }
+
+    @Override
+    public int getMaxHealthCheckInterval() throws CloudException, InternalException {
+        return 0;
+    }
+
+    @Override
+    public int getMinHealthCheckInterval() throws CloudException, InternalException {
+        return 0;
+    }
+
     @Nonnull
     @Override
     public String getProviderTermForLoadBalancer(@Nonnull Locale locale) {
@@ -72,7 +92,7 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
     @Nullable
     @Override
     public VisibleScope getLoadBalancerVisibleScope() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+        return VisibleScope.ACCOUNT_REGION;
     }
 
     @Override
@@ -81,7 +101,18 @@ public class LBCapabilities extends AbstractCapabilities<CSCloud> implements Loa
     }
 
     @Override
+    public boolean healthCheckRequiresListener() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
     public Requirement healthCheckRequiresName() throws CloudException, InternalException {
+        return Requirement.REQUIRED;
+    }
+
+    @Nonnull
+    @Override
+    public Requirement healthCheckRequiresPort() throws CloudException, InternalException {
         return Requirement.REQUIRED;
     }
 
