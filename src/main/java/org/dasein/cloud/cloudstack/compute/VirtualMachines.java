@@ -890,7 +890,6 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         return listProducts(options, Architecture.I64);
     }
 
-    @Override
     public Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
         try {

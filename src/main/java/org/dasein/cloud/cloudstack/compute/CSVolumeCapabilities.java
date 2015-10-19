@@ -72,16 +72,6 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
     }
 
     @Override
-    public int getMaximumVolumeProductIOPS() throws InternalException, CloudException {
-        return LIMIT_UNKNOWN;
-    }
-
-    @Override
-    public int getMinimumVolumeProductIOPS() throws InternalException, CloudException {
-        return LIMIT_UNKNOWN;
-    }
-
-    @Override
     public int getMaximumVolumeSizeIOPS() throws InternalException, CloudException {
         return LIMIT_UNKNOWN;
     }
@@ -125,6 +115,11 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
     @Override
     public @Nonnull Requirement getDeviceIdOnAttachRequirement() throws InternalException, CloudException {
         return Requirement.OPTIONAL;
+    }
+
+    @Override
+    public boolean supportsIOPSVolumes() throws InternalException, CloudException {
+        return false;
     }
 
     @Override
@@ -181,5 +176,15 @@ public class CSVolumeCapabilities extends AbstractCapabilities<CSCloud> implemen
     @Override
     public Requirement requiresVMOnCreate() throws InternalException, CloudException {
         return Requirement.NONE;
+    }
+
+    @Override
+    public boolean supportsAttach() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsDetach() {
+        return true;
     }
 }
