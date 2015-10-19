@@ -152,6 +152,12 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Nonnull
     @Override
+    public String[] getVirtualMachineReservedUserNames() {
+        return new String[0];
+    }
+
+    @Nonnull
+    @Override
     public Requirement identifyDataCenterLaunchRequirement() throws CloudException, InternalException {
         return Requirement.REQUIRED;
     }
@@ -245,6 +251,11 @@ public class VMCapabilities extends AbstractCapabilities<CSCloud> implements Vir
 
     @Override
     public boolean isUserDefinedPrivateIPSupported() throws CloudException, InternalException {
+        return false;
+    }
+
+    @Override
+    public boolean isRootPasswordSSHKeyEncrypted() throws CloudException, InternalException {
         return false;
     }
 
