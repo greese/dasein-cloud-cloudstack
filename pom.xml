@@ -25,7 +25,7 @@
 
   <name>dasein-cloud-cloudstack</name>
   <description>Implements the Dasein Cloud API for Cloud.com Cloudstack-based public and private clouds.</description>
-  <url>http://dasein-cloud.sf.net</url>
+  <url>https://github.com/dasein-cloud/dasein-cloud-cloudstack</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -252,7 +252,7 @@
             <executions>
                 <execution>
                     <id>sign-artifacts</id>
-                    <phase>verify</phase>
+                    <phase>deploy</phase>
                     <goals>
                         <goal>sign</goal>
                     </goals>

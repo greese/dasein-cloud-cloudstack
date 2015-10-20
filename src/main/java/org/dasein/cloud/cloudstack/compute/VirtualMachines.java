@@ -809,6 +809,11 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         }
     }
 
+    @Override
+    public @Nonnull Iterable<VirtualMachineProduct> listAllProducts() throws InternalException, CloudException{
+        return listProducts(VirtualMachineProductFilterOptions.getInstance(), Architecture.I64);
+    }
+
     @Nonnull
     @Override
     public Iterable<VirtualMachineProduct> listProducts(@Nonnull String machineImageId, @Nonnull VirtualMachineProductFilterOptions options) throws InternalException, CloudException {
