@@ -20,12 +20,12 @@
 
   <groupId>org.dasein</groupId>
   <artifactId>dasein-cloud-cloudstack</artifactId>
-  <version>2015.10.1</version>
+  <version>2015.10.2</version>
   <packaging>jar</packaging>
 
   <name>dasein-cloud-cloudstack</name>
   <description>Implements the Dasein Cloud API for Cloud.com Cloudstack-based public and private clouds.</description>
-  <url>http://dasein-cloud.sf.net</url>
+  <url>https://github.com/dasein-cloud/dasein-cloud-cloudstack</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -47,7 +47,7 @@
         <connection>scm:git:git://github.com/greese/dasein-cloud-cloudstack.git</connection>
         <developerConnection>scm:git:ssh://git@github.com/greese/dasein-cloud-cloudstack.git</developerConnection>
         <url>http://github.com/greese/dasein-cloud-cloudstack</url>
-      <tag>dasein-cloud-cloudstack-2015.10.1</tag>
+      <tag>dasein-cloud-cloudstack-2015.10.2</tag>
   </scm>
 
   <dependencies>
@@ -252,7 +252,7 @@
             <executions>
                 <execution>
                     <id>sign-artifacts</id>
-                    <phase>verify</phase>
+                    <phase>deploy</phase>
                     <goals>
                         <goal>sign</goal>
                     </goals>
