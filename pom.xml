@@ -44,9 +44,9 @@
     </organization>
 
     <scm>
-        <connection>scm:git:git://github.com/greese/dasein-cloud-cloudstack.git</connection>
-        <developerConnection>scm:git:ssh://git@github.com/greese/dasein-cloud-cloudstack.git</developerConnection>
-        <url>http://github.com/greese/dasein-cloud-cloudstack</url>
+        <connection>scm:git:git://github.com/dasein-cloud/dasein-cloud-cloudstack.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/dasein-cloud/dasein-cloud-cloudstack.git</developerConnection>
+        <url>http://github.com/dasein-cloud/dasein-cloud-cloudstack</url>
         <tag>HEAD</tag>
     </scm>
 
