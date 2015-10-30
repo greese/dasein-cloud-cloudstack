@@ -72,7 +72,7 @@ import java.util.TreeSet;
 
 public class VirtualMachines extends AbstractVMSupport<CSCloud> {
     static public final Logger logger = Logger.getLogger(VirtualMachines.class);
-    
+
     static private final String DEPLOY_VIRTUAL_MACHINE  = "deployVirtualMachine";
     static private final String DESTROY_VIRTUAL_MACHINE = "destroyVirtualMachine";
     static private final String GET_VIRTUAL_MACHINE_PASSWORD = "getVMPassword";
@@ -83,11 +83,11 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
     static private final String RESIZE_VIRTUAL_MACHINE  = "scaleVirtualMachine";
     static private final String START_VIRTUAL_MACHINE   = "startVirtualMachine";
     static private final String STOP_VIRTUAL_MACHINE    = "stopVirtualMachine";
-    
+
     static private Properties                              cloudMappings;
     static private Map<String,Map<String,String>>          customNetworkMappings;
     static private Map<String,Map<String,Set<String>>>     customServiceMappings;
-    
+
     public VirtualMachines(CSCloud provider) {
         super(provider);
     }
@@ -416,17 +416,17 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             List<Tag> tags = new ArrayList<Tag>();
             Map<String, Object> meta = withLaunchOptions.getMetaData();
             for( Map.Entry<String, Object> entry : meta.entrySet() ) {
-            	if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
-            		continue;
-            	}
-            	if (entry.getValue() != null && !entry.getValue().equals("")) {
-            		tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
-            	}
+                if( entry.getKey().equalsIgnoreCase("name") || entry.getKey().equalsIgnoreCase("description") ) {
+                    continue;
+                }
+                if (entry.getValue() != null && !entry.getValue().equals("")) {
+                    tags.add(new Tag(entry.getKey(), entry.getValue().toString()));
+                }
             }
             tags.add(new Tag("Name", withLaunchOptions.getFriendlyName()));
             tags.add(new Tag("Description", withLaunchOptions.getDescription()));
             if( withLaunchOptions.getVirtualMachineGroup() != null ) {
-            	tags.add(new Tag("dsnVMGroup", withLaunchOptions.getVirtualMachineGroup()));
+                tags.add(new Tag("dsnVMGroup", withLaunchOptions.getVirtualMachineGroup()));
             }
             getProvider().createTags(new String[] { vm.getProviderVirtualMachineId() }, "UserVm", tags.toArray(new Tag[tags.size()]));
             return vm;
@@ -442,7 +442,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
     public @Nonnull VirtualMachine launch(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nonnull String inZoneId, @Nonnull String name, @Nonnull String description, @Nullable String usingKey, @Nullable String withVlanId, boolean withMonitoring, boolean asSandbox, @Nullable String[] protectedByFirewalls, @Nullable Tag ... tags) throws InternalException, CloudException {
         if( getProvider().getVersion().greaterThan(CSVersion.CS21) ) {
             StringBuilder userData = new StringBuilder();
-            
+
             if( tags != null && tags.length > 0 ) {
                 for( Tag tag : tags ) {
                     userData.append(tag.getKey());
@@ -460,7 +460,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             return launch21(imageId, product, inZoneId, name);
         }
     }
-    
+
     private VirtualMachine launch21(String imageId, VirtualMachineProduct product, String inZoneId, String name) throws InternalException, CloudException {
         return launch(new CSMethod(getProvider()).get(
                 DEPLOY_VIRTUAL_MACHINE,
@@ -469,14 +469,14 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                 new Param("templateId", imageId), new Param("displayName", name))
         );
     }
-    
+
     private void load() {
         try {
             InputStream input = VirtualMachines.class.getResourceAsStream("/cloudMappings.cfg");
             BufferedReader reader = new BufferedReader(new InputStreamReader(input));
             Properties properties = new Properties();
             String line;
-            
+
             while( (line = reader.readLine()) != null ) {
                 if( line.startsWith("#") ) {
                     continue;
@@ -493,17 +493,17 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         }
         catch( Throwable ignore ) {
             // ignore
-        }        
+        }
         try {
             InputStream input = VirtualMachines.class.getResourceAsStream("/customNetworkMappings.cfg");
             Map<String,Map<String,String>> mapping = new HashMap<String,Map<String,String>>();
             Properties properties = new Properties();
-            
+
             properties.load(input);
             for( Object key : properties.keySet() ) {
                 String[] trueKey = ((String)key).split(",");
                 Map<String,String> current = mapping.get(trueKey[0]);
-                
+
                 if( current == null ) {
                     current = new HashMap<String,String>();
                     mapping.put(trueKey[0], current);
@@ -519,23 +519,23 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             InputStream input = VirtualMachines.class.getResourceAsStream("/customServiceMappings.cfg");
             Map<String,Map<String,Set<String>>> mapping = new HashMap<String,Map<String,Set<String>>>();
             Properties properties = new Properties();
-            
+
             properties.load(input);
-            
+
             for( Object key : properties.keySet() ) {
                 String value = (String)properties.get(key);
-                
+
                 if( value != null ) {
                     String[] trueKey = ((String)key).split(",");
                     Map<String,Set<String>> tmp = mapping.get(trueKey[0]);
-                    
+
                     if( tmp == null ) {
                         tmp =new HashMap<String,Set<String>>();
                         mapping.put(trueKey[0], tmp);
                     }
                     TreeSet<String> m = new TreeSet<String>();
                     String[] offerings = value.split(",");
-                    
+
                     if( offerings == null || offerings.length < 1 ) {
                         m.add(value);
                     }
@@ -551,7 +551,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             // ignore
         }
     }
-    
+
     private @Nonnull VirtualMachine launch22(@Nonnull String imageId, @Nonnull VirtualMachineProduct product, @Nullable String inZoneId, @Nonnull String name, @Nullable String withKeypair, @Nullable String targetVlanId, @Nullable String[] protectedByFirewalls, @Nullable String userData) throws InternalException, CloudException {
         ProviderContext ctx = getContext();
         List<String> vlans = null;
@@ -569,20 +569,20 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             throw new InternalException("No region is established for this request");
         }
 
-       String prdId = product.getProviderProductId();
+        String prdId = product.getProviderProductId();
 
         if( customNetworkMappings == null ) {
             load();
         }
         if( customNetworkMappings != null ) {
             String cloudId = cloudMappings.getProperty(ctx.getCloud().getEndpoint());
-            
+
             if( cloudId != null ) {
                 Map<String,String> map = customNetworkMappings.get(cloudId);
-                
+
                 if( map != null ) {
                     String id = map.get(prdId);
-                    
+
                     if( id != null ) {
                         targetVlanId = id;
                     }
@@ -600,7 +600,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
 
         if( targetVlanId == null ) {
             Network vlan = getProvider().getNetworkServices().getVlanSupport();
-            
+
             if( vlan != null && vlan.isSubscribed() ) {
                 if( getCapabilities().identifyVlanRequirement().equals(Requirement.REQUIRED) ) {
                     vlans = vlan.findFreeNetworks();
@@ -665,7 +665,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                 securityGroupIds = sgId;
                 count++;
             }    
-            */            
+            */
         }
         List<Param> params = new ArrayList<Param>();
         params.add(new Param("zoneId", inZoneId));
@@ -718,18 +718,18 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             ));
         }
     }
-    
+
     private @Nonnull VirtualMachine launch(@Nonnull Document doc) throws InternalException, CloudException {
         NodeList matches = doc.getElementsByTagName("deployvirtualmachineresponse");
         String serverId = null;
         String jobId = null;
-        
+
         for( int i=0; i<matches.getLength(); i++ ) {
             NodeList attrs = matches.item(i).getChildNodes();
-            
+
             for( int j=0; j<attrs.getLength(); j++ ) {
                 Node node = attrs.item(j);
-                
+
                 if( node != null && (node.getNodeName().equalsIgnoreCase("virtualmachineid") || node.getNodeName().equalsIgnoreCase("id")) ) {
                     serverId = node.getFirstChild().getNodeValue();
                     break;
@@ -746,7 +746,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             throw new CloudException("Could not launch server");
         }
         // TODO: very odd logic below; figure out what it thinks it is doing
-        
+
         VirtualMachine vm = null;
 
         // have to wait on jobs as sometimes they fail and we need to bubble error message up
@@ -763,9 +763,9 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                 }
             }
         }
-        
+
         if (vm == null){
-        	vm = getVirtualMachine(serverId);
+            vm = getVirtualMachine(serverId);
         }
         if( vm == null ) {
             throw new CloudException("No virtual machine provided: " + serverId);
@@ -809,6 +809,11 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         }
     }
 
+    @Override
+    public @Nonnull Iterable<VirtualMachineProduct> listAllProducts() throws InternalException, CloudException{
+        return listProducts(VirtualMachineProductFilterOptions.getInstance(), Architecture.I64);
+    }
+
     @Nonnull
     @Override
     public Iterable<VirtualMachineProduct> listProducts(@Nonnull String machineImageId, @Nonnull VirtualMachineProductFilterOptions options) throws InternalException, CloudException {
@@ -816,7 +821,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         return listProducts(options, Architecture.I64);
     }
 
-    protected Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
+    public Iterable<VirtualMachineProduct> listProducts(VirtualMachineProductFilterOptions options, Architecture architecture) throws InternalException, CloudException {
         APITrace.begin(getProvider(), "VM.listProducts");
         try {
             Cache<VirtualMachineProduct> cache = Cache.getInstance(getProvider(), "ServerProducts", VirtualMachineProduct.class, CacheLevel.REGION_ACCOUNT, new TimePeriod<Hour>(4, TimePeriod.HOUR));
@@ -1200,7 +1205,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         VirtualMachine server = new VirtualMachine();
         NodeList attributes = node.getChildNodes();
         String productId = null;
-        
+
         server.setProviderOwnerId(getContext().getAccountNumber());
         server.setClonable(false);
         server.setImagable(false);
@@ -1211,15 +1216,15 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
             Node attribute = attributes.item(i);
             String name = attribute.getNodeName().toLowerCase();
             String value;
-            
+
             if( attribute.getChildNodes().getLength() > 0 ) {
-                value = attribute.getFirstChild().getNodeValue();                
+                value = attribute.getFirstChild().getNodeValue();
             }
             else {
                 value = null;
             }
             if( name.equals("virtualmachineid") || name.equals("id") ) {
-                server.setProviderVirtualMachineId(value);                
+                server.setProviderVirtualMachineId(value);
             }
             else if( name.equals("name") ) {
                 server.setDescription(value);
@@ -1255,13 +1260,13 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                 }
             }
             else if( name.equals("nic") ) { // v2.2+
-                if( attribute.hasChildNodes() ) {                    
+                if( attribute.hasChildNodes() ) {
                     NodeList parts = attribute.getChildNodes();
                     String addr = null;
-                    
+
                     for( int j=0; j<parts.getLength(); j++ ) {
-                        Node part = parts.item(j); 
-                        
+                        Node part = parts.item(j);
+
                         if( part.getNodeName().equalsIgnoreCase("ipaddress") ) {
                             if( part.hasChildNodes() ) {
                                 addr = part.getFirstChild().getNodeValue();
@@ -1276,18 +1281,18 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                     }
                     if( addr != null ) {
                         boolean pub = false;
-                        
+
                         if( !addr.startsWith("10.") && !addr.startsWith("192.168.") ) {
                             if( addr.startsWith("172.") ) {
                                 String[] nums = addr.split("\\.");
-                                
+
                                 if( nums.length != 4 ) {
                                     pub = true;
                                 }
                                 else {
                                     try {
                                         int x = Integer.parseInt(nums[1]);
-                                        
+
                                         if( x < 16 || x > 31 ) {
                                             pub = true;
                                         }
@@ -1321,12 +1326,12 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                     server.setArchitecture(Architecture.I32);
                 }
                 else {
-                    server.setArchitecture(Architecture.I64);                  
+                    server.setArchitecture(Architecture.I64);
                 }
             }
             else if( name.equals("created") ) {
                 DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ"); //2009-02-03T05:26:32.612278
-                
+
                 try {
                     server.setCreationTimestamp(df.parse(value).getTime());
                 }
@@ -1373,7 +1378,7 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
                 else {
                     throw new CloudException("Unexpected server state: " + value);
                 }
-                server.setCurrentState(state);                
+                server.setCurrentState(state);
             }
             else if( name.equals("zoneid") ) {
                 server.setProviderRegionId(value);
@@ -1424,53 +1429,53 @@ public class VirtualMachines extends AbstractVMSupport<CSCloud> {
         server.setTags(properties);
         return server;
     }
-    
+
     @Override
     public void setTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	setTags(new String[] { vmId }, tags);
+        setTags(new String[] { vmId }, tags);
     }
-    
+
     @Override
     public void setTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "Server.setTags");
-    	try {
-    		removeTags(vmIds);
-    		getProvider().createTags(vmIds, "UserVm", tags);
-    	}
-    	finally {
-    		APITrace.end();
-    	}
+        APITrace.begin(getProvider(), "Server.setTags");
+        try {
+            removeTags(vmIds);
+            getProvider().createTags(vmIds, "UserVm", tags);
+        }
+        finally {
+            APITrace.end();
+        }
     }
-    
+
     @Override
     public void updateTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	updateTags(new String[] { vmId }, tags);
+        updateTags(new String[] { vmId }, tags);
     }
-    
+
     @Override
     public void updateTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "Server.updateTags");
-    	try {
-    		getProvider().updateTags(vmIds, "UserVm", tags);
-    	}
-    	finally {
-    		APITrace.end();
-    	}
+        APITrace.begin(getProvider(), "Server.updateTags");
+        try {
+            getProvider().updateTags(vmIds, "UserVm", tags);
+        }
+        finally {
+            APITrace.end();
+        }
     }
-    
+
     @Override
     public void removeTags(@Nonnull String vmId, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	removeTags(new String[] { vmId }, tags);
+        removeTags(new String[] { vmId }, tags);
     }
-    
+
     @Override
     public void removeTags(@Nonnull String[] vmIds, @Nonnull Tag... tags) throws CloudException, InternalException {
-    	APITrace.begin(getProvider(), "Server.removeTags");
-    	try {
-    		getProvider().removeTags(vmIds, "UserVm", tags);
-    	}
-    	finally {
-    		APITrace.end();
-    	}
+        APITrace.begin(getProvider(), "Server.removeTags");
+        try {
+            getProvider().removeTags(vmIds, "UserVm", tags);
+        }
+        finally {
+            APITrace.end();
+        }
     }
 }

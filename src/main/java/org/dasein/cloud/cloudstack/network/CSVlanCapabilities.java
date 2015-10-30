@@ -95,7 +95,7 @@ public class CSVlanCapabilities extends AbstractCapabilities<CSCloud> implements
 
     @Override
     public boolean allowsDeletionOfReservedSubnets() throws CloudException, InternalException {
-        return false;
+        return true;
     }
 
     @Override
